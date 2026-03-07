@@ -361,3 +361,5 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+/KinetixFlowEngine.Core/flow_metrics_20260307.csv
+/KinetixFlowEngine.Core/engine_snapshot.json
