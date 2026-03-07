@@ -1,20 +1,55 @@
-﻿namespace KinetixFlowEngine.Core.Context
+﻿public class AtrEngine
 {
-    public class AtrEngine
+    private const int Period = 14;
+
+    private double _atr;
+    private double _prevClose;
+    private int _count;
+
+    public double Value => _atr;
+
+    public bool IsReady => _count >= Period;
+
+    public void Reset()
     {
-        private readonly Queue<double> _ranges = new();
-        private const int Period = 14;
+        _atr = 0;
+        _prevClose = 0;
+        _count = 0;
+    }
 
-        public double Update(double high, double low)
+    public double Update(double high, double low, double close)
+    {
+        double tr;
+
+        if (_count == 0)
         {
-            double range = high - low;
-
-            _ranges.Enqueue(range);
-
-            if (_ranges.Count > Period)
-                _ranges.Dequeue();
-
-            return _ranges.Average();
+            tr = high - low;
         }
+        else
+        {
+            var r1 = high - low;
+            var r2 = Math.Abs(high - _prevClose);
+            var r3 = Math.Abs(low - _prevClose);
+
+            tr = Math.Max(r1, Math.Max(r2, r3));
+        }
+
+        _count++;
+
+        if (_count <= Period)
+        {
+            _atr += tr;
+
+            if (_count == Period)
+                _atr /= Period;
+        }
+        else
+        {
+            _atr = ((_atr * (Period - 1)) + tr) / Period;
+        }
+
+        _prevClose = close;
+
+        return _atr;
     }
 }

@@ -2,13 +2,14 @@
 
 namespace KinetixFlowEngine.Core.Persistence
 {
-    public class SnapshotManager
+    public class MarketStateManager
     {
-        private const string FilePath = "engine_snapshot.json";
+        private const string FilePath = "market_state.json";
 
-        public void Save(EngineSnapshot snapshot)
+        public void Save(MarketStateSnapshot snapshot)
         {
-            var json = JsonSerializer.Serialize(snapshot,
+            var json = JsonSerializer.Serialize(
+                snapshot,
                 new JsonSerializerOptions
                 {
                     WriteIndented = true
@@ -17,14 +18,14 @@ namespace KinetixFlowEngine.Core.Persistence
             File.WriteAllText(FilePath, json);
         }
 
-        public EngineSnapshot? Load()
+        public MarketStateSnapshot? Load()
         {
             if (!File.Exists(FilePath))
                 return null;
 
             var json = File.ReadAllText(FilePath);
 
-            return JsonSerializer.Deserialize<EngineSnapshot>(json);
+            return JsonSerializer.Deserialize<MarketStateSnapshot>(json);
         }
     }
 }

@@ -99,7 +99,7 @@ namespace KinetixFlowEngine.Core.Engine
 
             var er = _erEngine.Update(price);
 
-            var atr = _atrEngine.Update(price, price);
+            var atr = _atrEngine.Update(price, price, price);
 
             var oiChange = _oiEngine.Update(openInterest);
 

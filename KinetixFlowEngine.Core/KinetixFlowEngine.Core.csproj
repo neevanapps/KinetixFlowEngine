@@ -8,6 +8,11 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+	  <Compile Remove="Persistence\EngineSnapshot.cs" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Binance.Net" Version="12.9.0" />
 		<PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.3" />
 		<PackageReference Include="Microsoft.Extensions.Options" Version="10.0.3" />
 		<PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />

@@ -1,15 +1,19 @@
 using KinetixFlowEngine.Core;
+using KinetixFlowEngine.Core.Bootstrap;
 using KinetixFlowEngine.Core.Config;
 using KinetixFlowEngine.Core.Context;
 using KinetixFlowEngine.Core.Data;
+using KinetixFlowEngine.Core.Engine;
 using KinetixFlowEngine.Core.Flow;
 using KinetixFlowEngine.Core.Flow.Probability;
 using KinetixFlowEngine.Core.Flow.State;
 using KinetixFlowEngine.Core.Persistence;
 using KinetixFlowEngine.Core.Signal;
+using KinetixFlowEngine.Core.Strategy;
+using KinetixFlowEngine.Core.Strategy.Strategies;
+using KinetixFlowEngine.Core.Trading;
 using KinetixFlowEngine.Core.Trend;
 using KinetixFlowEngine.Core.Utils;
-using KinetixFlowEngine.Core.Engine;
 using Serilog;
 using Serilog.Events;
 
@@ -50,8 +54,9 @@ try
     builder.Services.AddSingleton<ImbalanceNormalizer>();
     builder.Services.AddSingleton<ExhaustionNormalizer>();
     builder.Services.AddSingleton<CompressionNormalizer>();
-    builder.Services.AddSingleton<SnapshotManager>();
-
+    builder.Services.AddSingleton<MarketStateManager>();
+    builder.Services.AddSingleton<EngineBootstrapService>();
+    builder.Services.AddSingleton<EngineWarmupManager>();
     builder.Services.AddSingleton<TradeStreamClient>();
     builder.Services.AddSingleton<OpenInterestClient>();
     builder.Services.AddSingleton<TelegramService>();
@@ -76,6 +81,15 @@ try
     builder.Services.AddSingleton<ScoreTrendEngine>();
     builder.Services.AddSingleton<FlowStateEngine>();
     builder.Services.AddSingleton<KinetixEngineProcessor>();
+
+    builder.Services.AddSingleton<IKinetixStrategy, FlowMomentumStrategy>();
+    builder.Services.AddSingleton<StrategyEngine>();
+    builder.Services.AddSingleton<StrategyAggregator>();
+    builder.Services.AddSingleton<TradePersistence>();
+    builder.Services.AddSingleton<PositionManager>();
+    builder.Services.AddSingleton<StrategyConfigLoader>();
+    builder.Services.AddSingleton<FairPriceEngine>();
+
     builder.Services.AddHostedService<Worker>();
 
     var host = builder.Build();

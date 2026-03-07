@@ -1,3 +1,4 @@
+using KinetixFlowEngine.Core.Bootstrap;
 using KinetixFlowEngine.Core.Context;
 using KinetixFlowEngine.Core.Data;
 using KinetixFlowEngine.Core.Engine;
@@ -6,6 +7,8 @@ using KinetixFlowEngine.Core.Flow.Probability;
 using KinetixFlowEngine.Core.Flow.State;
 using KinetixFlowEngine.Core.Persistence;
 using KinetixFlowEngine.Core.Signal;
+using KinetixFlowEngine.Core.Strategy;
+using KinetixFlowEngine.Core.Trading;
 using KinetixFlowEngine.Core.Trend;
 using KinetixFlowEngine.Core.Utils;
 using System.Globalization;
@@ -19,9 +22,10 @@ namespace KinetixFlowEngine.Core
         private readonly FlowTradeBuffer _flowTradeBuffer;
         private readonly ILogger<Worker> _logger;
         private readonly KinetixEngineProcessor _engineProcessor;
-
+        private readonly EngineWarmupManager _warmup;
         private readonly PriceTrendEngine _priceEngine;
         private readonly ScoreTrendEngine _scoreEngine;
+        private readonly EngineBootstrapService _bootstrap;
 
         private readonly ScoreNormalizer _scoreNorm;
         private readonly VelocityNormalizer _velNorm;
@@ -29,21 +33,26 @@ namespace KinetixFlowEngine.Core
         private readonly ExhaustionNormalizer _exhNorm;
         private readonly CompressionNormalizer _cmpNorm;
 
-        private readonly SnapshotManager _snapshotManager;
+        private readonly MarketStateManager _marketStateManager;
         private readonly FlowMetricsRecorder _recorder;
         private readonly OpenInterestClient _openInterestClient;
+
+        private readonly StrategyEngine _strategyEngine;
+        private readonly StrategyAggregator _strategyAggregator;
+        private readonly PositionManager _positionManager;
 
         private DateTime _lastSnapshot = DateTime.MinValue;
         private DateTime _lastOiFetch = DateTime.MinValue;
         private double _lastOiValue = 0;
 
-        public Worker(FlowTradeBuffer flowTradeBuffer, TradeStreamClient tradeStreamClient, ILogger<Worker> logger, KinetixEngineProcessor engineProcessor, ScoreNormalizer scoreNorm,
-                    VelocityNormalizer velNorm, ImbalanceNormalizer imbNorm, ExhaustionNormalizer exhNorm, CompressionNormalizer cmpNorm, SnapshotManager snapshotManager,
-                    PriceTrendEngine priceEngine, ScoreTrendEngine scoreEngine, OpenInterestClient openInterestClient, FlowMetricsRecorder recorder)
+        public Worker(FlowTradeBuffer flowTradeBuffer, TradeStreamClient tradeStreamClient, ILogger<Worker> logger, KinetixEngineProcessor engineProcessor, ScoreNormalizer scoreNorm, EngineBootstrapService bootstrap,
+                    VelocityNormalizer velNorm, ImbalanceNormalizer imbNorm, ExhaustionNormalizer exhNorm, CompressionNormalizer cmpNorm, MarketStateManager snapshotManager, PositionManager positionManager, EngineWarmupManager warmup,
+                    PriceTrendEngine priceEngine, ScoreTrendEngine scoreEngine, OpenInterestClient openInterestClient, FlowMetricsRecorder recorder, StrategyEngine strategyEngine, StrategyAggregator strategyAggregator)
         {
             _logger = logger;
+            _bootstrap = bootstrap;
             _engineProcessor = engineProcessor;
-
+            _warmup = warmup;
             _flowTradeBuffer = flowTradeBuffer;
             _tradeStreamClient = tradeStreamClient;
 
@@ -53,10 +62,14 @@ namespace KinetixFlowEngine.Core
             _exhNorm = exhNorm;
             _cmpNorm = cmpNorm;
 
-            _snapshotManager = snapshotManager;
+            _marketStateManager = snapshotManager;
 
             _priceEngine = priceEngine;
             _scoreEngine = scoreEngine;
+
+            _strategyEngine = strategyEngine;
+            _strategyAggregator = strategyAggregator;
+            _positionManager = positionManager;
 
             _openInterestClient = openInterestClient;
             _recorder = recorder;
@@ -69,8 +82,11 @@ namespace KinetixFlowEngine.Core
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            await _bootstrap.InitializeAsync();
+
             await _tradeStreamClient.StartAsync(stoppingToken);
-            var snapshot = _snapshotManager.Load();
+           
+            var snapshot = _marketStateManager.Load();
 
             if (snapshot != null)
             {
@@ -107,13 +123,31 @@ namespace KinetixFlowEngine.Core
                 }
 
                 var result = _engineProcessor.Process(price, trades[^1].Quantity, _lastOiValue);
+                bool ready = _warmup.Update();
+                if (!ready)
+                {
+                    _logger.LogInformation("ENGINE WARMUP | Waiting for indicators to stabilize...");
+                    await Task.Delay(1000, stoppingToken);
+                    continue;
+                }
+
+                var signals = _strategyEngine.Evaluate(result);
+                var finalSignal = _strategyAggregator.SelectSignal(signals);
+                if (finalSignal != null)
+                {
+                    _positionManager.TryEnterTrade(finalSignal, (decimal)result.Price);
+                    _logger.LogInformation("STRATEGY SIGNAL | Strategy {Strategy} Direction {Direction} Confidence {Confidence}",
+                        finalSignal.StrategyName, finalSignal.Direction, finalSignal.Confidence);
+                }
+                _positionManager.Update((decimal)result.Price);
+
                 _recorder.Record(result);
                 _logger.LogInformation("FLOW | Price {Price:F1} Score {Score:F1} Fast {Fast:F2} Medium {medium:F2} Slow {Slow:F2} Z {ScoreZ:F2} Trend {Trend} State {State} Long {LongProb:F2} Short {ShortProb:F2}",
                                 result.Price, result.AdjustedScore, result.ScoreFastEma, result.ScoreMediumEma, result.ScoreSlowEma, result.ScoreZ, result.ScoreTrend, result.FlowState.State, result.LongProbability, result.ShortProbability);
 
                 if ((DateTime.UtcNow - _lastSnapshot).TotalSeconds > 60)
                 {
-                    _snapshotManager.Save(new EngineSnapshot
+                    _marketStateManager.Save(new MarketStateSnapshot
                     {
                         Timestamp = DateTime.UtcNow,
                         LastPrice = price,

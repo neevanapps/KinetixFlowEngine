@@ -5,8 +5,9 @@ namespace KinetixFlowEngine.Core.Utils
     public class UniversalNormalizer
     {
         private readonly Queue<double> _values = new();
-
         public int MaxSamples { get; }
+        public int Count => _values.Count;
+        public bool IsReady => _values.Count >= 100;
 
         public UniversalNormalizer(int maxSamples)
         {
