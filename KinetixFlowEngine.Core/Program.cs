@@ -70,7 +70,7 @@ try
     builder.Services.AddSingleton<AtrEngine>();
     builder.Services.AddSingleton<OpenInterestEngine>();
     builder.Services.AddSingleton<ContextScoreEngine>();
-
+    builder.Services.AddSingleton<FlowMetricsRecorder>();
     builder.Services.AddSingleton<SignalStabilityEngine>();
     builder.Services.AddSingleton<PriceTrendEngine>();
     builder.Services.AddSingleton<ScoreTrendEngine>();

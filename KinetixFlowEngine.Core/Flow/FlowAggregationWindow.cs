@@ -9,7 +9,7 @@ namespace KinetixFlowEngine.Core.Flow
 
         public FlowAggregationWindow(
             FlowTradeBuffer buffer,
-            int windowSeconds = 20)
+            int windowSeconds = 40)
         {
             _buffer = buffer;
             _windowSeconds = windowSeconds;

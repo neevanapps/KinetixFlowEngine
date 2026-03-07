@@ -26,6 +26,7 @@ namespace KinetixFlowEngine.Core.Engine
         public FlowTrend ScoreTrend { get; set; }
 
         public double ScoreFastEma { get; set; }
+        public double ScoreMediumEma { get; set; }
         public double ScoreSlowEma { get; set; }
 
         public FlowStateSnapshot FlowState { get; set; } = new();
@@ -38,5 +39,13 @@ namespace KinetixFlowEngine.Core.Engine
 
         public int LongPersistence { get; set; }
         public int ShortPersistence { get; set; }
+
+        // NEW RAW FLOW FEATURES
+        public double DeltaVelocity { get; set; }
+        public double Momentum { get; set; }
+        public double Acceleration { get; set; }
+        public double Persistence { get; set; }
+        public double SizeBias { get; set; }
+        public double Absorption { get; set; }
     }
 }

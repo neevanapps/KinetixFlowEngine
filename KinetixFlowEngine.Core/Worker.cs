@@ -9,6 +9,7 @@ using KinetixFlowEngine.Core.Signal;
 using KinetixFlowEngine.Core.Trend;
 using KinetixFlowEngine.Core.Utils;
 using System.Globalization;
+using System.Text;
 
 namespace KinetixFlowEngine.Core
 {
@@ -29,7 +30,7 @@ namespace KinetixFlowEngine.Core
         private readonly CompressionNormalizer _cmpNorm;
 
         private readonly SnapshotManager _snapshotManager;
-
+        private readonly FlowMetricsRecorder _recorder;
         private readonly OpenInterestClient _openInterestClient;
 
         private DateTime _lastSnapshot = DateTime.MinValue;
@@ -38,7 +39,7 @@ namespace KinetixFlowEngine.Core
 
         public Worker(FlowTradeBuffer flowTradeBuffer, TradeStreamClient tradeStreamClient, ILogger<Worker> logger, KinetixEngineProcessor engineProcessor, ScoreNormalizer scoreNorm,
                     VelocityNormalizer velNorm, ImbalanceNormalizer imbNorm, ExhaustionNormalizer exhNorm, CompressionNormalizer cmpNorm, SnapshotManager snapshotManager,
-                    PriceTrendEngine priceEngine, ScoreTrendEngine scoreEngine, OpenInterestClient openInterestClient)
+                    PriceTrendEngine priceEngine, ScoreTrendEngine scoreEngine, OpenInterestClient openInterestClient, FlowMetricsRecorder recorder)
         {
             _logger = logger;
             _engineProcessor = engineProcessor;
@@ -58,6 +59,7 @@ namespace KinetixFlowEngine.Core
             _scoreEngine = scoreEngine;
 
             _openInterestClient = openInterestClient;
+            _recorder = recorder;
 
             _tradeStreamClient.OnTrade += trade =>
             {
@@ -83,7 +85,7 @@ namespace KinetixFlowEngine.Core
                     _cmpNorm.Restore(snapshot.CompressionNormalizer);
 
                     _priceEngine.Restore(snapshot.PriceFastEma, snapshot.PriceSlowEma);
-                    _scoreEngine.Restore(snapshot.ScoreFastEma, snapshot.ScoreSlowEma);
+                    _scoreEngine.Restore(snapshot.ScoreFastEma, snapshot.ScoreSlowEma, snapshot.ScoreMediumEma);
 
                     _logger.LogInformation("Snapshot restored successfully.");
                 }
@@ -105,9 +107,9 @@ namespace KinetixFlowEngine.Core
                 }
 
                 var result = _engineProcessor.Process(price, trades[^1].Quantity, _lastOiValue);
-
-                _logger.LogInformation("FLOW | Price {Price:F1} Score {Score:F1} Fast {Fast:F2} Slow {Slow:F2} Z {ScoreZ:F2} Trend {Trend} State {State} Long {LongProb:F2} Short {ShortProb:F2}",
-                                result.Price, result.AdjustedScore, result.ScoreFastEma, result.ScoreSlowEma, result.ScoreZ, result.ScoreTrend, result.FlowState.State, result.LongProbability, result.ShortProbability);
+                _recorder.Record(result);
+                _logger.LogInformation("FLOW | Price {Price:F1} Score {Score:F1} Fast {Fast:F2} Medium {medium:F2} Slow {Slow:F2} Z {ScoreZ:F2} Trend {Trend} State {State} Long {LongProb:F2} Short {ShortProb:F2}",
+                                result.Price, result.AdjustedScore, result.ScoreFastEma, result.ScoreMediumEma, result.ScoreSlowEma, result.ScoreZ, result.ScoreTrend, result.FlowState.State, result.LongProbability, result.ShortProbability);
 
                 if ((DateTime.UtcNow - _lastSnapshot).TotalSeconds > 60)
                 {
@@ -121,6 +123,7 @@ namespace KinetixFlowEngine.Core
 
                         ScoreFastEma = _scoreEngine.Fast,
                         ScoreSlowEma = _scoreEngine.Slow,
+                        ScoreMediumEma = _scoreEngine.Medium,
 
                         ScoreNormalizer = _scoreNorm.GetState(),
                         VelocityNormalizer = _velNorm.GetState(),

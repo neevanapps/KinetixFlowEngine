@@ -11,6 +11,7 @@ public class EngineSnapshot
 
     public decimal ScoreFastEma { get; set; }
     public decimal ScoreSlowEma { get; set; }
+    public decimal ScoreMediumEma { get; set; }
 
     public NormalizerState ScoreNormalizer { get; set; } = new();
     public NormalizerState VelocityNormalizer { get; set; } = new();

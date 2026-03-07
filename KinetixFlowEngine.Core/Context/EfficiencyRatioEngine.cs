@@ -3,7 +3,7 @@
     public class EfficiencyRatioEngine
     {
         private readonly Queue<double> _prices = new();
-        private const int Period = 20;
+        private const int Period = 100;
 
         public double Update(double price)
         {

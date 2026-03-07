@@ -161,7 +161,7 @@ namespace KinetixFlowEngine.Core.Engine
 
                 ScoreFastEma = (double)_scoreEngine.Fast,
                 ScoreSlowEma = (double)_scoreEngine.Slow,
-
+                ScoreMediumEma = (double)_scoreEngine.Medium,
                 FlowState = flowState,
 
                 LongProbability = probability.LongProbability,
@@ -170,7 +170,15 @@ namespace KinetixFlowEngine.Core.Engine
                 LongStable = stability.LongStable,
                 ShortStable = stability.ShortStable,
                 LongPersistence = stability.LongPersistence,
-                ShortPersistence = stability.ShortPersistence
+                ShortPersistence = stability.ShortPersistence,
+
+                // RAW FLOW FEATURES
+                DeltaVelocity = features.DeltaVelocity,
+                Momentum = features.Momentum,
+                Acceleration = features.Acceleration,
+                Persistence = features.Persistence,
+                SizeBias = features.SizeBias,
+                Absorption = features.Absorption
             };
         }
     }

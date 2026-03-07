@@ -7,7 +7,7 @@
 
         private readonly int _requiredSeconds;
 
-        public SignalStabilityEngine(int requiredSeconds = 5)
+        public SignalStabilityEngine(int requiredSeconds = 10)
         {
             _requiredSeconds = requiredSeconds;
         }
