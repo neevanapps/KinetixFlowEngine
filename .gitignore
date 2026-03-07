@@ -363,3 +363,4 @@ MigrationBackup/
 FodyWeavers.xsd
 /KinetixFlowEngine.Core/flow_metrics_20260307.csv
 /KinetixFlowEngine.Core/engine_snapshot.json
+/KinetixFlowEngine.Core/market_state.json
