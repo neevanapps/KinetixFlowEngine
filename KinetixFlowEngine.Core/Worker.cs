@@ -87,8 +87,18 @@ namespace KinetixFlowEngine.Core
                 if (!trade.NotifyThroughTelegram)
                     return;
 
-                await _telegram.SendMessageAsync($"TARGET1 HIT\n" + $"Strategy: {trade.StrategyName}\n" + $"Direction: {trade.Direction}\n" +
-                    $"Entry: {trade.EntryPrice:F2}\n" + $"Remaining Size: {trade.RemainingSize:F2}");
+                await _telegram.SendMessageAsync(
+                    $"""
+                        TARGET1 HIT | {trade.Direction}
+
+                        Entry={trade.EntryPrice:F1}
+                        Remaining={trade.RemainingSize:P0}
+
+                        EMA
+                        Fast={_scoreEngine.Fast:F2}
+                        Medium={_scoreEngine.Medium:F2}
+                        Slow={_scoreEngine.Slow:F2}
+                    """);
             };
             _tradeJournal = tradeJournal;
             _positionManager.TradeClosed += (trade, exitPrice) =>
@@ -198,7 +208,40 @@ namespace KinetixFlowEngine.Core
                         _positionManager.CloseTrade((decimal)price);
                         if (trade.NotifyThroughTelegram)
                         {
-                            await _telegram.SendMessageAsync($"EXIT SIGNAL\nStrategy: {trade.StrategyName}\nDirection: {trade.Direction}\nPrice: {result.Price:F2}");
+                            var exitPrice = (decimal)result.Price;
+                            var entry = trade.EntryPrice;
+                            var target1 = trade.Target1;
+                            decimal pnlPoints;
+                            if (trade.Target1Hit)
+                            {
+                                if (trade.Direction == SignalDirection.Long)
+                                {
+                                    pnlPoints = (target1 - entry) * 0.7m + (exitPrice - entry) * 0.3m;
+                                }
+                                else
+                                {
+                                    pnlPoints = (entry - target1) * 0.7m + (entry - exitPrice) * 0.3m;
+                                }
+                            }
+                            else
+                            {
+                                pnlPoints = trade.Direction == SignalDirection.Long ? exitPrice - entry : entry - exitPrice;
+                            }
+                            var duration = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - trade.EntryTimeMs) / 1000;
+                            await _telegram.SendMessageAsync(
+                            $"""
+                                EXIT | {trade.Direction}
+
+                                Entry={entry:F1}  Exit={exitPrice:F1}
+
+                                PnL={pnlPoints:F1}
+                                Duration={duration}s
+
+                                EMA
+                                Fast={result.ScoreFastEma:F2}
+                                Medium={result.ScoreMediumEma:F2}
+                                Slow={result.ScoreSlowEma:F2}
+                            """);
                         }
                         continue;
                     }
@@ -214,7 +257,23 @@ namespace KinetixFlowEngine.Core
 
                     if (finalSignal.NotifyThroughTelegram)
                     {
-                        await _telegram.SendMessageAsync($"ENTRY SIGNAL\nStrategy: {finalSignal.StrategyName}\nDirection: {finalSignal.Direction}\nPrice: {result.Price:F2}");
+                        var trade = _positionManager.ActiveTrade;
+
+                        await _telegram.SendMessageAsync(
+                        $"""
+                                ENTRY | {finalSignal.Direction}
+
+                                Price={result.Price:F1}  SL={trade?.StopLoss:F1}
+
+                                Score={result.ScoreZ:F2}  Conf={(result.LongProbability * 100):F0}%
+                                ER={result.ER:F2}  ATR15={result.ATR15m:F1}
+                                State={result.FlowState.State}
+
+                                EMA
+                                Fast={result.ScoreFastEma:F2}
+                                Medium={result.ScoreMediumEma:F2}
+                                Slow={result.ScoreSlowEma:F2}
+                         """);
                     }
                     _logger.LogInformation("STRATEGY SIGNAL | Strategy {Strategy} Direction {Direction} Confidence {Confidence}",
                         finalSignal.StrategyName, finalSignal.Direction, finalSignal.Confidence);
