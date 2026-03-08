@@ -365,3 +365,4 @@ FodyWeavers.xsd
 /KinetixFlowEngine.Core/engine_snapshot.json
 /KinetixFlowEngine.Core/market_state.json
 /KinetixFlowEngine.Core/active_trade.json
+/KinetixFlowEngine.Core/flow_metrics_20260308.csv
