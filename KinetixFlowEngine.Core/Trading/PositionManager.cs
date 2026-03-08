@@ -1,4 +1,5 @@
-﻿using KinetixFlowEngine.Core.Strategy;
+﻿using KinetixFlowEngine.Core.Engine;
+using KinetixFlowEngine.Core.Strategy;
 
 namespace KinetixFlowEngine.Core.Trading
 {
@@ -7,6 +8,7 @@ namespace KinetixFlowEngine.Core.Trading
         private readonly TradePersistence _persistence;
         public event Action<ActiveTrade>? Target1Reached;
         private ActiveTrade? _activeTrade;
+        public event Action<ActiveTrade, decimal>? TradeClosed;
 
         public PositionManager(TradePersistence persistence)
         {
@@ -19,7 +21,7 @@ namespace KinetixFlowEngine.Core.Trading
 
         public bool HasPosition => _activeTrade != null;
 
-        public void TryEnterTrade(StrategySignal signal, decimal price, double atr)
+        public void TryEnterTrade(StrategySignal signal, decimal price, double atr, KinetixEngineResult r)
         {
             if (_activeTrade != null)
                 return;
@@ -42,7 +44,16 @@ namespace KinetixFlowEngine.Core.Trading
                 InitialSize = 1,
                 RemainingSize = 1,
                 EntryTimeMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                NotifyThroughTelegram = signal.NotifyThroughTelegram
+                NotifyThroughTelegram = signal.NotifyThroughTelegram,
+                MaxPrice = price,
+                MinPrice = price,
+                EntryScoreZ = r.ScoreZ,
+                EntryVelocityZ = r.VelocityZ,
+                EntryImbalanceZ = r.ImbalanceZ,
+                EntryCompressionZ = r.CompressionZ,
+                EntryATR = r.ATR,
+                EntryER = r.ER,
+                EntryFlowState = r.FlowState.State.ToString(),
             };
 
             _activeTrade = trade;
@@ -56,7 +67,8 @@ namespace KinetixFlowEngine.Core.Trading
                 return;
 
             var trade = _activeTrade;
-
+            trade.MaxPrice = Math.Max(trade.MaxPrice, price);
+            trade.MinPrice = Math.Min(trade.MinPrice, price);
             if (!trade.Target1Hit)
             {
                 bool hit = false;
@@ -79,19 +91,24 @@ namespace KinetixFlowEngine.Core.Trading
 
             if (trade.Direction == SignalDirection.Long && price <= trade.StopLoss)
             {
-                CloseTrade();
+                CloseTrade(price);
             }
 
             if (trade.Direction == SignalDirection.Short && price >= trade.StopLoss)
             {
-                CloseTrade();
+                CloseTrade(price);
             }
 
             _persistence.Save(trade);
         }
 
-        public void CloseTrade()
+        public void CloseTrade(decimal exitPrice)
         {
+            if (_activeTrade == null)
+                return;
+
+            TradeClosed?.Invoke(_activeTrade, exitPrice);
+
             _activeTrade = null;
 
             _persistence.Clear();

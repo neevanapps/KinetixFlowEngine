@@ -37,6 +37,7 @@ namespace KinetixFlowEngine.Core
         private readonly StrategyEngine _strategyEngine;
         private readonly StrategyAggregator _strategyAggregator;
         private readonly PositionManager _positionManager;
+        private readonly TradeJournalRecorder _tradeJournal;
 
         private DateTime _lastSnapshot = DateTime.MinValue;
         private DateTime _lastOiFetch = DateTime.MinValue;
@@ -48,7 +49,7 @@ namespace KinetixFlowEngine.Core
         public Worker(FlowTradeBuffer flowTradeBuffer, TradeStreamClient tradeStreamClient, ILogger<Worker> logger, KinetixEngineProcessor engineProcessor, ScoreNormalizer scoreNorm, EngineBootstrapService bootstrap,
                     VelocityNormalizer velNorm, ImbalanceNormalizer imbNorm, ExhaustionNormalizer exhNorm, CompressionNormalizer cmpNorm, MarketStateManager snapshotManager, PositionManager positionManager,
                     EngineWarmupManager warmup, PriceTrendEngine priceEngine, ScoreTrendEngine scoreEngine, OpenInterestClient openInterestClient, FlowMetricsRecorder recorder, StrategyEngine strategyEngine,
-                    StrategyAggregator strategyAggregator, TelegramService telegram, IOptions<FlowEngineOptions> options)
+                    StrategyAggregator strategyAggregator, TelegramService telegram, IOptions<FlowEngineOptions> options, TradeJournalRecorder tradeJournal)
         {
             _logger = logger;
             _bootstrap = bootstrap;
@@ -88,6 +89,38 @@ namespace KinetixFlowEngine.Core
 
                 await _telegram.SendMessageAsync($"TARGET1 HIT\n" + $"Strategy: {trade.StrategyName}\n" + $"Direction: {trade.Direction}\n" +
                     $"Entry: {trade.EntryPrice:F2}\n" + $"Remaining Size: {trade.RemainingSize:F2}");
+            };
+            _tradeJournal = tradeJournal;
+            _positionManager.TradeClosed += (trade, exitPrice) =>
+            {
+                var duration = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - trade.EntryTimeMs) / 1000;
+                decimal pnlPoints = trade.Direction == SignalDirection.Long ? exitPrice - trade.EntryPrice : trade.EntryPrice - exitPrice;
+                decimal risk = Math.Abs(trade.EntryPrice - trade.StopLoss);
+                decimal pnlR = risk == 0 ? 0 : pnlPoints / risk;
+                decimal mfe = trade.Direction == SignalDirection.Long ? trade.MaxPrice - trade.EntryPrice : trade.EntryPrice - trade.MinPrice;
+                decimal mae = trade.Direction == SignalDirection.Long ? trade.EntryPrice - trade.MinPrice : trade.MaxPrice - trade.EntryPrice;
+                _tradeJournal.Record(new TradeJournalRecord
+                {
+                    Timestamp = DateTime.UtcNow,
+                    Strategy = trade.StrategyName,
+                    Direction = trade.Direction,
+                    EntryPrice = trade.EntryPrice,
+                    ExitPrice = exitPrice,
+                    StopLoss = trade.StopLoss,
+                    Target1 = trade.Target1,
+                    DurationSeconds = duration,
+                    PnlPoints = pnlPoints,
+                    PnlR = pnlR,
+                    MFE = mfe,
+                    MAE = mae,
+                    ScoreZ = trade.EntryScoreZ,
+                    VelocityZ = trade.EntryVelocityZ,
+                    ImbalanceZ = trade.EntryImbalanceZ,
+                    CompressionZ = trade.EntryCompressionZ,
+                    ATR = trade.EntryATR,
+                    ER = trade.EntryER,
+                    FlowState = trade.EntryFlowState
+                });
             };
         }
 
@@ -162,7 +195,7 @@ namespace KinetixFlowEngine.Core
                     var exitSignal = _strategyEngine.EvaluateExit(result, trade);
                     if (exitSignal != null)
                     {
-                        _positionManager.CloseTrade();
+                        _positionManager.CloseTrade((decimal)price);
                         if (trade.NotifyThroughTelegram)
                         {
                             await _telegram.SendMessageAsync($"EXIT SIGNAL\nStrategy: {trade.StrategyName}\nDirection: {trade.Direction}\nPrice: {result.Price:F2}");
@@ -177,7 +210,7 @@ namespace KinetixFlowEngine.Core
 
                 if (finalSignal != null && !_positionManager.HasPosition)
                 {
-                    _positionManager.TryEnterTrade(finalSignal, (decimal)result.Price, result.ATR15m);
+                    _positionManager.TryEnterTrade(finalSignal, (decimal)result.Price, result.ATR15m, result);
 
                     if (finalSignal.NotifyThroughTelegram)
                     {

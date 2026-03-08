@@ -24,6 +24,18 @@ namespace KinetixFlowEngine.Core.Trading
 
         public long EntryTimeMs { get; set; }
 
+        public decimal MaxPrice { get; set; }
+
+        public decimal MinPrice { get; set; }
+
         public bool NotifyThroughTelegram { get; set; }
+
+        public double EntryScoreZ { get; set; }
+        public double EntryVelocityZ { get; set; }
+        public double EntryImbalanceZ { get; set; }
+        public double EntryCompressionZ { get; set; }
+        public double EntryATR { get; set; }
+        public double EntryER { get; set; }
+        public string EntryFlowState { get; set; } = "";
     }
 }

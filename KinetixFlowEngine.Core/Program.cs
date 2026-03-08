@@ -90,6 +90,7 @@ try
     builder.Services.AddSingleton<PositionManager>();
     builder.Services.AddSingleton<StrategyConfigLoader>();
     builder.Services.AddSingleton<FairPriceEngine>();
+    builder.Services.AddSingleton<TradeJournalRecorder>();
 
     builder.Services.AddHostedService<Worker>();
 

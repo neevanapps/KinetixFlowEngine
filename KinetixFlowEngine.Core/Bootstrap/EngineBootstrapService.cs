@@ -44,8 +44,8 @@ namespace KinetixFlowEngine.Core.Bootstrap
             if (!klines.Success)
                 throw new Exception("Failed to fetch bootstrap klines");
 
-            var candles = klines.Data.ToList();
-            if (candles.Count < 100)
+            var candles = klines.Data;
+            if (candles.Count() < 100)
                 throw new Exception("Not enough bootstrap candles");
             // ---------- ATR 1m ----------
             foreach (var c in candles)
@@ -57,7 +57,7 @@ namespace KinetixFlowEngine.Core.Bootstrap
             }
 
             // ---------- Build 15m candles ----------
-            for (int i = 0; i < candles.Count; i += 15)
+            for (int i = 0; i < candles.Count(); i += 15)
             {
                 var group = candles.Skip(i).Take(15).ToList();
                 if (group.Count < 15) break;
