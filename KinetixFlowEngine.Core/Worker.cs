@@ -89,15 +89,15 @@ namespace KinetixFlowEngine.Core
 
                 await _telegram.SendMessageAsync(
                     $"""
-                        TARGET1 HIT | {trade.Direction}
+                    TARGET1 HIT | {trade.Direction}
 
-                        Entry={trade.EntryPrice:F1}
-                        Remaining={trade.RemainingSize:P0}
+                    Entry={trade.EntryPrice:F1}
+                    Remaining={trade.RemainingSize:P0}
 
-                        EMA
-                        Fast={_scoreEngine.Fast:F2}
-                        Medium={_scoreEngine.Medium:F2}
-                        Slow={_scoreEngine.Slow:F2}
+                    EMA
+                    Fast={_scoreEngine.Fast:F2}
+                    Medium={_scoreEngine.Medium:F2}
+                    Slow={_scoreEngine.Slow:F2}
                     """);
             };
             _tradeJournal = tradeJournal;
@@ -230,17 +230,17 @@ namespace KinetixFlowEngine.Core
                             var duration = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - trade.EntryTimeMs) / 1000;
                             await _telegram.SendMessageAsync(
                             $"""
-                                EXIT | {trade.Direction}
+                            EXIT | {trade.Direction}
 
-                                Entry={entry:F1}  Exit={exitPrice:F1}
+                            Entry={entry:F1}  Exit={exitPrice:F1}
 
-                                PnL={pnlPoints:F1}
-                                Duration={(duration / 60): F1}Mins
+                            PnL={pnlPoints:F1}
+                            Duration={(duration / 60): F1}Mins
 
-                                EMA
-                                Fast={result.ScoreFastEma:F2}
-                                Medium={result.ScoreMediumEma:F2}
-                                Slow={result.ScoreSlowEma:F2}
+                            EMA
+                            Fast={result.ScoreFastEma:F2}
+                            Medium={result.ScoreMediumEma:F2}
+                            Slow={result.ScoreSlowEma:F2}
                             """);
                         }
                         continue;
@@ -261,18 +261,18 @@ namespace KinetixFlowEngine.Core
 
                         await _telegram.SendMessageAsync(
                         $"""
-                                ENTRY | {finalSignal.Direction}
-
-                                Price={result.Price:F1}  SL={trade?.StopLoss:F1}
-
-                                Score={result.ScoreZ:F2}  Conf={(result.LongProbability * 100):F0}%
-                                ER={result.ER:F2}  ATR15={result.ATR15m:F1}
-                                State={result.FlowState.State}
-
-                                EMA
-                                Fast={result.ScoreFastEma:F2}
-                                Medium={result.ScoreMediumEma:F2}
-                                Slow={result.ScoreSlowEma:F2}
+                         ENTRY | {finalSignal.Direction}
+                         
+                         Price={result.Price:F1}  SL={trade?.StopLoss:F1}
+                         
+                         Score={result.ScoreZ:F2}  Conf={(result.LongProbability * 100):F0}%
+                         ER={result.ER:F2}  ATR15={result.ATR15m:F1}
+                         State={result.FlowState.State}
+                         
+                         EMA
+                         Fast={result.ScoreFastEma:F2}
+                         Medium={result.ScoreMediumEma:F2}
+                         Slow={result.ScoreSlowEma:F2}
                          """);
                     }
                     _logger.LogInformation("STRATEGY SIGNAL | Strategy {Strategy} Direction {Direction} Confidence {Confidence}",

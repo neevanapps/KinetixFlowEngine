@@ -14,9 +14,9 @@ namespace KinetixFlowEngine.Core.Trend
 
         public FlowTrend Update(decimal score, decimal er)
         {
-            var fast = _fast.Update(score, er, 5 * 60, 20 * 60);
-            var medium = _medium.Update(score, er, 20 * 60, 80 * 60);
-            var slow = _slow.Update(score, er, 40 * 60, 160 * 60);
+            var fast = _fast.Update(score, er, 5 * 12, 20 * 12);
+            var medium = _medium.Update(score, er, 20 * 12, 80 * 12);
+            var slow = _slow.Update(score, er, 40 * 12, 160 * 12);
 
             if (fast > medium && medium > slow)
                 return FlowTrend.Bullish;
