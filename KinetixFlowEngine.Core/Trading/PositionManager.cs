@@ -86,7 +86,7 @@ namespace KinetixFlowEngine.Core.Trading
             _persistence.Save(trade);
         }
 
-        private void CloseTrade()
+        public void CloseTrade()
         {
             _activeTrade = null;
 

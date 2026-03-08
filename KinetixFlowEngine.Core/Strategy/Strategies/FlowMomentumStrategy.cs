@@ -1,4 +1,5 @@
 ﻿using KinetixFlowEngine.Core.Engine;
+using KinetixFlowEngine.Core.Trading;
 using KinetixFlowEngine.Core.Trend;
 
 namespace KinetixFlowEngine.Core.Strategy.Strategies
@@ -13,9 +14,9 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
             _config = loader.Get(Name);
         }
 
-        public StrategySignal Evaluate(KinetixEngineResult r)
+        public StrategySignal EvaluateEntry(KinetixEngineResult r)
         {
-            if (r.ScoreZ > _config.MinConfidence && r.VelocityZ > 0.8 && r.ScoreTrend == FlowTrend.Bullish)
+            if (r.ScoreFastEma > 0 && r.ScoreMediumEma > 0 && r.ScoreSlowEma > 0)
             {
                 return new StrategySignal
                 {
@@ -27,9 +28,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
                 };
             }
 
-            if (r.ScoreZ < -1.5 &&
-                r.VelocityZ < -0.8 &&
-                r.ScoreTrend == FlowTrend.Bearish)
+            if (r.ScoreFastEma < 0 && r.ScoreMediumEma < 0 && r.ScoreSlowEma < 0)
             {
                 return new StrategySignal
                 {
@@ -46,6 +45,29 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
                 StrategyName = Name,
                 Direction = SignalDirection.None
             };
+        }
+
+        public StrategySignal EvaluateExit(KinetixEngineResult r, ActiveTrade trade)
+        {
+            if (trade.Direction == SignalDirection.Long && r.ScoreMediumEma < 0 && r.ScoreFastEma < 0)
+            {
+                return new StrategySignal
+                {
+                    StrategyName = Name,
+                    ExitSignal = true
+                };
+            }
+
+            if (trade.Direction == SignalDirection.Short && r.ScoreMediumEma > 0 && r.ScoreFastEma > 0)
+            {
+                return new StrategySignal
+                {
+                    StrategyName = Name,
+                    ExitSignal = true
+                };
+            }
+
+            return new StrategySignal { ExitSignal = false };
         }
     }
 }

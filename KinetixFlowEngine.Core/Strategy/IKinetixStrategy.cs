@@ -1,4 +1,5 @@
 ﻿using KinetixFlowEngine.Core.Engine;
+using KinetixFlowEngine.Core.Trading;
 
 namespace KinetixFlowEngine.Core.Strategy
 {
@@ -6,6 +7,9 @@ namespace KinetixFlowEngine.Core.Strategy
     {
         string Name { get; }
 
-        StrategySignal Evaluate(KinetixEngineResult result);
+        StrategySignal EvaluateEntry(KinetixEngineResult result);
+
+        StrategySignal EvaluateExit(KinetixEngineResult result, ActiveTrade trade);
+
     }
 }

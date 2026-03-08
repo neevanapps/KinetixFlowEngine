@@ -94,7 +94,7 @@ namespace KinetixFlowEngine.Core
             {
                 var age = DateTime.UtcNow - snapshot.Timestamp;
 
-                if (age.TotalMinutes < 10)
+                if (age.TotalMinutes < 60)
                 {
                     _scoreNorm.Restore(snapshot.ScoreNormalizer);
                     _velNorm.Restore(snapshot.VelocityNormalizer);
@@ -106,6 +106,10 @@ namespace KinetixFlowEngine.Core
                     _scoreEngine.Restore(snapshot.ScoreFastEma, snapshot.ScoreSlowEma, snapshot.ScoreMediumEma);
 
                     _logger.LogInformation("Snapshot restored successfully.");
+                }
+                else
+                {
+                    await _telegram.SendMessageAsync("Market state is older than 60mins, fresh state started.");
                 }
             }
 
@@ -129,24 +133,46 @@ namespace KinetixFlowEngine.Core
                     continue;
                 }
                 _lastEngineCycle = DateTime.UtcNow;
-                
+
                 var result = _engineProcessor.Process(price, lastTrade.Quantity, _lastOiValue);
                 bool ready = _warmup.Update();
                 if (!ready)
                 {
-                    _logger.LogInformation("ENGINE WARMUP | Waiting for indicators to stabilize...");
+                    if ((DateTime.UtcNow.Second % 30) == 0)
+                    {
+                        _logger.LogInformation("ENGINE WARMUP | Waiting for indicators to stabilize...");
+                    }
                     await Task.Delay(1000, stoppingToken);
                     continue;
                 }
 
+                // ---------- EXIT FIRST ----------
+                if (_positionManager.HasPosition)
+                {
+                    var trade = _positionManager.ActiveTrade;
+                    var exitSignal = _strategyEngine.EvaluateExit(result, trade);
+                    if (exitSignal != null)
+                    {
+                        _positionManager.CloseTrade();
+                        if (trade.NotifyThroughTelegram)
+                        {
+                            await _telegram.SendMessageAsync($"EXIT SIGNAL\nStrategy: {trade.StrategyName}\nDirection: {trade.Direction}\nPrice: {result.Price:F2}");
+                        }
+                        continue;
+                    }
+                }
+
+                // ---------- ENTRY SECOND ----------
                 var signals = _strategyEngine.Evaluate(result);
                 var finalSignal = _strategyAggregator.SelectSignal(signals);
-                if (finalSignal != null)
+
+                if (finalSignal != null && !_positionManager.HasPosition)
                 {
                     _positionManager.TryEnterTrade(finalSignal, (decimal)result.Price);
+
                     if (finalSignal.NotifyThroughTelegram)
                     {
-                        await _telegram.SendMessageAsync($"Strategy {finalSignal.StrategyName} | Direction {finalSignal.Direction} | Price {result.Price:f2} |SL {_positionManager.ActiveTrade?.StopLoss}");
+                        await _telegram.SendMessageAsync($"ENTRY SIGNAL\nStrategy: {finalSignal.StrategyName}\nDirection: {finalSignal.Direction}\nPrice: {result.Price:F2}");
                     }
                     _logger.LogInformation("STRATEGY SIGNAL | Strategy {Strategy} Direction {Direction} Confidence {Confidence}",
                         finalSignal.StrategyName, finalSignal.Direction, finalSignal.Confidence);

@@ -1,4 +1,5 @@
 ﻿using KinetixFlowEngine.Core.Engine;
+using KinetixFlowEngine.Core.Trading;
 using KinetixFlowEngine.Core.Utils;
 
 namespace KinetixFlowEngine.Core.Strategy
@@ -20,7 +21,7 @@ namespace KinetixFlowEngine.Core.Strategy
 
             foreach (var strategy in _strategies)
             {
-                var signal = strategy.Evaluate(result);
+                var signal = strategy.EvaluateEntry(result);
 
                 if (signal.Direction != SignalDirection.None)
                 {
@@ -44,6 +45,23 @@ namespace KinetixFlowEngine.Core.Strategy
             }
 
             return signals;
+        }
+
+        // EXIT EVALUATION
+        public StrategySignal? EvaluateExit(KinetixEngineResult result, ActiveTrade trade)
+        {
+            foreach (var strategy in _strategies)
+            {
+                if (strategy.Name != trade.StrategyName)
+                    continue;
+
+                var exit = strategy.EvaluateExit(result, trade);
+
+                if (exit.ExitSignal)
+                    return exit;
+            }
+
+            return null;
         }
     }
 }

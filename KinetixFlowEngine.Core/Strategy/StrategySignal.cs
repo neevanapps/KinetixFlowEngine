@@ -15,5 +15,7 @@
         public decimal? SuggestedEntryPrice { get; set; }
 
         public bool FairPriceApproved { get; set; }
+
+        public bool ExitSignal { get; set; }
     }
 }
