@@ -235,7 +235,7 @@ namespace KinetixFlowEngine.Core
                                 Entry={entry:F1}  Exit={exitPrice:F1}
 
                                 PnL={pnlPoints:F1}
-                                Duration={duration}s
+                                Duration={(duration / 60): F1}Mins
 
                                 EMA
                                 Fast={result.ScoreFastEma:F2}
