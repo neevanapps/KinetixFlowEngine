@@ -21,10 +21,10 @@ namespace KinetixFlowEngine.Core.Strategy
 
         private Dictionary<string, StrategyConfig> LoadConfigs()
         {
-            var path = "strategy_config.json";
+            var path = Path.Combine(AppContext.BaseDirectory, "strategy_config.json");
 
             if (!File.Exists(path))
-                throw new Exception("strategy_config.json not found");
+                throw new Exception($"strategy_config.json not found at {path}");
 
             var json = File.ReadAllText(path);
 

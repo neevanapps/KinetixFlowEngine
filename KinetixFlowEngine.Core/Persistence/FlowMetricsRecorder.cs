@@ -10,9 +10,10 @@ namespace KinetixFlowEngine.Core.Persistence
 
         public FlowMetricsRecorder()
         {
-            var date = DateTime.UtcNow.ToString("yyyyMMdd");
-            _filePath = $"flow_metrics_{date}.csv";
+            var folder = Path.Combine(AppContext.BaseDirectory, "metrics");
+            Directory.CreateDirectory(folder);
 
+            _filePath = Path.Combine(folder, "flow_metrics.csv");
             if (!File.Exists(_filePath))
             {
                 WriteHeader();
