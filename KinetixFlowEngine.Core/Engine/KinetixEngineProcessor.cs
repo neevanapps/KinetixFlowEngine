@@ -21,6 +21,7 @@ namespace KinetixFlowEngine.Core.Engine
         private readonly AtrEngine _atrEngine;
         private readonly OpenInterestEngine _oiEngine;
         private readonly ContextScoreEngine _contextScoreEngine;
+        private readonly Atr15mEngine _atr15m;
 
         private readonly PriceTrendEngine _priceEngine;
         private readonly ScoreTrendEngine _scoreEngine;
@@ -57,7 +58,8 @@ namespace KinetixFlowEngine.Core.Engine
             VelocityNormalizer velNorm,
             ImbalanceNormalizer imbNorm,
             ExhaustionNormalizer exhNorm,
-            CompressionNormalizer cmpNorm)
+            CompressionNormalizer cmpNorm,
+            Atr15mEngine atr15m)
         {
             _flowAggregationWindow = flowAggregationWindow;
             _flowFeatureEngine = flowFeatureEngine;
@@ -83,6 +85,7 @@ namespace KinetixFlowEngine.Core.Engine
             _imbNorm = imbNorm;
             _exhNorm = exhNorm;
             _cmpNorm = cmpNorm;
+            _atr15m = atr15m;
         }
 
         public KinetixEngineResult Process(double price, decimal quantity, double openInterest)
@@ -162,7 +165,7 @@ namespace KinetixFlowEngine.Core.Engine
                 ER = er,
                 ATR = atr,
                 OIChange = oiChange,
-
+                ATR15m = _atr15m.Value,
                 PriceTrend = priceTrend,
                 ScoreTrend = scoreTrend,
 

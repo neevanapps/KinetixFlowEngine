@@ -80,6 +80,15 @@ namespace KinetixFlowEngine.Core
             {
                 _flowTradeBuffer.AddTrade(trade);
             };
+
+            _positionManager.Target1Reached += async trade =>
+            {
+                if (!trade.NotifyThroughTelegram)
+                    return;
+
+                await _telegram.SendMessageAsync($"TARGET1 HIT\n" + $"Strategy: {trade.StrategyName}\n" + $"Direction: {trade.Direction}\n" +
+                    $"Entry: {trade.EntryPrice:F2}\n" + $"Remaining Size: {trade.RemainingSize:F2}");
+            };
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -168,7 +177,7 @@ namespace KinetixFlowEngine.Core
 
                 if (finalSignal != null && !_positionManager.HasPosition)
                 {
-                    _positionManager.TryEnterTrade(finalSignal, (decimal)result.Price);
+                    _positionManager.TryEnterTrade(finalSignal, (decimal)result.Price, result.ATR15m);
 
                     if (finalSignal.NotifyThroughTelegram)
                     {

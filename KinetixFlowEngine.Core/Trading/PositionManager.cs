@@ -5,7 +5,7 @@ namespace KinetixFlowEngine.Core.Trading
     public class PositionManager
     {
         private readonly TradePersistence _persistence;
-
+        public event Action<ActiveTrade>? Target1Reached;
         private ActiveTrade? _activeTrade;
 
         public PositionManager(TradePersistence persistence)
@@ -19,12 +19,13 @@ namespace KinetixFlowEngine.Core.Trading
 
         public bool HasPosition => _activeTrade != null;
 
-        public void TryEnterTrade(StrategySignal signal, decimal price)
+        public void TryEnterTrade(StrategySignal signal, decimal price, double atr)
         {
             if (_activeTrade != null)
                 return;
 
-            var stopDistance = price * 0.002m; // 0.2% placeholder
+            decimal atrValue = (decimal)atr;
+            var stopDistance = Math.Min(price * 0.01m, atrValue * 3);
 
             var trade = new ActiveTrade
             {
@@ -35,8 +36,8 @@ namespace KinetixFlowEngine.Core.Trading
                     ? price - stopDistance
                     : price + stopDistance,
                 Target1 = signal.Direction == SignalDirection.Long
-                    ? price + stopDistance * 2
-                    : price - stopDistance * 2,
+                    ? price + stopDistance
+                    : price - stopDistance,
                 TrailingStop = stopDistance,
                 InitialSize = 1,
                 RemainingSize = 1,
@@ -58,18 +59,21 @@ namespace KinetixFlowEngine.Core.Trading
 
             if (!trade.Target1Hit)
             {
-                if (trade.Direction == SignalDirection.Long && price >= trade.Target1)
-                {
-                    trade.Target1Hit = true;
+                bool hit = false;
 
-                    trade.RemainingSize *= 0.5m;
-                }
+                if (trade.Direction == SignalDirection.Long && price >= trade.Target1)
+                    hit = true;
 
                 if (trade.Direction == SignalDirection.Short && price <= trade.Target1)
+                    hit = true;
+
+                if (hit)
                 {
                     trade.Target1Hit = true;
 
-                    trade.RemainingSize *= 0.5m;
+                    trade.RemainingSize *= 0.3m;
+
+                    Target1Reached?.Invoke(trade);
                 }
             }
 

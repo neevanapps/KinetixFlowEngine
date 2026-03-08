@@ -21,6 +21,7 @@ namespace KinetixFlowEngine.Core.Engine
         public double ER { get; set; }
         public double ATR { get; set; }
         public double OIChange { get; set; }
+        public double ATR15m { get; set; }
 
         public FlowTrend PriceTrend { get; set; }
         public FlowTrend ScoreTrend { get; set; }
