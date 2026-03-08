@@ -1,9 +1,16 @@
-﻿namespace KinetixFlowEngine.Core.Context
+﻿using System.Collections.Generic;
+using System.Linq;
+
+namespace KinetixFlowEngine.Core.Context
 {
     public class EfficiencyRatioEngine
     {
         private readonly Queue<double> _prices = new();
-        private const int Period = 100;
+
+        // 5 minute ER window
+        private const int Period = 60; // 60 samples * 5s = 300 seconds
+
+        private double _lastEr = 0.5;
 
         public double Update(double price)
         {
@@ -13,7 +20,7 @@
                 _prices.Dequeue();
 
             if (_prices.Count < Period)
-                return 0.5;
+                return _lastEr;
 
             var first = _prices.First();
             var last = _prices.Last();
@@ -30,9 +37,11 @@
             }
 
             if (volatility == 0)
-                return 0;
+                return _lastEr;
 
-            return change / volatility;
+            _lastEr = change / volatility;
+
+            return _lastEr;
         }
     }
 }

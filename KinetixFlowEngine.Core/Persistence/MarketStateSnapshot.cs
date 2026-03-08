@@ -17,9 +17,6 @@ namespace KinetixFlowEngine.Core.Persistence
         public decimal ScoreSlowEma { get; set; }
         public decimal ScoreMediumEma { get; set; }
 
-        public double VWAPSumPV { get; set; }
-        public double VWAPSumVolume { get; set; }
-
         public NormalizerState ScoreNormalizer { get; set; } = new();
         public NormalizerState VelocityNormalizer { get; set; } = new();
         public NormalizerState ImbalanceNormalizer { get; set; } = new();

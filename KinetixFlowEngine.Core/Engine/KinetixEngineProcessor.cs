@@ -35,6 +35,8 @@ namespace KinetixFlowEngine.Core.Engine
         private readonly ExhaustionNormalizer _exhNorm;
         private readonly CompressionNormalizer _cmpNorm;
 
+        private readonly OneMinuteCandleBuilder _candleBuilder = new();
+
         public KinetixEngineProcessor(
             FlowAggregationWindow flowAggregationWindow,
             FlowFeatureEngine flowFeatureEngine,
@@ -99,7 +101,12 @@ namespace KinetixFlowEngine.Core.Engine
 
             var er = _erEngine.Update(price);
 
-            var atr = _atrEngine.Update(price, price, price);
+            double atr = _atrEngine.Value;
+
+            if (_candleBuilder.Update(price, out var candle))
+            {
+                atr = _atrEngine.Update(candle.High, candle.Low, candle.Close);
+            }
 
             var oiChange = _oiEngine.Update(openInterest);
 

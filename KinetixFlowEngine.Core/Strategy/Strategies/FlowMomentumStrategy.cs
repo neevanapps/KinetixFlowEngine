@@ -34,7 +34,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
                 return new StrategySignal
                 {
                     StrategyName = Name,
-                    Direction = SignalDirection.Long,
+                    Direction = SignalDirection.Short,
                     Confidence = r.ScoreZ,
                     EnterOnlyAtFairPrice = _config.EnterOnlyAtFairPrice,
                     NotifyThroughTelegram = _config.NotifyThroughTelegram

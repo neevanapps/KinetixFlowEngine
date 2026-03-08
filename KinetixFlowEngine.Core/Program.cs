@@ -72,7 +72,8 @@ try
 
     builder.Services.AddSingleton<VwapEngine>();
     builder.Services.AddSingleton<EfficiencyRatioEngine>();
-    builder.Services.AddSingleton<AtrEngine>();
+    builder.Services.AddSingleton<AtrEngine>();  // 1m ATR
+    builder.Services.AddSingleton<Atr15mEngine>();   // 15m ATR
     builder.Services.AddSingleton<OpenInterestEngine>();
     builder.Services.AddSingleton<ContextScoreEngine>();
     builder.Services.AddSingleton<FlowMetricsRecorder>();

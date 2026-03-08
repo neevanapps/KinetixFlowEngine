@@ -7,6 +7,12 @@ public class OpenInterestEngine
 
     public double Update(double current)
     {
+        if (_previous == 0)
+        {
+            _previous = current;
+            return 0;
+        }
+
         var change = current - _previous;
         _previous = current;
 

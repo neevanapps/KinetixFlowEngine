@@ -3,6 +3,8 @@ using Binance.Net.Enums;
 using KinetixFlowEngine.Core.Context;
 using KinetixFlowEngine.Core.Trend;
 using KinetixFlowEngine.Core.Utils;
+using Serilog;
+using System.Runtime.InteropServices;
 
 namespace KinetixFlowEngine.Core.Bootstrap
 {
@@ -16,11 +18,11 @@ namespace KinetixFlowEngine.Core.Bootstrap
         private readonly VwapEngine _vwap;
         private readonly ILogger<EngineBootstrapService> _logger;
 
-        public EngineBootstrapService(EfficiencyRatioEngine er, PriceTrendEngine priceTrend, VwapEngine vwap, ILogger<EngineBootstrapService> logger)
+        public EngineBootstrapService(EfficiencyRatioEngine er, PriceTrendEngine priceTrend, VwapEngine vwap, ILogger<EngineBootstrapService> logger, AtrEngine atr1m, Atr15mEngine atr15m)
         {
             _binance = new BinanceRestClient();
-            _atr1m = new AtrEngine();
-            _atr15m = new AtrEngine();
+            _atr1m = atr1m;
+            _atr15m = atr15m;
             _er = er;
             _priceTrend = priceTrend;
             _vwap = vwap;
@@ -43,15 +45,15 @@ namespace KinetixFlowEngine.Core.Bootstrap
                 throw new Exception("Failed to fetch bootstrap klines");
 
             var candles = klines.Data.ToList();
-
+            if (candles.Count < 100)
+                throw new Exception("Not enough bootstrap candles");
             // ---------- ATR 1m ----------
             foreach (var c in candles)
             {
-                var high = (double)c.HighPrice;
-                var low = (double)c.LowPrice;
-                var close = (double)c.ClosePrice;
-
-                _atr1m.Update(high, low, close);
+                _atr1m.Update(
+                    (double)c.HighPrice,
+                    (double)c.LowPrice,
+                    (double)c.ClosePrice);
             }
 
             // ---------- Build 15m candles ----------
@@ -67,17 +69,25 @@ namespace KinetixFlowEngine.Core.Bootstrap
                 _atr15m.Update(high, low, close);
             }
 
-            // ---------- ER + EMA + VWAP ----------
-            foreach (var c in candles)
+            // ---------- ER + EMA bootstrap ----------
+            var erCandles = candles.TakeLast(60);
+
+            foreach (var c in erCandles)
             {
-                double price = (double)c.ClosePrice;
-                decimal volume = c.Volume;
+                var close = (double)c.ClosePrice;
 
-                _er.Update(price);
+                var er = _er.Update(close);
+                _priceTrend.Update((decimal)close, (decimal)er);
+            }
 
-                _priceTrend.Update((decimal)price, 0.5m); // neutral ER seed
+            // ---------- VWAP bootstrap (15 minutes) ----------
+            var vwapCandles = candles.TakeLast(15);
 
-                _vwap.Update((decimal)price, volume);
+            foreach (var c in vwapCandles)
+            {
+                _vwap.Update(
+                    c.ClosePrice,
+                    c.Volume);
             }
 
             _logger.LogInformation(

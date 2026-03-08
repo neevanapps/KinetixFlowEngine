@@ -28,5 +28,18 @@ namespace KinetixFlowEngine.Core.Flow
         {
             return _trades.ToArray();
         }
+
+        public bool TryGetLast(out FlowTrade trade)
+        {
+            trade = default;
+
+            if (_trades.IsEmpty)
+                return false;
+
+            foreach (var t in _trades)
+                trade = t;
+
+            return true;
+        }
     }
 }

@@ -2,28 +2,22 @@
 {
     public class FlowPersistence
     {
-        private int _bullCount;
-        private int _bearCount;
+        private double _score;
 
         public double Calculate(double imbalance)
         {
-            if (imbalance > 0.2)
-            {
-                _bullCount++;
-                _bearCount = 0;
-            }
-            else if (imbalance < -0.2)
-            {
-                _bearCount++;
-                _bullCount = 0;
-            }
-            else
-            {
-                _bullCount = 0;
-                _bearCount = 0;
-            }
+            const double threshold = 0.15;
 
-            return _bullCount - _bearCount;
+            if (imbalance > threshold)
+                _score += 1;
+
+            else if (imbalance < -threshold)
+                _score -= 1;
+
+            else
+                _score *= 0.7; // decay
+
+            return _score;
         }
     }
 }

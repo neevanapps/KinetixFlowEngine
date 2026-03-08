@@ -2,35 +2,35 @@
 {
     public class ScoreNormalizer : UniversalNormalizer
     {
-        public ScoreNormalizer() : base(43200) // 12 hours @ 1 sec
+        public ScoreNormalizer() : base(8640) // 12 hours @ 1 sec
         {
         }
     }
 
     public class VelocityNormalizer : UniversalNormalizer
     {
-        public VelocityNormalizer() : base(43200)
+        public VelocityNormalizer() : base(8640)
         {
         }
     }
 
     public class ImbalanceNormalizer : UniversalNormalizer
     {
-        public ImbalanceNormalizer() : base(43200)
+        public ImbalanceNormalizer() : base(8640)
         {
         }
     }
 
     public class ExhaustionNormalizer : UniversalNormalizer
     {
-        public ExhaustionNormalizer() : base(43200)
+        public ExhaustionNormalizer() : base(8640)
         {
         }
     }
 
     public class CompressionNormalizer : UniversalNormalizer
     {
-        public CompressionNormalizer() : base(43200) // 12 hours at 1s updates
+        public CompressionNormalizer() : base(8640) // 12 hours at 1s updates
         {
         }
     }

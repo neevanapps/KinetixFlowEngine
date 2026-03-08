@@ -1,18 +1,14 @@
 using KinetixFlowEngine.Core.Bootstrap;
-using KinetixFlowEngine.Core.Context;
+using KinetixFlowEngine.Core.Config;
 using KinetixFlowEngine.Core.Data;
 using KinetixFlowEngine.Core.Engine;
 using KinetixFlowEngine.Core.Flow;
-using KinetixFlowEngine.Core.Flow.Probability;
-using KinetixFlowEngine.Core.Flow.State;
 using KinetixFlowEngine.Core.Persistence;
-using KinetixFlowEngine.Core.Signal;
 using KinetixFlowEngine.Core.Strategy;
 using KinetixFlowEngine.Core.Trading;
 using KinetixFlowEngine.Core.Trend;
 using KinetixFlowEngine.Core.Utils;
-using System.Globalization;
-using System.Text;
+using Microsoft.Extensions.Options;
 
 namespace KinetixFlowEngine.Core
 {
@@ -26,6 +22,7 @@ namespace KinetixFlowEngine.Core
         private readonly PriceTrendEngine _priceEngine;
         private readonly ScoreTrendEngine _scoreEngine;
         private readonly EngineBootstrapService _bootstrap;
+        private readonly TelegramService _telegram;
 
         private readonly ScoreNormalizer _scoreNorm;
         private readonly VelocityNormalizer _velNorm;
@@ -45,9 +42,13 @@ namespace KinetixFlowEngine.Core
         private DateTime _lastOiFetch = DateTime.MinValue;
         private double _lastOiValue = 0;
 
+        private readonly FlowEngineOptions _options;
+        private DateTime _lastEngineCycle = DateTime.MinValue;
+
         public Worker(FlowTradeBuffer flowTradeBuffer, TradeStreamClient tradeStreamClient, ILogger<Worker> logger, KinetixEngineProcessor engineProcessor, ScoreNormalizer scoreNorm, EngineBootstrapService bootstrap,
-                    VelocityNormalizer velNorm, ImbalanceNormalizer imbNorm, ExhaustionNormalizer exhNorm, CompressionNormalizer cmpNorm, MarketStateManager snapshotManager, PositionManager positionManager, EngineWarmupManager warmup,
-                    PriceTrendEngine priceEngine, ScoreTrendEngine scoreEngine, OpenInterestClient openInterestClient, FlowMetricsRecorder recorder, StrategyEngine strategyEngine, StrategyAggregator strategyAggregator)
+                    VelocityNormalizer velNorm, ImbalanceNormalizer imbNorm, ExhaustionNormalizer exhNorm, CompressionNormalizer cmpNorm, MarketStateManager snapshotManager, PositionManager positionManager,
+                    EngineWarmupManager warmup, PriceTrendEngine priceEngine, ScoreTrendEngine scoreEngine, OpenInterestClient openInterestClient, FlowMetricsRecorder recorder, StrategyEngine strategyEngine,
+                    StrategyAggregator strategyAggregator, TelegramService telegram, IOptions<FlowEngineOptions> options)
         {
             _logger = logger;
             _bootstrap = bootstrap;
@@ -55,12 +56,13 @@ namespace KinetixFlowEngine.Core
             _warmup = warmup;
             _flowTradeBuffer = flowTradeBuffer;
             _tradeStreamClient = tradeStreamClient;
-
+            _telegram = telegram;
             _scoreNorm = scoreNorm;
             _velNorm = velNorm;
             _imbNorm = imbNorm;
             _exhNorm = exhNorm;
             _cmpNorm = cmpNorm;
+            _options = options.Value;
 
             _marketStateManager = snapshotManager;
 
@@ -85,7 +87,7 @@ namespace KinetixFlowEngine.Core
             await _bootstrap.InitializeAsync();
 
             await _tradeStreamClient.StartAsync(stoppingToken);
-           
+
             var snapshot = _marketStateManager.Load();
 
             if (snapshot != null)
@@ -109,20 +111,26 @@ namespace KinetixFlowEngine.Core
 
             while (!stoppingToken.IsCancellationRequested)
             {
-                var trades = _flowTradeBuffer.GetSnapshot();
-                if (trades == null || trades.Length == 0)
+                if (!_flowTradeBuffer.TryGetLast(out var lastTrade))
                 {
                     await Task.Delay(1000, stoppingToken);
                     continue;
                 }
-                double price = (double)trades[^1].Price;
-                if ((DateTime.UtcNow - _lastOiFetch).TotalSeconds > 20)
+                double price = (double)lastTrade.Price;
+
+                if ((DateTime.UtcNow - _lastOiFetch).TotalSeconds > 120)
                 {
                     _lastOiValue = await _openInterestClient.GetOpenInterestAsync();
                     _lastOiFetch = DateTime.UtcNow;
                 }
-
-                var result = _engineProcessor.Process(price, trades[^1].Quantity, _lastOiValue);
+                if ((DateTime.UtcNow - _lastEngineCycle).TotalSeconds < _options.EngineCycleSeconds)
+                {
+                    await Task.Delay(1000, stoppingToken);
+                    continue;
+                }
+                _lastEngineCycle = DateTime.UtcNow;
+                
+                var result = _engineProcessor.Process(price, lastTrade.Quantity, _lastOiValue);
                 bool ready = _warmup.Update();
                 if (!ready)
                 {
@@ -136,14 +144,22 @@ namespace KinetixFlowEngine.Core
                 if (finalSignal != null)
                 {
                     _positionManager.TryEnterTrade(finalSignal, (decimal)result.Price);
+                    if (finalSignal.NotifyThroughTelegram)
+                    {
+                        await _telegram.SendMessageAsync($"Strategy {finalSignal.StrategyName} | Direction {finalSignal.Direction} | Price {result.Price:f2} |SL {_positionManager.ActiveTrade?.StopLoss}");
+                    }
                     _logger.LogInformation("STRATEGY SIGNAL | Strategy {Strategy} Direction {Direction} Confidence {Confidence}",
                         finalSignal.StrategyName, finalSignal.Direction, finalSignal.Confidence);
                 }
                 _positionManager.Update((decimal)result.Price);
 
                 _recorder.Record(result);
-                _logger.LogInformation("FLOW | Price {Price:F1} Score {Score:F1} Fast {Fast:F2} Medium {medium:F2} Slow {Slow:F2} Z {ScoreZ:F2} Trend {Trend} State {State} Long {LongProb:F2} Short {ShortProb:F2}",
-                                result.Price, result.AdjustedScore, result.ScoreFastEma, result.ScoreMediumEma, result.ScoreSlowEma, result.ScoreZ, result.ScoreTrend, result.FlowState.State, result.LongProbability, result.ShortProbability);
+                _logger.LogInformation("FLOW | " + "Price {Price:F2} " + "RawScore {RawScore:F2} AdjScore {AdjScore:F2} " + "Fast {Fast:F2} Medium {Medium:F2} Slow {Slow:F2} "
+                    + "ScoreZ {ScoreZ:F2} VelZ {VelZ:F2} ImbZ {ImbZ:F2} ExhZ {ExhZ:F2} CmpZ {CmpZ:F2} " + "VWAP {VWAP:F2} ER {ER:F3} ATR {ATR:F2} OIΔ {OI:F2} " + "Trend {Trend} "
+                    + "State {State} " + "LongProb {LongProb:F3} ShortProb {ShortProb:F3} " + "LongStable {LongStable} ShortStable {ShortStable} " + "LongPersist {LongPersist} ShortPersist {ShortPersist}",
+                    result.Price, result.RawScore, result.AdjustedScore, result.ScoreFastEma, result.ScoreMediumEma, result.ScoreSlowEma, result.ScoreZ, result.VelocityZ, result.ImbalanceZ, result.ExhaustionZ,
+                    result.CompressionZ, result.VWAP, result.ER, result.ATR, result.OIChange, result.ScoreTrend, result.FlowState.State, result.LongProbability, result.ShortProbability,
+                    result.LongStable, result.ShortStable, result.LongPersistence, result.ShortPersistence);
 
                 if ((DateTime.UtcNow - _lastSnapshot).TotalSeconds > 60)
                 {
