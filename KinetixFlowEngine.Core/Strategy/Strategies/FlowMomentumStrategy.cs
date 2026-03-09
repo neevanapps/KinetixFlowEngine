@@ -17,7 +17,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
         public StrategySignal EvaluateEntry(KinetixEngineResult r)
         {
             double spread = r.ScoreMediumEma - r.ScoreSlowEma;
-            if (r.ScoreFastEma > r.ScoreMediumEma && r.ScoreMediumEma > r.ScoreSlowEma && spread > 2)
+            if (r.ScoreFastEma > r.ScoreMediumEma && r.ScoreMediumEma > r.ScoreSlowEma && spread > 2 && r.ScoreMediumEma > 0)
             {
                 return new StrategySignal
                 {
@@ -30,7 +30,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
             }
 
             spread = r.ScoreSlowEma - r.ScoreMediumEma;
-            if (r.ScoreFastEma < r.ScoreMediumEma && r.ScoreMediumEma < r.ScoreSlowEma && spread > 2)
+            if (r.ScoreFastEma < r.ScoreMediumEma && r.ScoreMediumEma < r.ScoreSlowEma && spread > 2 && r.ScoreMediumEma < 0)
             {
                 return new StrategySignal
                 {
