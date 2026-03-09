@@ -16,8 +16,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
 
         public StrategySignal EvaluateEntry(KinetixEngineResult r)
         {
-            double spread = r.ScoreMediumEma - r.ScoreSlowEma;
-            if (r.ScoreFastEma > r.ScoreMediumEma && r.ScoreMediumEma > r.ScoreSlowEma && spread > 2 && r.ScoreMediumEma > 0)
+            if (r.ScoreFastEma > 0 && r.ScoreMediumEma > 0 && r.ScoreSlowEma > 0)
             {
                 return new StrategySignal
                 {
@@ -29,8 +28,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
                 };
             }
 
-            spread = r.ScoreSlowEma - r.ScoreMediumEma;
-            if (r.ScoreFastEma < r.ScoreMediumEma && r.ScoreMediumEma < r.ScoreSlowEma && spread > 2 && r.ScoreMediumEma < 0)
+            if (r.ScoreFastEma < 0 && r.ScoreMediumEma < 0 && r.ScoreSlowEma < 0)
             {
                 return new StrategySignal
                 {
@@ -53,7 +51,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
         {
             if (trade.Direction == SignalDirection.Long)
             {
-                bool trendBroken = r.ScoreFastEma < r.ScoreMediumEma && r.ScoreMediumEma < r.ScoreSlowEma && r.ScoreMediumEma < 0;
+                bool trendBroken = r.ScoreFastEma < 0 && r.ScoreMediumEma < 0 && r.ScoreSlowEma < 0;
 
                 if (trendBroken)
                 {
@@ -67,7 +65,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
 
             if (trade.Direction == SignalDirection.Short)
             {
-                bool trendBroken = r.ScoreFastEma > r.ScoreMediumEma && r.ScoreMediumEma > r.ScoreSlowEma && r.ScoreMediumEma > 0;
+                bool trendBroken = r.ScoreFastEma > 0 && r.ScoreMediumEma > 0 && r.ScoreSlowEma > 0;
 
                 if (trendBroken)
                 {
