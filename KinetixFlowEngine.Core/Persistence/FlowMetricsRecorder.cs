@@ -24,7 +24,7 @@ namespace KinetixFlowEngine.Core.Persistence
         {
             var header = "timestamp,price,score,score_z,velocity_z,imbalance_z,compression_z,exhaustion_z," +
                     "score_fast,score_medium,score_slow,price_trend,score_trend,state," +
-                    "long_prob,short_prob,vwap,er,atr,oi," +
+                    "long_prob,short_prob,vwap,er5,er30,atr,oi," +
                     "delta_velocity,momentum,acceleration,persistence,size_bias,absorption";
 
             File.WriteAllText(_filePath, header + Environment.NewLine);
@@ -51,6 +51,7 @@ namespace KinetixFlowEngine.Core.Persistence
                 r.ShortProbability.ToString(CultureInfo.InvariantCulture),
                 r.VWAP.ToString(CultureInfo.InvariantCulture),
                 r.ER.ToString(CultureInfo.InvariantCulture),
+                r.ER30.ToString(CultureInfo.InvariantCulture),
                 r.ATR.ToString(CultureInfo.InvariantCulture),
                 r.OIChange.ToString(CultureInfo.InvariantCulture),
                 r.DeltaVelocity.ToString(CultureInfo.InvariantCulture),

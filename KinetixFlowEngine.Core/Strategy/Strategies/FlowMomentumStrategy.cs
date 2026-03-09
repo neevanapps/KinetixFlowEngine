@@ -16,7 +16,8 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
 
         public StrategySignal EvaluateEntry(KinetixEngineResult r)
         {
-            if (r.ScoreFastEma > 0 && r.ScoreMediumEma > 0 && r.ScoreSlowEma > 0)
+            double spread = r.ScoreMediumEma - r.ScoreSlowEma;
+            if (r.ScoreFastEma > r.ScoreMediumEma && r.ScoreMediumEma > r.ScoreSlowEma && spread > 2)
             {
                 return new StrategySignal
                 {
@@ -28,7 +29,8 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
                 };
             }
 
-            if (r.ScoreFastEma < 0 && r.ScoreMediumEma < 0 && r.ScoreSlowEma < 0)
+            spread = r.ScoreSlowEma - r.ScoreMediumEma;
+            if (r.ScoreFastEma < r.ScoreMediumEma && r.ScoreMediumEma < r.ScoreSlowEma && spread > 2)
             {
                 return new StrategySignal
                 {
@@ -49,22 +51,32 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
 
         public StrategySignal EvaluateExit(KinetixEngineResult r, ActiveTrade trade)
         {
-            if (trade.Direction == SignalDirection.Long && r.ScoreMediumEma < 0 && r.ScoreFastEma < 0)
+            if (trade.Direction == SignalDirection.Long)
             {
-                return new StrategySignal
+                bool trendBroken = r.ScoreFastEma < r.ScoreMediumEma && r.ScoreMediumEma < r.ScoreSlowEma && r.ScoreMediumEma < 0;
+
+                if (trendBroken)
                 {
-                    StrategyName = Name,
-                    ExitSignal = true
-                };
+                    return new StrategySignal
+                    {
+                        StrategyName = Name,
+                        ExitSignal = true
+                    };
+                }
             }
 
-            if (trade.Direction == SignalDirection.Short && r.ScoreMediumEma > 0 && r.ScoreFastEma > 0)
+            if (trade.Direction == SignalDirection.Short)
             {
-                return new StrategySignal
+                bool trendBroken = r.ScoreFastEma > r.ScoreMediumEma && r.ScoreMediumEma > r.ScoreSlowEma && r.ScoreMediumEma > 0;
+
+                if (trendBroken)
                 {
-                    StrategyName = Name,
-                    ExitSignal = true
-                };
+                    return new StrategySignal
+                    {
+                        StrategyName = Name,
+                        ExitSignal = true
+                    };
+                }
             }
 
             return new StrategySignal { ExitSignal = false };
