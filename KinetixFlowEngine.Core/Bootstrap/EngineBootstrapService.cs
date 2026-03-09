@@ -14,11 +14,12 @@ namespace KinetixFlowEngine.Core.Bootstrap
         private readonly AtrEngine _atr1m;
         private readonly AtrEngine _atr15m;
         private readonly EfficiencyRatioEngine _er;
+        private readonly EfficiencyRatio30mEngine _er30;
         private readonly PriceTrendEngine _priceTrend;
         private readonly VwapEngine _vwap;
         private readonly ILogger<EngineBootstrapService> _logger;
 
-        public EngineBootstrapService(EfficiencyRatioEngine er, PriceTrendEngine priceTrend, VwapEngine vwap, ILogger<EngineBootstrapService> logger, AtrEngine atr1m, Atr15mEngine atr15m)
+        public EngineBootstrapService(EfficiencyRatioEngine er, PriceTrendEngine priceTrend, VwapEngine vwap, ILogger<EngineBootstrapService> logger, AtrEngine atr1m, Atr15mEngine atr15m, EfficiencyRatio30mEngine er30)
         {
             _binance = new BinanceRestClient();
             _atr1m = atr1m;
@@ -27,6 +28,7 @@ namespace KinetixFlowEngine.Core.Bootstrap
             _priceTrend = priceTrend;
             _vwap = vwap;
             _logger = logger;
+            _er30 = er30;
         }
 
         public async Task InitializeAsync()
@@ -76,8 +78,10 @@ namespace KinetixFlowEngine.Core.Bootstrap
             {
                 var close = (double)c.ClosePrice;
 
-                var er = _er.Update(close);
-                _priceTrend.Update((decimal)close, (decimal)er);
+                var er5 = _er.Update(close);
+                var er30 = _er30.Update(close);
+
+                _priceTrend.Update((decimal)close, (decimal)er5);
             }
 
             // ---------- VWAP bootstrap (15 minutes) ----------

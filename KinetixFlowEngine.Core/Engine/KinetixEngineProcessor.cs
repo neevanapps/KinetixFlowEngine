@@ -18,6 +18,7 @@ namespace KinetixFlowEngine.Core.Engine
 
         private readonly VwapEngine _vwapEngine;
         private readonly EfficiencyRatioEngine _erEngine;
+        private readonly EfficiencyRatio30mEngine _er30m;
         private readonly AtrEngine _atrEngine;
         private readonly OpenInterestEngine _oiEngine;
         private readonly ContextScoreEngine _contextScoreEngine;
@@ -59,7 +60,8 @@ namespace KinetixFlowEngine.Core.Engine
             ImbalanceNormalizer imbNorm,
             ExhaustionNormalizer exhNorm,
             CompressionNormalizer cmpNorm,
-            Atr15mEngine atr15m)
+            Atr15mEngine atr15m,
+            EfficiencyRatio30mEngine er30m)
         {
             _flowAggregationWindow = flowAggregationWindow;
             _flowFeatureEngine = flowFeatureEngine;
@@ -86,6 +88,7 @@ namespace KinetixFlowEngine.Core.Engine
             _exhNorm = exhNorm;
             _cmpNorm = cmpNorm;
             _atr15m = atr15m;
+            _er30m = er30m;
         }
 
         public KinetixEngineResult Process(double price, decimal quantity, double openInterest)
@@ -102,7 +105,8 @@ namespace KinetixFlowEngine.Core.Engine
 
             var vwapDev = _vwapEngine.Deviation((decimal)price, vwap);
 
-            var er = _erEngine.Update(price);
+            var er5 = _erEngine.Update(price);
+            var er30 = _er30m.Update(price);
 
             double atr = _atrEngine.Value;
 
@@ -113,10 +117,10 @@ namespace KinetixFlowEngine.Core.Engine
 
             var oiChange = _oiEngine.Update(openInterest);
 
-            var adjustedScore = _contextScoreEngine.AdjustScore(score, vwapDev, er, oiChange);
+            var adjustedScore = _contextScoreEngine.AdjustScore(score, vwapDev, er30, oiChange);
 
             decimal priceDec = (decimal)price;
-            decimal erDec = (decimal)er;
+            decimal erDec = (decimal)er5;
 
             var priceTrend = _priceEngine.Update(priceDec, erDec);
             var scoreTrend = _scoreEngine.Update((decimal)adjustedScore, erDec);
@@ -162,7 +166,9 @@ namespace KinetixFlowEngine.Core.Engine
                 CompressionZ = cmpZ,
 
                 VWAP = (double)vwap,
-                ER = er,
+                ER = er5,
+                ER5 = er5,
+                ER30 = er30,
                 ATR = atr,
                 OIChange = oiChange,
                 ATR15m = _atr15m.Value,

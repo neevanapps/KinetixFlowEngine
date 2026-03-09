@@ -19,6 +19,8 @@ namespace KinetixFlowEngine.Core.Engine
 
         public double VWAP { get; set; }
         public double ER { get; set; }
+        public double ER5 { get; set; }
+        public double ER30 { get; set; }
         public double ATR { get; set; }
         public double OIChange { get; set; }
         public double ATR15m { get; set; }

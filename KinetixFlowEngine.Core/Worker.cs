@@ -23,6 +23,7 @@ namespace KinetixFlowEngine.Core
         private readonly ScoreTrendEngine _scoreEngine;
         private readonly EngineBootstrapService _bootstrap;
         private readonly TelegramService _telegram;
+        private readonly ExceptionAlertAggregator _exceptionAggregator;
 
         private readonly ScoreNormalizer _scoreNorm;
         private readonly VelocityNormalizer _velNorm;
@@ -49,7 +50,7 @@ namespace KinetixFlowEngine.Core
         public Worker(FlowTradeBuffer flowTradeBuffer, TradeStreamClient tradeStreamClient, ILogger<Worker> logger, KinetixEngineProcessor engineProcessor, ScoreNormalizer scoreNorm, EngineBootstrapService bootstrap,
                     VelocityNormalizer velNorm, ImbalanceNormalizer imbNorm, ExhaustionNormalizer exhNorm, CompressionNormalizer cmpNorm, MarketStateManager snapshotManager, PositionManager positionManager,
                     EngineWarmupManager warmup, PriceTrendEngine priceEngine, ScoreTrendEngine scoreEngine, OpenInterestClient openInterestClient, FlowMetricsRecorder recorder, StrategyEngine strategyEngine,
-                    StrategyAggregator strategyAggregator, TelegramService telegram, IOptions<FlowEngineOptions> options, TradeJournalRecorder tradeJournal)
+                    StrategyAggregator strategyAggregator, TelegramService telegram, IOptions<FlowEngineOptions> options, TradeJournalRecorder tradeJournal, ExceptionAlertAggregator exceptionAggregator)
         {
             _logger = logger;
             _bootstrap = bootstrap;
@@ -132,6 +133,7 @@ namespace KinetixFlowEngine.Core
                     FlowState = trade.EntryFlowState
                 });
             };
+            _exceptionAggregator = exceptionAggregator;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -186,7 +188,20 @@ namespace KinetixFlowEngine.Core
                 }
                 _lastEngineCycle = DateTime.UtcNow;
 
-                var result = _engineProcessor.Process(price, lastTrade.Quantity, _lastOiValue);
+                KinetixEngineResult result;
+
+                try
+                {
+                    result = _engineProcessor.Process(price, lastTrade.Quantity, _lastOiValue);
+                }
+                catch (Exception ex)
+                {
+                    _exceptionAggregator.Capture(ex);
+                    _logger.LogError(ex, "Engine processing failed");
+                    await Task.Delay(1000, stoppingToken);
+                    continue;
+                }
+
                 bool ready = _warmup.Update();
                 if (!ready)
                 {
@@ -235,7 +250,7 @@ namespace KinetixFlowEngine.Core
                             Entry={entry:F1}  Exit={exitPrice:F1}
 
                             PnL={pnlPoints:F1}
-                            Duration={(duration / 60): F1}Mins
+                            Duration={(duration / 60):F1}Mins
 
                             EMA
                             Fast={result.ScoreFastEma:F2}
@@ -282,10 +297,10 @@ namespace KinetixFlowEngine.Core
 
                 _recorder.Record(result);
                 _logger.LogInformation("FLOW | " + "Price {Price:F2} " + "RawScore {RawScore:F2} AdjScore {AdjScore:F2} " + "Fast {Fast:F2} Medium {Medium:F2} Slow {Slow:F2} "
-                    + "ScoreZ {ScoreZ:F2} VelZ {VelZ:F2} ImbZ {ImbZ:F2} ExhZ {ExhZ:F2} CmpZ {CmpZ:F2} " + "VWAP {VWAP:F2} ER {ER:F3} ATR {ATR:F2} OIΔ {OI:F2} " + "Trend {Trend} "
+                    + "ScoreZ {ScoreZ:F2} VelZ {VelZ:F2} ImbZ {ImbZ:F2} ExhZ {ExhZ:F2} CmpZ {CmpZ:F2} " + "VWAP {VWAP:F2} ER5 {ER:F3} ER30 {ER30:F3} ATR {ATR:F2} OIΔ {OI:F2} " + "Trend {Trend} "
                     + "State {State} " + "LongProb {LongProb:F3} ShortProb {ShortProb:F3} " + "LongStable {LongStable} ShortStable {ShortStable} " + "LongPersist {LongPersist} ShortPersist {ShortPersist}",
                     result.Price, result.RawScore, result.AdjustedScore, result.ScoreFastEma, result.ScoreMediumEma, result.ScoreSlowEma, result.ScoreZ, result.VelocityZ, result.ImbalanceZ, result.ExhaustionZ,
-                    result.CompressionZ, result.VWAP, result.ER, result.ATR, result.OIChange, result.ScoreTrend, result.FlowState.State, result.LongProbability, result.ShortProbability,
+                    result.CompressionZ, result.VWAP, result.ER, result.ER30, result.ATR, result.OIChange, result.ScoreTrend, result.FlowState.State, result.LongProbability, result.ShortProbability,
                     result.LongStable, result.ShortStable, result.LongPersistence, result.ShortPersistence);
 
                 if ((DateTime.UtcNow - _lastSnapshot).TotalSeconds > 60)

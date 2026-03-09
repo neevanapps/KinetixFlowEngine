@@ -79,7 +79,8 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<FlowProbabilityEngine>();
 
                 builder.Services.AddSingleton<VwapEngine>();
-                builder.Services.AddSingleton<EfficiencyRatioEngine>();
+                builder.Services.AddSingleton<EfficiencyRatioEngine>(sp => new EfficiencyRatioEngine(60));
+                builder.Services.AddSingleton<EfficiencyRatio30mEngine>(); 
                 builder.Services.AddSingleton<AtrEngine>();  // 1m ATR
                 builder.Services.AddSingleton<Atr15mEngine>();   // 15m ATR
                 builder.Services.AddSingleton<OpenInterestEngine>();
