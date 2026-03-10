@@ -32,6 +32,10 @@ namespace KinetixFlowEngine.Core.Engine
         public double ScoreMediumEma { get; set; }
         public double ScoreSlowEma { get; set; }
 
+        public double ProbFastEma { get; set; }
+        public double ProbMediumEma { get; set; }
+        public double ProbSlowEma { get; set; }
+
         public FlowStateSnapshot FlowState { get; set; } = new();
 
         public double LongProbability { get; set; }
@@ -50,5 +54,35 @@ namespace KinetixFlowEngine.Core.Engine
         public double Persistence { get; set; }
         public double SizeBias { get; set; }
         public double Absorption { get; set; }
+
+        public bool BullishAbsorption { get; set; }
+        public bool BearishDistribution { get; set; }
+        public double DivergenceStrength { get; set; }
+
+        public double BuyPressure { get; set; }
+        public double SellPressure { get; set; }
+        public double NetPressure { get; set; }
+
+        public bool BullishBreakout { get; set; }
+        public bool BearishBreakout { get; set; }
+
+        public bool VwapBullishAbsorption { get; set; }
+        public bool VwapBearishAbsorption { get; set; }
+        public double VwapAbsorptionStrength { get; set; }
+
+        public int LargeBuyTrades { get; set; }
+        public int LargeSellTrades { get; set; }
+
+        public double BuyClusterStrength { get; set; }
+        public double SellClusterStrength { get; set; }
+        public int BullishPersistence { get; set; }
+        public int BearishPersistence { get; set; }
+
+        public bool StrongBullishPersistence { get; set; }
+        public bool StrongBearishPersistence { get; set; }
+        public double FlowImpactEfficiency { get; set; }
+
+        public bool BullishPriceControl { get; set; }
+        public bool BearishPriceControl { get; set; }
     }
 }

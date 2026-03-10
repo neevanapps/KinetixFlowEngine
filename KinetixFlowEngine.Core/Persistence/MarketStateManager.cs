@@ -4,7 +4,8 @@ namespace KinetixFlowEngine.Core.Persistence
 {
     public class MarketStateManager
     {
-        private const string FilePath = "market_state.json";
+        private readonly string _filePath =
+    Path.Combine(AppContext.BaseDirectory, "market_state.json");
 
         public void Save(MarketStateSnapshot snapshot)
         {
@@ -15,15 +16,18 @@ namespace KinetixFlowEngine.Core.Persistence
                     WriteIndented = true
                 });
 
-            File.WriteAllText(FilePath, json);
+            var temp = _filePath + ".tmp";
+
+            File.WriteAllText(temp, json);
+            File.Move(temp, _filePath, true);
         }
 
         public MarketStateSnapshot? Load()
         {
-            if (!File.Exists(FilePath))
+            if (!File.Exists(_filePath))
                 return null;
 
-            var json = File.ReadAllText(FilePath);
+            var json = File.ReadAllText(_filePath);
 
             return JsonSerializer.Deserialize<MarketStateSnapshot>(json);
         }

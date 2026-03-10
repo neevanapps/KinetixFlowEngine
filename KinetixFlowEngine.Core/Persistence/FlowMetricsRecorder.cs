@@ -25,7 +25,9 @@ namespace KinetixFlowEngine.Core.Persistence
             var header = "timestamp,price,score,score_z,velocity_z,imbalance_z,compression_z,exhaustion_z," +
                     "score_fast,score_medium,score_slow,price_trend,score_trend,state," +
                     "long_prob,short_prob,vwap,er5,er30,atr,oi," +
-                    "delta_velocity,momentum,acceleration,persistence,size_bias,absorption";
+                    "delta_velocity,momentum,acceleration,persistence,size_bias,absorption," +
+                    "buy_pressure,sell_pressure,net_pressure,bullish_absorption,bearish_distribution," +
+                    "vwap_bullish_absorption,vwap_bearish_absorption,whale_buy_trades,whale_sell_trades,impact_efficiency,bullish_control,bearish_control";
 
             File.WriteAllText(_filePath, header + Environment.NewLine);
         }
@@ -59,7 +61,19 @@ namespace KinetixFlowEngine.Core.Persistence
                 r.Acceleration.ToString(CultureInfo.InvariantCulture),
                 r.Persistence.ToString(CultureInfo.InvariantCulture),
                 r.SizeBias.ToString(CultureInfo.InvariantCulture),
-                r.Absorption.ToString(CultureInfo.InvariantCulture)
+                r.Absorption.ToString(CultureInfo.InvariantCulture),
+                r.BuyPressure.ToString(CultureInfo.InvariantCulture),
+                r.SellPressure.ToString(CultureInfo.InvariantCulture),
+                r.NetPressure.ToString(CultureInfo.InvariantCulture),
+                r.BullishAbsorption,
+                r.BearishDistribution,
+                r.VwapBullishAbsorption,
+                r.VwapBearishAbsorption,
+                r.LargeBuyTrades,
+                r.LargeSellTrades,
+                r.FlowImpactEfficiency.ToString(CultureInfo.InvariantCulture),
+                r.BullishPriceControl,
+                r.BearishPriceControl
             );
 
             File.AppendAllText(_filePath, line + Environment.NewLine);

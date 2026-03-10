@@ -2,6 +2,7 @@
 using KinetixFlowEngine.Core.Flow;
 using KinetixFlowEngine.Core.Flow.Probability;
 using KinetixFlowEngine.Core.Flow.State;
+using KinetixFlowEngine.Core.Models;
 using KinetixFlowEngine.Core.Signal;
 using KinetixFlowEngine.Core.Trend;
 using KinetixFlowEngine.Core.Utils;
@@ -26,10 +27,17 @@ namespace KinetixFlowEngine.Core.Engine
 
         private readonly PriceTrendEngine _priceEngine;
         private readonly ScoreTrendEngine _scoreEngine;
-
+        private readonly ProbabilityTrendEngine _probEngine;
+        private readonly FlowDivergenceEngine _divergenceEngine;
         private readonly FlowStateEngine _flowStateEngine;
         private readonly FlowProbabilityEngine _flowProbabilityEngine;
         private readonly SignalStabilityEngine _signalStabilityEngine;
+        private readonly LiquidityPressureEngine _pressureEngine;
+        private readonly VwapAbsorptionEngine _vwapAbsorptionEngine;
+        private readonly WhaleClusterEngine _whaleClusterEngine;
+        private readonly FlowPersistenceEngine _flowPersistenceEngine;
+        private readonly FlowImpactEngine _flowImpactEngine;
+        private double _previousPrice;
 
         private readonly ScoreNormalizer _scoreNorm;
         private readonly VelocityNormalizer _velNorm;
@@ -61,14 +69,19 @@ namespace KinetixFlowEngine.Core.Engine
             ExhaustionNormalizer exhNorm,
             CompressionNormalizer cmpNorm,
             Atr15mEngine atr15m,
-            EfficiencyRatio30mEngine er30m)
+            FlowDivergenceEngine divergenceEngine,
+            EfficiencyRatio30mEngine er30m,
+            LiquidityPressureEngine pressureEngine,
+            VwapAbsorptionEngine vwapAbsorptionEngine,
+            WhaleClusterEngine whaleClusterEngine, FlowImpactEngine flowImpactEngine,
+            FlowPersistenceEngine flowPersistenceEngine, ProbabilityTrendEngine probEngine)
         {
             _flowAggregationWindow = flowAggregationWindow;
             _flowFeatureEngine = flowFeatureEngine;
             _flowCompositeEngine = flowCompositeEngine;
             _flowScoreEngine = flowScoreEngine;
             _flowRegimeEngine = flowRegimeEngine;
-
+            _flowImpactEngine = flowImpactEngine;
             _vwapEngine = vwapEngine;
             _erEngine = erEngine;
             _atrEngine = atrEngine;
@@ -81,6 +94,7 @@ namespace KinetixFlowEngine.Core.Engine
             _flowStateEngine = flowStateEngine;
             _flowProbabilityEngine = flowProbabilityEngine;
             _signalStabilityEngine = signalStabilityEngine;
+            _divergenceEngine = divergenceEngine;
 
             _scoreNorm = scoreNorm;
             _velNorm = velNorm;
@@ -89,10 +103,21 @@ namespace KinetixFlowEngine.Core.Engine
             _cmpNorm = cmpNorm;
             _atr15m = atr15m;
             _er30m = er30m;
+            _pressureEngine = pressureEngine;
+            _vwapAbsorptionEngine = vwapAbsorptionEngine;
+            _whaleClusterEngine = whaleClusterEngine;
+            _flowPersistenceEngine = flowPersistenceEngine;
+            _probEngine = probEngine;
         }
 
         public KinetixEngineResult Process(double price, decimal quantity, double openInterest)
         {
+            var tradeList = _flowAggregationWindow.GetType().GetField("_buffer", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                                    ?.GetValue(_flowAggregationWindow) as FlowTradeBuffer;
+            var allTrades = tradeList?.GetSnapshot() ?? Array.Empty<FlowTrade>();
+            long cutoff = DateTimeOffset.UtcNow.AddSeconds(-40).ToUnixTimeMilliseconds();
+            var whaleClusters = _whaleClusterEngine.Detect(allTrades, cutoff);
+
             var window = _flowAggregationWindow.GetSnapshot();
 
             var features = _flowFeatureEngine.Calculate(window, price);
@@ -115,6 +140,9 @@ namespace KinetixFlowEngine.Core.Engine
                 atr = _atrEngine.Update(candle.High, candle.Low, candle.Close);
             }
 
+            var impact = _flowImpactEngine.Calculate(price, _previousPrice, window, atr);
+            _previousPrice = price;
+
             var oiChange = _oiEngine.Update(openInterest);
 
             var adjustedScore = _contextScoreEngine.AdjustScore(score, vwapDev, er30, oiChange);
@@ -124,6 +152,7 @@ namespace KinetixFlowEngine.Core.Engine
 
             var priceTrend = _priceEngine.Update(priceDec, erDec);
             var scoreTrend = _scoreEngine.Update((decimal)adjustedScore, erDec);
+            var pressure = _pressureEngine.Calculate(window, price, atr, (double)vwap);
 
             var scoreZ = _scoreNorm.Update(adjustedScore);
             var velZ = _velNorm.Update(features.DeltaVelocity);
@@ -131,23 +160,14 @@ namespace KinetixFlowEngine.Core.Engine
             var exhZ = _exhNorm.Update(features.Exhaustion);
             var cmpZ = _cmpNorm.Update(features.Compression);
 
-            var flowState = _flowStateEngine.Detect(
-                scoreZ,
-                velZ,
-                imbZ,
-                cmpZ,
-                exhZ,
-                features.Persistence,
-                scoreTrend);
+            var persistenceSignal = _flowPersistenceEngine.Update(scoreTrend, scoreZ);
+            var divergence = _divergenceEngine.Detect(priceTrend, scoreTrend, scoreZ, vwapDev);
+            var vwapAbsorption = _vwapAbsorptionEngine.Detect(price, (double)vwap, adjustedScore, priceTrend);
+            var flowState = _flowStateEngine.Detect(scoreZ, velZ, imbZ, cmpZ, exhZ, features.Persistence, scoreTrend);
 
-            var probability = _flowProbabilityEngine.Calculate(
-                scoreZ,
-                velZ,
-                imbZ,
-                cmpZ,
-                exhZ,
-                flowState,
-                scoreTrend);
+            var probability = _flowProbabilityEngine.Calculate(scoreZ, velZ, imbZ, cmpZ, exhZ, flowState, scoreTrend, divergence.BullishAbsorption,
+                divergence.BearishDistribution, vwapAbsorption.BullishAbsorption, vwapAbsorption.BearishAbsorption, impact.BullishControl, impact.BearishControl);
+            var ProbTrend = _probEngine.Update((decimal)probability.LongProbability, erDec);
 
             bool longSignal = probability.LongProbability > 0.65 && scoreTrend == FlowTrend.Bullish;
             bool shortSignal = probability.ShortProbability > 0.65 && scoreTrend == FlowTrend.Bearish;
@@ -194,7 +214,33 @@ namespace KinetixFlowEngine.Core.Engine
                 Acceleration = features.Acceleration,
                 Persistence = features.Persistence,
                 SizeBias = features.SizeBias,
-                Absorption = features.Absorption
+                Absorption = features.Absorption,
+
+                BullishAbsorption = divergence.BullishAbsorption,
+                BearishDistribution = divergence.BearishDistribution,
+                DivergenceStrength = divergence.Strength,
+                BuyPressure = pressure.BuyPressure,
+                SellPressure = pressure.SellPressure,
+                NetPressure = pressure.NetPressure,
+                BullishBreakout = pressure.BullishBreakout,
+                BearishBreakout = pressure.BearishBreakout,
+                VwapBullishAbsorption = vwapAbsorption.BullishAbsorption,
+                VwapBearishAbsorption = vwapAbsorption.BearishAbsorption,
+                VwapAbsorptionStrength = vwapAbsorption.Strength,
+                LargeBuyTrades = whaleClusters.LargeBuyTrades,
+                LargeSellTrades = whaleClusters.LargeSellTrades,
+                BuyClusterStrength = whaleClusters.BuyClusterStrength,
+                SellClusterStrength = whaleClusters.SellClusterStrength,
+                BullishPersistence = persistenceSignal.BullishDuration,
+                BearishPersistence = persistenceSignal.BearishDuration,
+                StrongBullishPersistence = persistenceSignal.StrongBullish,
+                StrongBearishPersistence = persistenceSignal.StrongBearish,
+                FlowImpactEfficiency = impact.Efficiency,
+                BullishPriceControl = impact.BullishControl,
+                BearishPriceControl = impact.BearishControl,
+                ProbFastEma = (double)_probEngine.Fast,
+                ProbSlowEma = (double)_probEngine.Slow,
+                ProbMediumEma = (double)_probEngine.Medium,
             };
         }
     }

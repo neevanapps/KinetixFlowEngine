@@ -4,7 +4,7 @@ namespace KinetixFlowEngine.Core.Trading
 {
     public class TradePersistence
     {
-        private readonly string _filePath = "active_trade.json";
+        private readonly string _filePath = Path.Combine(AppContext.BaseDirectory, "active_trade.json");
 
         public void Save(ActiveTrade trade)
         {

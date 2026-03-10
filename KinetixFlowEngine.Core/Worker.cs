@@ -21,6 +21,7 @@ namespace KinetixFlowEngine.Core
         private readonly EngineWarmupManager _warmup;
         private readonly PriceTrendEngine _priceEngine;
         private readonly ScoreTrendEngine _scoreEngine;
+        private readonly ProbabilityTrendEngine _probEngine;
         private readonly EngineBootstrapService _bootstrap;
         private readonly TelegramService _telegram;
         private readonly ExceptionAlertAggregator _exceptionAggregator;
@@ -50,7 +51,7 @@ namespace KinetixFlowEngine.Core
         public Worker(FlowTradeBuffer flowTradeBuffer, TradeStreamClient tradeStreamClient, ILogger<Worker> logger, KinetixEngineProcessor engineProcessor, ScoreNormalizer scoreNorm, EngineBootstrapService bootstrap,
                     VelocityNormalizer velNorm, ImbalanceNormalizer imbNorm, ExhaustionNormalizer exhNorm, CompressionNormalizer cmpNorm, MarketStateManager snapshotManager, PositionManager positionManager,
                     EngineWarmupManager warmup, PriceTrendEngine priceEngine, ScoreTrendEngine scoreEngine, OpenInterestClient openInterestClient, FlowMetricsRecorder recorder, StrategyEngine strategyEngine,
-                    StrategyAggregator strategyAggregator, TelegramService telegram, IOptions<FlowEngineOptions> options, TradeJournalRecorder tradeJournal, ExceptionAlertAggregator exceptionAggregator)
+                    StrategyAggregator strategyAggregator, TelegramService telegram, IOptions<FlowEngineOptions> options, TradeJournalRecorder tradeJournal, ExceptionAlertAggregator exceptionAggregator, ProbabilityTrendEngine probEngine)
         {
             _logger = logger;
             _bootstrap = bootstrap;
@@ -134,6 +135,7 @@ namespace KinetixFlowEngine.Core
                 });
             };
             _exceptionAggregator = exceptionAggregator;
+            _probEngine = probEngine;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -158,6 +160,7 @@ namespace KinetixFlowEngine.Core
 
                     _priceEngine.Restore(snapshot.PriceFastEma, snapshot.PriceSlowEma);
                     _scoreEngine.Restore(snapshot.ScoreFastEma, snapshot.ScoreSlowEma, snapshot.ScoreMediumEma);
+                    _probEngine.Restore(snapshot.ProbFastEma, snapshot.ProbSlowEma, snapshot.ProbMediumEma);
 
                     _logger.LogInformation("Snapshot restored successfully.");
                 }
@@ -288,6 +291,10 @@ namespace KinetixFlowEngine.Core
                          Fast={result.ScoreFastEma:F2}
                          Medium={result.ScoreMediumEma:F2}
                          Slow={result.ScoreSlowEma:F2}
+                         Prob
+                         Fast={result.ProbFastEma - .50:F2}
+                         Medium={result.ProbMediumEma - .50:F2}
+                         Slow={result.ProbSlowEma - .50:F2}
                          """);
                     }
                     _logger.LogInformation("STRATEGY SIGNAL | Strategy {Strategy} Direction {Direction} Confidence {Confidence}",
@@ -296,12 +303,18 @@ namespace KinetixFlowEngine.Core
                 _positionManager.Update((decimal)result.Price);
 
                 _recorder.Record(result);
-                _logger.LogInformation("FLOW | " + "Price {Price:F2} " + "RawScore {RawScore:F2} AdjScore {AdjScore:F2} " + "Fast {Fast:F2} Medium {Medium:F2} Slow {Slow:F2} "
-                    + "ScoreZ {ScoreZ:F2} VelZ {VelZ:F2} ImbZ {ImbZ:F2} ExhZ {ExhZ:F2} CmpZ {CmpZ:F2} " + "VWAP {VWAP:F2} ER5 {ER:F3} ER30 {ER30:F3} ATR {ATR:F2} OIΔ {OI:F2} " + "Trend {Trend} "
-                    + "State {State} " + "LongProb {LongProb:F3} ShortProb {ShortProb:F3} " + "LongStable {LongStable} ShortStable {ShortStable} " + "LongPersist {LongPersist} ShortPersist {ShortPersist}",
-                    result.Price, result.RawScore, result.AdjustedScore, result.ScoreFastEma, result.ScoreMediumEma, result.ScoreSlowEma, result.ScoreZ, result.VelocityZ, result.ImbalanceZ, result.ExhaustionZ,
-                    result.CompressionZ, result.VWAP, result.ER, result.ER30, result.ATR, result.OIChange, result.ScoreTrend, result.FlowState.State, result.LongProbability, result.ShortProbability,
-                    result.LongStable, result.ShortStable, result.LongPersistence, result.ShortPersistence);
+                _logger.LogInformation("FLOW | Price {Price:F2} RawScore {RawScore:F2} AdjScore {AdjScore:F2} " +
+                            "Fast {Fast:F2} Medium {Medium:F2} Slow {Slow:F2} " + "ScoreZ {ScoreZ:F2} VelZ {VelZ:F2} ImbZ {ImbZ:F2} ExhZ {ExhZ:F2} CmpZ {CmpZ:F2} " +
+                            "VWAP {VWAP:F2} ER5 {ER:F3} ER30 {ER30:F3} ATR {ATR:F2} OIΔ {OI:F2} " + "Trend {Trend} State {State} " +
+                            "LongProb {LongProb:F3} ShortProb {ShortProb:F3} " + "LongStable {LongStable} ShortStable {ShortStable} " +
+                            "LongPersist {LongPersist} ShortPersist {ShortPersist} " + "Impact {Impact:F3} ControlB {BullCtrl} ControlS {BearCtrl} " +
+                            "WhaleStr B {WhaleStrB:F2} S {WhaleStrS:F2} " + "Pressure B {BuyP:F2} S {SellP:F2} Net {NetP:F2} | BFast {BFast:F2} BMedium {BMedium:F2} BSlow {BSlow:F2}",
+
+                            result.Price, result.RawScore, result.AdjustedScore, result.ScoreFastEma, result.ScoreMediumEma, result.ScoreSlowEma, result.ScoreZ, result.VelocityZ,
+                            result.ImbalanceZ, result.ExhaustionZ, result.CompressionZ, result.VWAP, result.ER, result.ER30, result.ATR, result.OIChange, result.ScoreTrend, result.FlowState.State,
+                            result.LongProbability, result.ShortProbability, result.LongStable, result.ShortStable, result.LongPersistence, result.ShortPersistence, result.FlowImpactEfficiency,
+                            result.BullishPriceControl, result.BearishPriceControl, result.BuyClusterStrength, result.SellClusterStrength, result.BuyPressure, result.SellPressure, result.NetPressure,
+                            (result.ProbFastEma - .50), (result.ProbMediumEma - .50), (result.ProbSlowEma - .50));
 
                 if ((DateTime.UtcNow - _lastSnapshot).TotalSeconds > 60)
                 {
@@ -316,6 +329,10 @@ namespace KinetixFlowEngine.Core
                         ScoreFastEma = _scoreEngine.Fast,
                         ScoreSlowEma = _scoreEngine.Slow,
                         ScoreMediumEma = _scoreEngine.Medium,
+
+                        ProbFastEma = _probEngine.Fast,
+                        ProbSlowEma = _probEngine.Slow,
+                        ProbMediumEma = _probEngine.Medium,
 
                         ScoreNormalizer = _scoreNorm.GetState(),
                         VelocityNormalizer = _velNorm.GetState(),

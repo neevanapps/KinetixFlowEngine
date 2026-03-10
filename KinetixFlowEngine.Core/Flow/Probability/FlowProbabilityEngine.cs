@@ -6,13 +6,19 @@ namespace KinetixFlowEngine.Core.Flow.Probability
     public class FlowProbabilityEngine
     {
         public FlowProbabilitySnapshot Calculate(
-            double scoreZ,
-            double velocityZ,
-            double imbalanceZ,
-            double compression,
-            double exhaustion,
-            FlowStateSnapshot state,
-            FlowTrend scoreTrend)
+    double scoreZ,
+    double velocityZ,
+    double imbalanceZ,
+    double compression,
+    double exhaustion,
+    FlowStateSnapshot state,
+    FlowTrend scoreTrend,
+    bool bullishAbsorption,
+    bool bearishDistribution,
+    bool vwapBullishAbsorption,
+    bool vwapBearishAbsorption,
+    bool bullishControl,
+bool bearishControl)
         {
             double longScore = 0;
             double shortScore = 0;
@@ -56,12 +62,61 @@ namespace KinetixFlowEngine.Core.Flow.Probability
                 shortScore *= 0.5;
             }
 
-            // Trend bias
-            if (scoreTrend == FlowTrend.Bullish)
-                longScore *= 1.2;
+            // -------------------------------------
+            // FLOW-PRICE DIVERGENCE WEIGHTING
+            // -------------------------------------
 
-            if (scoreTrend == FlowTrend.Bearish)
-                shortScore *= 1.2;
+            if (bullishAbsorption)
+            {
+                longScore *= 1.4;
+                shortScore *= 0.6;
+            }
+
+            if (bearishDistribution)
+            {
+                shortScore *= 1.4;
+                longScore *= 0.6;
+            }
+
+            // Price impact control
+            if (bullishControl)
+            {
+                longScore *= 1.35;
+                shortScore *= 0.65;
+            }
+
+            if (bearishControl)
+            {
+                shortScore *= 1.35;
+                longScore *= 0.65;
+            }
+
+            // -------------------------------------
+            // PERSISTENCE BOOST
+            // -------------------------------------
+
+            if (state.Bullish && scoreTrend == FlowTrend.Bullish)
+            {
+                longScore *= 1.15;
+            }
+
+            if (state.Bearish && scoreTrend == FlowTrend.Bearish)
+            {
+                shortScore *= 1.15;
+            }
+
+            // VWAP absorption is stronger institutional signal
+            if (vwapBullishAbsorption)
+            {
+                longScore *= 1.5;
+                shortScore *= 0.5;
+            }
+
+            if (vwapBearishAbsorption)
+            {
+                shortScore *= 1.5;
+                longScore *= 0.5;
+            }
 
             var total = longScore + shortScore;
 

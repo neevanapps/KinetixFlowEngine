@@ -2,7 +2,7 @@
 
 namespace KinetixFlowEngine.Core.Trend
 {
-    public class ScoreTrendEngine
+    public class ProbabilityTrendEngine
     {
         private readonly AdaptiveEma _fast = new();
         private readonly AdaptiveEma _medium = new();
@@ -12,11 +12,11 @@ namespace KinetixFlowEngine.Core.Trend
         public decimal Slow => _slow.Value ?? 0;
         public decimal Medium => _medium.Value ?? 0;
 
-        public FlowTrend Update(decimal score, decimal er)
+        public FlowTrend Update(decimal prob, decimal er)
         {
-            var fast = _fast.Update(score, er, 6 * minTick, 20 * minTick);
-            var medium = _medium.Update(score, er, 20 * minTick, 60 * minTick);
-            var slow = _slow.Update(score, er, 60 * minTick, 180 * minTick);
+            var fast = _fast.Update(prob, er, 6 * minTick, 20 * minTick);
+            var medium = _medium.Update(prob, er, 20 * minTick, 60 * minTick);
+            var slow = _slow.Update(prob, er, 60 * minTick, 180 * minTick);
 
             if (fast > medium && medium > slow)
                 return FlowTrend.Bullish;

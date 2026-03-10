@@ -76,7 +76,13 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<FlowCompositeEngine>();
                 builder.Services.AddSingleton<FlowScoreEngine>();
                 builder.Services.AddSingleton<FlowRegimeEngine>();
+                builder.Services.AddSingleton<FlowDivergenceEngine>();
                 builder.Services.AddSingleton<FlowProbabilityEngine>();
+                builder.Services.AddSingleton<LiquidityPressureEngine>();
+                builder.Services.AddSingleton<VwapAbsorptionEngine>();
+                builder.Services.AddSingleton<WhaleClusterEngine>();
+                builder.Services.AddSingleton<FlowPersistenceEngine>();
+                builder.Services.AddSingleton<FlowImpactEngine>();
 
                 builder.Services.AddSingleton<VwapEngine>();
                 builder.Services.AddSingleton<EfficiencyRatioEngine>(sp => new EfficiencyRatioEngine(60));
@@ -91,6 +97,7 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<ScoreTrendEngine>();
                 builder.Services.AddSingleton<FlowStateEngine>();
                 builder.Services.AddSingleton<KinetixEngineProcessor>();
+                builder.Services.AddSingleton<ProbabilityTrendEngine>();
 
                 builder.Services.AddSingleton<IKinetixStrategy, FlowMomentumStrategy>();
                 builder.Services.AddSingleton<StrategyEngine>();
