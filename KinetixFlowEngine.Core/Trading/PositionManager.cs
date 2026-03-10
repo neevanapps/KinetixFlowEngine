@@ -1,5 +1,6 @@
 ﻿using KinetixFlowEngine.Core.Engine;
 using KinetixFlowEngine.Core.Strategy;
+using System.Diagnostics;
 
 namespace KinetixFlowEngine.Core.Trading
 {
@@ -7,23 +8,31 @@ namespace KinetixFlowEngine.Core.Trading
     {
         private readonly TradePersistence _persistence;
         public event Action<ActiveTrade>? Target1Reached;
-        private ActiveTrade? _activeTrade;
+
+        private readonly Dictionary<string, ActiveTrade> _activeTrades;
+
         public event Action<ActiveTrade, decimal>? TradeClosed;
 
         public PositionManager(TradePersistence persistence)
         {
             _persistence = persistence;
-
-            _activeTrade = _persistence.Load();
+            _activeTrades = _persistence.Load();
         }
 
-        public ActiveTrade? ActiveTrade => _activeTrade;
+        public bool HasPosition(string strategy)
+        {
+            return _activeTrades.ContainsKey(strategy);
+        }
 
-        public bool HasPosition => _activeTrade != null;
+        public ActiveTrade? GetPosition(string strategy)
+        {
+            _activeTrades.TryGetValue(strategy, out var trade);
+            return trade;
+        }
 
         public void TryEnterTrade(StrategySignal signal, decimal price, double atr, KinetixEngineResult r)
         {
-            if (_activeTrade != null)
+            if (_activeTrades.ContainsKey(signal.StrategyName))
                 return;
 
             decimal atrValue = (decimal)atr;
@@ -56,62 +65,66 @@ namespace KinetixFlowEngine.Core.Trading
                 EntryFlowState = r.FlowState.State.ToString(),
             };
 
-            _activeTrade = trade;
+            _activeTrades[signal.StrategyName] = trade;
 
-            _persistence.Save(trade);
+            _persistence.Save(_activeTrades);
         }
 
         public void Update(decimal price)
         {
-            if (_activeTrade == null)
-                return;
-
-            var trade = _activeTrade;
-            trade.MaxPrice = Math.Max(trade.MaxPrice, price);
-            trade.MinPrice = Math.Min(trade.MinPrice, price);
-            if (!trade.Target1Hit)
+            foreach (var trade in _activeTrades.Values.ToList())
             {
-                bool hit = false;
+                trade.MaxPrice = Math.Max(trade.MaxPrice, price);
+                trade.MinPrice = Math.Min(trade.MinPrice, price);
 
-                if (trade.Direction == SignalDirection.Long && price >= trade.Target1)
-                    hit = true;
-
-                if (trade.Direction == SignalDirection.Short && price <= trade.Target1)
-                    hit = true;
-
-                if (hit)
+                if (!trade.Target1Hit)
                 {
-                    trade.Target1Hit = true;
+                    bool hit = false;
 
-                    trade.RemainingSize *= 0.3m;
+                    if (trade.Direction == SignalDirection.Long && price >= trade.Target1)
+                        hit = true;
 
-                    Target1Reached?.Invoke(trade);
+                    if (trade.Direction == SignalDirection.Short && price <= trade.Target1)
+                        hit = true;
+
+                    if (hit)
+                    {
+                        trade.Target1Hit = true;
+                        trade.RemainingSize *= 0.3m;
+
+                        Target1Reached?.Invoke(trade);
+                    }
+                }
+
+                if (trade.Direction == SignalDirection.Long && price <= trade.StopLoss)
+                {
+                    CloseTrade(trade.StrategyName, price);
+                }
+
+                if (trade.Direction == SignalDirection.Short && price >= trade.StopLoss)
+                {
+                    CloseTrade(trade.StrategyName, price);
                 }
             }
 
-            if (trade.Direction == SignalDirection.Long && price <= trade.StopLoss)
-            {
-                CloseTrade(price);
-            }
-
-            if (trade.Direction == SignalDirection.Short && price >= trade.StopLoss)
-            {
-                CloseTrade(price);
-            }
-
-            _persistence.Save(trade);
+            _persistence.Save(_activeTrades);
         }
 
-        public void CloseTrade(decimal exitPrice)
+        public IEnumerable<ActiveTrade> GetAllPositions()
         {
-            if (_activeTrade == null)
+            return _activeTrades.Values;
+        }
+
+        public void CloseTrade(string strategy, decimal exitPrice)
+        {
+            if (!_activeTrades.TryGetValue(strategy, out var trade))
                 return;
 
-            TradeClosed?.Invoke(_activeTrade, exitPrice);
+            TradeClosed?.Invoke(trade, exitPrice);
 
-            _activeTrade = null;
+            _activeTrades.Remove(strategy);
 
-            _persistence.Clear();
+            _persistence.Save(_activeTrades);
         }
     }
 }

@@ -217,16 +217,16 @@ namespace KinetixFlowEngine.Core
                 }
 
                 // ---------- EXIT FIRST ----------
-                if (_positionManager.HasPosition)
+                foreach (var trade in _positionManager.GetAllPositions().ToList())
                 {
-                    var trade = _positionManager.ActiveTrade;
                     var exitSignal = _strategyEngine.EvaluateExit(result, trade);
-                    if (exitSignal != null)
+
+                    if (exitSignal?.ExitSignal == true)
                     {
-                        _positionManager.CloseTrade((decimal)price);
+                        _positionManager.CloseTrade(trade.StrategyName, (decimal)price);
                         if (trade.NotifyThroughTelegram)
                         {
-                            var exitPrice = (decimal)result.Price;
+                            var exitPrice = (decimal)price;
                             var entry = trade.EntryPrice;
                             var target1 = trade.Target1;
                             decimal pnlPoints;
@@ -248,7 +248,7 @@ namespace KinetixFlowEngine.Core
                             var duration = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - trade.EntryTimeMs) / 1000;
                             await _telegram.SendMessageAsync(
                             $"""
-                            EXIT | {trade.Direction}
+                            EXIT | {trade.StrategyName} | {trade.Direction}
 
                             Entry={entry:F1}  Exit={exitPrice:F1}
 
@@ -267,23 +267,33 @@ namespace KinetixFlowEngine.Core
 
                 // ---------- ENTRY SECOND ----------
                 var signals = _strategyEngine.Evaluate(result);
-                var finalSignal = _strategyAggregator.SelectSignal(signals);
-
-                if (finalSignal != null && !_positionManager.HasPosition)
+                foreach (var s in signals)
                 {
-                    _positionManager.TryEnterTrade(finalSignal, (decimal)result.Price, result.ATR15m, result);
+                    _logger.LogInformation(
+                        "SIGNAL DEBUG | Strategy {Strategy} Direction {Direction}",
+                        s.StrategyName,
+                        s.Direction);
+                }
+                foreach (var signal in signals)
+                {
+                    if (signal.Direction == SignalDirection.None)
+                        continue;
 
-                    if (finalSignal.NotifyThroughTelegram)
+                    if (!_positionManager.HasPosition(signal.StrategyName))
                     {
-                        var trade = _positionManager.ActiveTrade;
+                        _positionManager.TryEnterTrade(signal, (decimal)result.Price, result.ATR15m, result);
 
-                        await _telegram.SendMessageAsync(
-                        $"""
-                         ENTRY | {finalSignal.Direction}
+                        if (signal.NotifyThroughTelegram)
+                        {
+                            var trade = _positionManager.GetPosition(signal.StrategyName);
+
+                            await _telegram.SendMessageAsync(
+                            $"""
+                         ENTRY | {signal.Direction} | Strategy {signal.StrategyName}
                          
                          Price={result.Price:F1}  SL={trade?.StopLoss:F1}
                          
-                         Score={result.ScoreZ:F2}  Conf={(result.LongProbability * 100):F0}%
+                         Score={result.ScoreZ:F2}
                          ER={result.ER:F2}  ATR15={result.ATR15m:F1}
                          State={result.FlowState.State}
                          
@@ -291,16 +301,18 @@ namespace KinetixFlowEngine.Core
                          Fast={result.ScoreFastEma:F2}
                          Medium={result.ScoreMediumEma:F2}
                          Slow={result.ScoreSlowEma:F2}
+
                          Prob
-                         Fast={result.ProbFastEma - .50:F2}
-                         Medium={result.ProbMediumEma - .50:F2}
-                         Slow={result.ProbSlowEma - .50:F2}
+                         Fast={result.ProbFastEma:F2}
+                         Medium={result.ProbMediumEma:F2}
+                         Slow={result.ProbSlowEma:F2}
                          """);
+                        }
+                        _logger.LogInformation("STRATEGY SIGNAL | Strategy {Strategy} Direction {Direction} Confidence {Confidence}",
+                            signal.StrategyName, signal.Direction, signal.Confidence);
                     }
-                    _logger.LogInformation("STRATEGY SIGNAL | Strategy {Strategy} Direction {Direction} Confidence {Confidence}",
-                        finalSignal.StrategyName, finalSignal.Direction, finalSignal.Confidence);
                 }
-                _positionManager.Update((decimal)result.Price);
+                _positionManager.Update((decimal)price);
 
                 _recorder.Record(result);
                 _logger.LogInformation("FLOW | Price {Price:F2} RawScore {RawScore:F2} AdjScore {AdjScore:F2} " +
@@ -308,13 +320,13 @@ namespace KinetixFlowEngine.Core
                             "VWAP {VWAP:F2} ER5 {ER:F3} ER30 {ER30:F3} ATR {ATR:F2} OIΔ {OI:F2} " + "Trend {Trend} State {State} " +
                             "LongProb {LongProb:F3} ShortProb {ShortProb:F3} " + "LongStable {LongStable} ShortStable {ShortStable} " +
                             "LongPersist {LongPersist} ShortPersist {ShortPersist} " + "Impact {Impact:F3} ControlB {BullCtrl} ControlS {BearCtrl} " +
-                            "WhaleStr B {WhaleStrB:F2} S {WhaleStrS:F2} " + "Pressure B {BuyP:F2} S {SellP:F2} Net {NetP:F2} | BFast {BFast:F2} BMedium {BMedium:F2} BSlow {BSlow:F2}",
+                            "WhaleStr B {WhaleStrB:F2} S {WhaleStrS:F2} " + "Pressure B {BuyP:F2} S {SellP:F2} Net {NetP:F2} | BFast {BFast:F4} BMedium {BMedium:F4} BSlow {BSlow:F4}",
 
                             result.Price, result.RawScore, result.AdjustedScore, result.ScoreFastEma, result.ScoreMediumEma, result.ScoreSlowEma, result.ScoreZ, result.VelocityZ,
                             result.ImbalanceZ, result.ExhaustionZ, result.CompressionZ, result.VWAP, result.ER, result.ER30, result.ATR, result.OIChange, result.ScoreTrend, result.FlowState.State,
                             result.LongProbability, result.ShortProbability, result.LongStable, result.ShortStable, result.LongPersistence, result.ShortPersistence, result.FlowImpactEfficiency,
                             result.BullishPriceControl, result.BearishPriceControl, result.BuyClusterStrength, result.SellClusterStrength, result.BuyPressure, result.SellPressure, result.NetPressure,
-                            (result.ProbFastEma - .50), (result.ProbMediumEma - .50), (result.ProbSlowEma - .50));
+                            (result.ProbFastEma), (result.ProbMediumEma), (result.ProbSlowEma));
 
                 if ((DateTime.UtcNow - _lastSnapshot).TotalSeconds > 60)
                 {
