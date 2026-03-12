@@ -16,6 +16,7 @@ namespace KinetixFlowEngine.Core.Engine
         private readonly FlowCompositeEngine _flowCompositeEngine;
         private readonly FlowScoreEngine _flowScoreEngine;
         private readonly FlowRegimeEngine _flowRegimeEngine;
+        private readonly FlowTradeBuffer _tradeBuffer;
 
         private readonly VwapEngine _vwapEngine;
         private readonly EfficiencyRatioEngine _erEngine;
@@ -74,7 +75,7 @@ namespace KinetixFlowEngine.Core.Engine
             LiquidityPressureEngine pressureEngine,
             VwapAbsorptionEngine vwapAbsorptionEngine,
             WhaleClusterEngine whaleClusterEngine, FlowImpactEngine flowImpactEngine,
-            FlowPersistenceEngine flowPersistenceEngine, ProbabilityTrendEngine probEngine)
+            FlowPersistenceEngine flowPersistenceEngine, ProbabilityTrendEngine probEngine, FlowTradeBuffer tradeBuffer)
         {
             _flowAggregationWindow = flowAggregationWindow;
             _flowFeatureEngine = flowFeatureEngine;
@@ -108,14 +109,13 @@ namespace KinetixFlowEngine.Core.Engine
             _whaleClusterEngine = whaleClusterEngine;
             _flowPersistenceEngine = flowPersistenceEngine;
             _probEngine = probEngine;
+            _tradeBuffer = tradeBuffer;
         }
 
         public KinetixEngineResult Process(double price, decimal quantity, double openInterest)
         {
-            var tradeList = _flowAggregationWindow.GetType().GetField("_buffer", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                                    ?.GetValue(_flowAggregationWindow) as FlowTradeBuffer;
-            var allTrades = tradeList?.GetSnapshot() ?? Array.Empty<FlowTrade>();
-            long cutoff = DateTimeOffset.UtcNow.AddSeconds(-40).ToUnixTimeMilliseconds();
+            var allTrades = _tradeBuffer.GetSnapshot();
+            long cutoff = DateTimeOffset.UtcNow.AddSeconds(-60).ToUnixTimeMilliseconds();
             var whaleClusters = _whaleClusterEngine.Detect(allTrades, cutoff);
 
             var window = _flowAggregationWindow.GetSnapshot();

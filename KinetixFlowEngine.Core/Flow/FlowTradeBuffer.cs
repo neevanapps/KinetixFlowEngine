@@ -9,6 +9,9 @@ namespace KinetixFlowEngine.Core.Flow
 
         private readonly int _maxTrades;
 
+        // Cache last trade for O(1) access
+        private volatile FlowTrade? _lastTrade;
+
         public FlowTradeBuffer(int maxTrades = 50000)
         {
             _maxTrades = maxTrades;
@@ -17,6 +20,9 @@ namespace KinetixFlowEngine.Core.Flow
         public void AddTrade(FlowTrade trade)
         {
             _trades.Enqueue(trade);
+
+            // Update cached last trade
+            _lastTrade = trade;
 
             while (_trades.Count > _maxTrades)
             {
@@ -31,14 +37,15 @@ namespace KinetixFlowEngine.Core.Flow
 
         public bool TryGetLast(out FlowTrade trade)
         {
-            trade = default;
+            var last = _lastTrade;
 
-            if (_trades.IsEmpty)
+            if (last == null)
+            {
+                trade = default!;
                 return false;
+            }
 
-            foreach (var t in _trades)
-                trade = t;
-
+            trade = last;
             return true;
         }
     }

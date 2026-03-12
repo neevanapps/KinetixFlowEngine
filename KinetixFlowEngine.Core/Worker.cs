@@ -91,15 +91,20 @@ namespace KinetixFlowEngine.Core
 
                 await _telegram.SendMessageAsync(
                     $"""
-                    TARGET1 HIT | {trade.Direction}
+                    TARGET1 HIT | {trade.Direction} | Strategy: {trade.StrategyName}
 
                     Entry={trade.EntryPrice:F1}
                     Remaining={trade.RemainingSize:P0}
 
-                    EMA
+                    Score
                     Fast={_scoreEngine.Fast:F2}
                     Medium={_scoreEngine.Medium:F2}
                     Slow={_scoreEngine.Slow:F2}
+
+                    Prob
+                    Fast={_probEngine.Fast:F2}
+                    Medium={_probEngine.Medium:F2}
+                    Slow={_probEngine.Slow:F2}
                     """);
             };
             _tradeJournal = tradeJournal;
@@ -150,24 +155,24 @@ namespace KinetixFlowEngine.Core
             {
                 var age = DateTime.UtcNow - snapshot.Timestamp;
 
-                if (age.TotalMinutes < 60)
-                {
-                    _scoreNorm.Restore(snapshot.ScoreNormalizer);
-                    _velNorm.Restore(snapshot.VelocityNormalizer);
-                    _imbNorm.Restore(snapshot.ImbalanceNormalizer);
-                    _exhNorm.Restore(snapshot.ExhaustionNormalizer);
-                    _cmpNorm.Restore(snapshot.CompressionNormalizer);
+                //if (age.TotalMinutes < 60)
+                //{
+                _scoreNorm.Restore(snapshot.ScoreNormalizer);
+                _velNorm.Restore(snapshot.VelocityNormalizer);
+                _imbNorm.Restore(snapshot.ImbalanceNormalizer);
+                _exhNorm.Restore(snapshot.ExhaustionNormalizer);
+                _cmpNorm.Restore(snapshot.CompressionNormalizer);
 
-                    _priceEngine.Restore(snapshot.PriceFastEma, snapshot.PriceSlowEma);
-                    _scoreEngine.Restore(snapshot.ScoreFastEma, snapshot.ScoreSlowEma, snapshot.ScoreMediumEma);
-                    _probEngine.Restore(snapshot.ProbFastEma, snapshot.ProbSlowEma, snapshot.ProbMediumEma);
+                _priceEngine.Restore(snapshot.PriceFastEma, snapshot.PriceSlowEma);
+                _scoreEngine.Restore(snapshot.ScoreFastEma, snapshot.ScoreSlowEma, snapshot.ScoreMediumEma);
+                _probEngine.Restore(snapshot.ProbFastEma, snapshot.ProbSlowEma, snapshot.ProbMediumEma);
 
-                    _logger.LogInformation("Snapshot restored successfully.");
-                }
-                else
-                {
-                    await _telegram.SendMessageAsync("Market state is older than 60mins, fresh state started.");
-                }
+                _logger.LogInformation("Snapshot restored successfully.");
+                //}
+                //else
+                //{
+                //    await _telegram.SendMessageAsync("Market state is older than 60mins, fresh state started.");
+                //}
             }
 
             while (!stoppingToken.IsCancellationRequested)
@@ -255,10 +260,15 @@ namespace KinetixFlowEngine.Core
                             PnL={pnlPoints:F1}
                             Duration={(duration / 60):F1}Mins
 
-                            EMA
+                            Score
                             Fast={result.ScoreFastEma:F2}
                             Medium={result.ScoreMediumEma:F2}
                             Slow={result.ScoreSlowEma:F2}
+
+                            Prob
+                            Fast={result.ProbFastEma:F2}
+                            Medium={result.ProbMediumEma:F2}
+                            Slow={result.ProbSlowEma:F2}
                             """);
                         }
                         continue;
@@ -267,13 +277,6 @@ namespace KinetixFlowEngine.Core
 
                 // ---------- ENTRY SECOND ----------
                 var signals = _strategyEngine.Evaluate(result);
-                foreach (var s in signals)
-                {
-                    _logger.LogInformation(
-                        "SIGNAL DEBUG | Strategy {Strategy} Direction {Direction}",
-                        s.StrategyName,
-                        s.Direction);
-                }
                 foreach (var signal in signals)
                 {
                     if (signal.Direction == SignalDirection.None)
@@ -292,12 +295,13 @@ namespace KinetixFlowEngine.Core
                          ENTRY | {signal.Direction} | Strategy {signal.StrategyName}
                          
                          Price={result.Price:F1}  SL={trade?.StopLoss:F1}
-                         
+                         TP1={trade?.Target1:F1}
+
                          Score={result.ScoreZ:F2}
                          ER={result.ER:F2}  ATR15={result.ATR15m:F1}
                          State={result.FlowState.State}
                          
-                         EMA
+                         Score
                          Fast={result.ScoreFastEma:F2}
                          Medium={result.ScoreMediumEma:F2}
                          Slow={result.ScoreSlowEma:F2}

@@ -4,57 +4,63 @@ namespace KinetixFlowEngine.Core.Utils
 {
     public class UniversalNormalizer
     {
-        private readonly Queue<double> _values = new();
-        public int MaxSamples { get; }
-        public int Count => _values.Count;
-        public bool IsReady => _values.Count >= 20;
+        private readonly Queue<double> _window = new();
+        private readonly int _maxSamples;
+
+        private double _mean;
+        private double _m2;
+        private int _count;
+
+        public bool IsReady => _count >= 100;
 
         public UniversalNormalizer(int maxSamples)
         {
-            MaxSamples = maxSamples;
+            _maxSamples = maxSamples;
         }
 
         public double Update(double value)
         {
-            _values.Enqueue(value);
+            _window.Enqueue(value);
 
-            if (_values.Count > MaxSamples)
-                _values.Dequeue();
+            _count++;
 
-            if (_values.Count < 100)
+            double delta = value - _mean;
+            _mean += delta / _count;
+            _m2 += delta * (value - _mean);
+
+            if (_window.Count > _maxSamples)
+            {
+                _window.Dequeue();
+            }
+
+            if (_count < 100)
                 return 0;
 
-            var mean = _values.Average();
-
-            double variance = 0;
-
-            foreach (var v in _values)
-                variance += (v - mean) * (v - mean);
-
-            variance /= _values.Count;
-
-            var std = Math.Sqrt(variance);
+            double variance = _m2 / (_count - 1);
+            double std = Math.Sqrt(variance);
 
             if (std == 0)
                 return 0;
 
-            return (value - mean) / std;
+            return (value - _mean) / std;
         }
 
         public NormalizerState GetState()
         {
             return new NormalizerState
             {
-                Values = _values.ToList()
+                Values = _window.ToList()
             };
         }
 
         public void Restore(NormalizerState state)
         {
-            _values.Clear();
+            _window.Clear();
 
             foreach (var v in state.Values)
-                _values.Enqueue(v);
+            {
+                Update(v);
+            }
         }
     }
 

@@ -7,9 +7,10 @@ namespace KinetixFlowEngine.Core.Flow
         private readonly FlowTradeBuffer _buffer;
         private readonly int _windowSeconds;
 
+        // Default window changed from 40 → 60 seconds
         public FlowAggregationWindow(
             FlowTradeBuffer buffer,
-            int windowSeconds = 40)
+            int windowSeconds = 60)
         {
             _buffer = buffer;
             _windowSeconds = windowSeconds;

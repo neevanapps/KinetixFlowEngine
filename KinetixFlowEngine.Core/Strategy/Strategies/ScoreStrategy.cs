@@ -1,22 +1,21 @@
 ﻿using KinetixFlowEngine.Core.Engine;
 using KinetixFlowEngine.Core.Trading;
-using KinetixFlowEngine.Core.Trend;
 
 namespace KinetixFlowEngine.Core.Strategy.Strategies
 {
-    public class FlowMomentumStrategy : IKinetixStrategy
+    public class ScoreStrategy : IKinetixStrategy
     {
-        public string Name => "FlowMomentum";
+        public string Name => "ScoreStrategy";
         private readonly StrategyConfig _config;
 
-        public FlowMomentumStrategy(StrategyConfigLoader loader)
+        public ScoreStrategy(StrategyConfigLoader loader)
         {
             _config = loader.Get(Name);
         }
 
         public StrategySignal EvaluateEntry(KinetixEngineResult r)
         {
-            if (r.ScoreFastEma > 0 && r.ScoreMediumEma > 0 && r.ScoreSlowEma > 0)
+            if (r.ScoreFastEma > 1 && r.ScoreMediumEma > 1 && r.ScoreSlowEma > 1)
             {
                 return new StrategySignal
                 {
@@ -28,7 +27,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
                 };
             }
 
-            if (r.ScoreFastEma < 0 && r.ScoreMediumEma < 0 && r.ScoreSlowEma < 0)
+            if (r.ScoreFastEma < -1 && r.ScoreMediumEma < -1 && r.ScoreSlowEma < -1)
             {
                 return new StrategySignal
                 {
@@ -51,7 +50,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
         {
             if (trade.Direction == SignalDirection.Long)
             {
-                bool trendBroken = r.ScoreFastEma < 0 && r.ScoreMediumEma < 0 && r.ScoreSlowEma < 0;
+                bool trendBroken = r.ScoreFastEma < -1 && r.ScoreMediumEma < -1 && r.ScoreSlowEma < -1;
 
                 if (trendBroken)
                 {
@@ -65,7 +64,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
 
             if (trade.Direction == SignalDirection.Short)
             {
-                bool trendBroken = r.ScoreFastEma > 0 && r.ScoreMediumEma > 0 && r.ScoreSlowEma > 0;
+                bool trendBroken = r.ScoreFastEma > 1&& r.ScoreMediumEma >1 && r.ScoreSlowEma > 1;
 
                 if (trendBroken)
                 {

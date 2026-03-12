@@ -13,11 +13,20 @@ namespace KinetixFlowEngine.Core.Flow
             double persistenceNormalized =
                 Math.Clamp(f.Persistence / MaxPersistence, -1.0, 1.0);
 
-            double composite = 0.25 * f.Imbalance + 0.15 * f.Momentum + 0.15 * f.Acceleration + 0.15 * persistenceNormalized + 0.10 * f.SizeBias + 0.10 * f.DeltaVelocity;
-            composite += 0.30 * f.Absorption;
+            // ------------------------------------------------
+            // Balanced composite weighting
+            // ------------------------------------------------
 
-            if (f.Absorption != 0)
-                composite += 0.15 * f.Absorption;
+            double composite =
+                0.30 * f.Imbalance +
+                0.15 * f.Momentum +
+                0.15 * f.Acceleration +
+                0.10 * persistenceNormalized +
+                0.10 * f.SizeBias +
+                0.10 * f.DeltaVelocity;
+
+            // Absorption should influence but not dominate
+            composite += 0.10 * f.Absorption;
 
             var smoothed = _ema.Update(composite);
 

@@ -6,122 +6,158 @@ namespace KinetixFlowEngine.Core.Flow.Probability
     public class FlowProbabilityEngine
     {
         public FlowProbabilitySnapshot Calculate(
-    double scoreZ,
-    double velocityZ,
-    double imbalanceZ,
-    double compression,
-    double exhaustion,
-    FlowStateSnapshot state,
-    FlowTrend scoreTrend,
-    bool bullishAbsorption,
-    bool bearishDistribution,
-    bool vwapBullishAbsorption,
-    bool vwapBearishAbsorption,
-    bool bullishControl,
-bool bearishControl)
+            double scoreZ,
+            double velocityZ,
+            double imbalanceZ,
+            double compression,
+            double exhaustion,
+            FlowStateSnapshot state,
+            FlowTrend scoreTrend,
+            bool bullishAbsorption,
+            bool bearishDistribution,
+            bool vwapBullishAbsorption,
+            bool vwapBearishAbsorption,
+            bool bullishControl,
+            bool bearishControl)
         {
             double longScore = 0;
             double shortScore = 0;
 
-            // Score pressure
-            longScore += Math.Max(scoreZ, 0);
-            shortScore += Math.Max(-scoreZ, 0);
+            // ------------------------------------------------
+            // 1. Clamp Z-scores to prevent outliers dominating
+            // ------------------------------------------------
 
-            // Velocity ignition
-            longScore += Math.Max(velocityZ, 0);
-            shortScore += Math.Max(-velocityZ, 0);
+            double s = Math.Clamp(scoreZ, -2, 2);
+            double v = Math.Clamp(velocityZ, -2, 2);
+            double i = Math.Clamp(imbalanceZ, -2, 2);
 
-            // Imbalance
-            longScore += Math.Max(imbalanceZ, 0);
-            shortScore += Math.Max(-imbalanceZ, 0);
+            longScore += Math.Max(s, 0);
+            shortScore += Math.Max(-s, 0);
 
-            // Compression reduces probabilities
+            longScore += Math.Max(v, 0);
+            shortScore += Math.Max(-v, 0);
+
+            longScore += Math.Max(i, 0);
+            shortScore += Math.Max(-i, 0);
+
+            // ------------------------------------------------
+            // 2. Compression penalty (lighter reduction)
+            // ------------------------------------------------
+
             if (compression > 0.8)
             {
-                longScore *= 0.6;
-                shortScore *= 0.6;
+                longScore *= 0.85;
+                shortScore *= 0.85;
             }
 
-            // Exhaustion penalizes continuation
-            if (exhaustion > 5)
-            {
-                longScore *= 0.5;
-                shortScore *= 0.5;
-            }
+            // ------------------------------------------------
+            // 3. Exhaustion smooth decay
+            // ------------------------------------------------
 
-            // State adjustments
+            double penalty = Math.Min(exhaustion / 10.0, 0.5);
+
+            longScore *= (1 - penalty);
+            shortScore *= (1 - penalty);
+
+            // ------------------------------------------------
+            // 4. Flow State adjustments
+            // ------------------------------------------------
+
             if (state.State == FlowState.Ignition)
             {
-                longScore *= 1.3;
-                shortScore *= 1.3;
+                longScore += 0.3;
+                shortScore += 0.3;
             }
 
             if (state.State == FlowState.Exhaustion)
             {
-                longScore *= 0.5;
-                shortScore *= 0.5;
+                longScore *= 0.7;
+                shortScore *= 0.7;
             }
 
-            // -------------------------------------
-            // FLOW-PRICE DIVERGENCE WEIGHTING
-            // -------------------------------------
+            // ------------------------------------------------
+            // 5. Flow / Price divergence signals
+            // ------------------------------------------------
 
             if (bullishAbsorption)
             {
-                longScore *= 1.4;
-                shortScore *= 0.6;
+                longScore += 0.4;
+                shortScore -= 0.2;
             }
 
             if (bearishDistribution)
             {
-                shortScore *= 1.4;
-                longScore *= 0.6;
+                shortScore += 0.4;
+                longScore -= 0.2;
             }
 
-            // Price impact control
+            // ------------------------------------------------
+            // 6. Price impact control
+            // ------------------------------------------------
+
             if (bullishControl)
             {
-                longScore *= 1.35;
-                shortScore *= 0.65;
+                longScore += 0.3;
+                shortScore -= 0.15;
             }
 
             if (bearishControl)
             {
-                shortScore *= 1.35;
-                longScore *= 0.65;
+                shortScore += 0.3;
+                longScore -= 0.15;
             }
 
-            // -------------------------------------
-            // PERSISTENCE BOOST
-            // -------------------------------------
+            // ------------------------------------------------
+            // 7. Trend persistence boost
+            // ------------------------------------------------
 
             if (state.Bullish && scoreTrend == FlowTrend.Bullish)
             {
-                longScore *= 1.15;
+                longScore += 0.25;
             }
 
             if (state.Bearish && scoreTrend == FlowTrend.Bearish)
             {
-                shortScore *= 1.15;
+                shortScore += 0.25;
             }
 
-            // VWAP absorption is stronger institutional signal
+            // ------------------------------------------------
+            // 8. VWAP absorption (strong institutional signal)
+            // ------------------------------------------------
+
             if (vwapBullishAbsorption)
             {
-                longScore *= 1.5;
-                shortScore *= 0.5;
+                longScore += 0.5;
+                shortScore -= 0.25;
             }
 
             if (vwapBearishAbsorption)
             {
-                shortScore *= 1.5;
-                longScore *= 0.5;
+                shortScore += 0.5;
+                longScore -= 0.25;
             }
 
-            var total = longScore + shortScore;
+            // ------------------------------------------------
+            // 9. Prevent negative scores
+            // ------------------------------------------------
 
-            if (total == 0)
-                return new FlowProbabilitySnapshot();
+            if (longScore < 0) longScore = 0;
+            if (shortScore < 0) shortScore = 0;
+
+            // ------------------------------------------------
+            // 10. Convert to probabilities
+            // ------------------------------------------------
+
+            double total = longScore + shortScore;
+
+            if (total <= 0)
+            {
+                return new FlowProbabilitySnapshot
+                {
+                    LongProbability = 0.5,
+                    ShortProbability = 0.5
+                };
+            }
 
             return new FlowProbabilitySnapshot
             {
