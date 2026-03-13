@@ -21,7 +21,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
 
         public StrategySignal EvaluateEntry(KinetixEngineResult r)
         {
-            if (r.ProbFastEma > 0.60 && r.ProbMediumEma > 0.55 && r.ProbSlowEma > 0.52)
+            if (r.ProbFastEma > 0.60 && r.ProbMediumEma > 0.55 && r.ProbSlowEma > 0.50)
             {
                 return new StrategySignal
                 {
@@ -32,7 +32,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
                     NotifyThroughTelegram = _config.NotifyThroughTelegram
                 };
             }
-            if (r.ProbFastEma < 0.40 && r.ProbMediumEma < 0.45 && r.ProbSlowEma < 0.48)
+            if (r.ProbFastEma < 0.40 && r.ProbMediumEma < 0.45 && r.ProbSlowEma < 0.50)
             {
                 return new StrategySignal
                 {
