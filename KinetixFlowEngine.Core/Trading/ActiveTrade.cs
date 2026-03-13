@@ -30,6 +30,7 @@ namespace KinetixFlowEngine.Core.Trading
 
         public bool NotifyThroughTelegram { get; set; }
 
+        public bool Closed { get; set; }
         public double EntryScoreZ { get; set; }
         public double EntryVelocityZ { get; set; }
         public double EntryImbalanceZ { get; set; }

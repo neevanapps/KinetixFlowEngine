@@ -1,17 +1,16 @@
 ﻿using KinetixFlowEngine.Core.Engine;
 using KinetixFlowEngine.Core.Strategy;
-using System.Diagnostics;
 
 namespace KinetixFlowEngine.Core.Trading
 {
     public class PositionManager
     {
         private readonly TradePersistence _persistence;
+
         public event Action<ActiveTrade>? Target1Reached;
+        public event Action<ActiveTrade, decimal>? TradeClosed;
 
         private readonly Dictionary<string, ActiveTrade> _activeTrades;
-
-        public event Action<ActiveTrade, decimal>? TradeClosed;
 
         public PositionManager(TradePersistence persistence)
         {
@@ -30,13 +29,18 @@ namespace KinetixFlowEngine.Core.Trading
             return trade;
         }
 
+        public IEnumerable<ActiveTrade> GetAllPositions()
+        {
+            return _activeTrades.Values;
+        }
+
         public void TryEnterTrade(StrategySignal signal, decimal price, double atr, KinetixEngineResult r)
         {
             if (_activeTrades.ContainsKey(signal.StrategyName))
                 return;
 
             decimal atrValue = (decimal)atr;
-            var stopDistance = Math.Min(price * 0.01m, atrValue * 3);
+            decimal stopDistance = Math.Min(price * 0.01m, atrValue * 3);
 
             var trade = new ActiveTrade
             {
@@ -46,16 +50,21 @@ namespace KinetixFlowEngine.Core.Trading
                 StopLoss = signal.Direction == SignalDirection.Long
                     ? price - stopDistance
                     : price + stopDistance,
+
                 Target1 = signal.Direction == SignalDirection.Long
                     ? price + stopDistance
                     : price - stopDistance,
+
                 TrailingStop = stopDistance,
                 InitialSize = 1,
                 RemainingSize = 1,
+
                 EntryTimeMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                 NotifyThroughTelegram = signal.NotifyThroughTelegram,
+
                 MaxPrice = price,
                 MinPrice = price,
+
                 EntryScoreZ = r.ScoreZ,
                 EntryVelocityZ = r.VelocityZ,
                 EntryImbalanceZ = r.ImbalanceZ,
@@ -63,6 +72,8 @@ namespace KinetixFlowEngine.Core.Trading
                 EntryATR = r.ATR,
                 EntryER = r.ER,
                 EntryFlowState = r.FlowState.State.ToString(),
+
+                Closed = false
             };
 
             _activeTrades[signal.StrategyName] = trade;
@@ -72,8 +83,13 @@ namespace KinetixFlowEngine.Core.Trading
 
         public void Update(decimal price)
         {
-            foreach (var trade in _activeTrades.Values.ToList())
+            var trades = _activeTrades.Values.ToList();
+
+            foreach (var trade in trades)
             {
+                if (trade.Closed)
+                    continue;
+
                 trade.MaxPrice = Math.Max(trade.MaxPrice, price);
                 trade.MinPrice = Math.Min(trade.MinPrice, price);
 
@@ -110,21 +126,21 @@ namespace KinetixFlowEngine.Core.Trading
             _persistence.Save(_activeTrades);
         }
 
-        public IEnumerable<ActiveTrade> GetAllPositions()
+        public void CloseTrade(string strategyName, decimal exitPrice)
         {
-            return _activeTrades.Values;
-        }
-
-        public void CloseTrade(string strategy, decimal exitPrice)
-        {
-            if (!_activeTrades.TryGetValue(strategy, out var trade))
+            if (!_activeTrades.TryGetValue(strategyName, out var trade))
                 return;
 
-            TradeClosed?.Invoke(trade, exitPrice);
+            if (trade.Closed)
+                return;
 
-            _activeTrades.Remove(strategy);
+            trade.Closed = true;
+
+            _activeTrades.Remove(strategyName);
 
             _persistence.Save(_activeTrades);
+
+            TradeClosed?.Invoke(trade, exitPrice);
         }
     }
 }
