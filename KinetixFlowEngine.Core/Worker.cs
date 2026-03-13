@@ -110,59 +110,56 @@ namespace KinetixFlowEngine.Core
             _tradeJournal = tradeJournal;
             _positionManager.TradeClosed += (trade, exitPrice) =>
             {
-                _positionManager.TradeClosed += (trade, exitPrice) =>
+                var duration = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - trade.EntryTimeMs) / 1000;
+
+                var entry = trade.EntryPrice;
+                var target1 = trade.Target1;
+
+                decimal pnlPoints;
+
+                // SAME LOGIC AS TELEGRAM EXIT
+                if (trade.Target1Hit)
                 {
-                    var duration = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - trade.EntryTimeMs) / 1000;
-
-                    var entry = trade.EntryPrice;
-                    var target1 = trade.Target1;
-
-                    decimal pnlPoints;
-
-                    // SAME LOGIC AS TELEGRAM EXIT
-                    if (trade.Target1Hit)
+                    if (trade.Direction == SignalDirection.Long)
                     {
-                        if (trade.Direction == SignalDirection.Long)
-                        {
-                            pnlPoints = (target1 - entry) * 0.7m + (exitPrice - entry) * 0.3m;
-                        }
-                        else
-                        {
-                            pnlPoints = (entry - target1) * 0.7m + (entry - exitPrice) * 0.3m;
-                        }
+                        pnlPoints = (target1 - entry) * 0.7m + (exitPrice - entry) * 0.3m;
                     }
                     else
                     {
-                        pnlPoints = trade.Direction == SignalDirection.Long ? exitPrice - entry : entry - exitPrice;
+                        pnlPoints = (entry - target1) * 0.7m + (entry - exitPrice) * 0.3m;
                     }
+                }
+                else
+                {
+                    pnlPoints = trade.Direction == SignalDirection.Long ? exitPrice - entry : entry - exitPrice;
+                }
 
-                    decimal risk = Math.Abs(entry - trade.StopLoss);
-                    decimal pnlR = risk == 0 ? 0 : pnlPoints / risk;
-                    decimal mfe = trade.Direction == SignalDirection.Long ? trade.MaxPrice - entry : entry - trade.MinPrice;
-                    decimal mae = trade.Direction == SignalDirection.Long ? entry - trade.MinPrice : trade.MaxPrice - entry;
-                    _tradeJournal.Record(new TradeJournalRecord
-                    {
-                        Timestamp = DateTime.UtcNow,
-                        Strategy = trade.StrategyName,
-                        Direction = trade.Direction,
-                        EntryPrice = entry,
-                        ExitPrice = exitPrice,
-                        StopLoss = trade.StopLoss,
-                        Target1 = target1,
-                        DurationSeconds = duration,
-                        PnlPoints = pnlPoints,
-                        PnlR = pnlR,
-                        MFE = mfe,
-                        MAE = mae,
-                        ScoreZ = trade.EntryScoreZ,
-                        VelocityZ = trade.EntryVelocityZ,
-                        ImbalanceZ = trade.EntryImbalanceZ,
-                        CompressionZ = trade.EntryCompressionZ,
-                        ATR = trade.EntryATR,
-                        ER = trade.EntryER,
-                        FlowState = trade.EntryFlowState
-                    });
-                };
+                decimal risk = Math.Abs(entry - trade.StopLoss);
+                decimal pnlR = risk == 0 ? 0 : pnlPoints / risk;
+                decimal mfe = trade.Direction == SignalDirection.Long ? trade.MaxPrice - entry : entry - trade.MinPrice;
+                decimal mae = trade.Direction == SignalDirection.Long ? entry - trade.MinPrice : trade.MaxPrice - entry;
+                _tradeJournal.Record(new TradeJournalRecord
+                {
+                    Timestamp = DateTime.UtcNow,
+                    Strategy = trade.StrategyName,
+                    Direction = trade.Direction,
+                    EntryPrice = entry,
+                    ExitPrice = exitPrice,
+                    StopLoss = trade.StopLoss,
+                    Target1 = target1,
+                    DurationSeconds = duration,
+                    PnlPoints = pnlPoints,
+                    PnlR = pnlR,
+                    MFE = mfe,
+                    MAE = mae,
+                    ScoreZ = trade.EntryScoreZ,
+                    VelocityZ = trade.EntryVelocityZ,
+                    ImbalanceZ = trade.EntryImbalanceZ,
+                    CompressionZ = trade.EntryCompressionZ,
+                    ATR = trade.EntryATR,
+                    ER = trade.EntryER,
+                    FlowState = trade.EntryFlowState
+                });
             };
             _exceptionAggregator = exceptionAggregator;
             _probEngine = probEngine;

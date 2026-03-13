@@ -19,6 +19,22 @@
             return Value.Value;
         }
 
+        // NEW METHOD (Persistence adaptive smoothing)
+        public decimal UpdateWithFactor(decimal price, decimal factor, int fastestPeriod, int slowestPeriod)
+        {
+            decimal fastAlpha = 2m / (fastestPeriod + 1m);
+            decimal slowAlpha = 2m / (slowestPeriod + 1m);
+
+            decimal sc = factor * (fastAlpha - slowAlpha) + slowAlpha;
+
+            if (!Value.HasValue)
+                Value = price;
+            else
+                Value = Value + sc * (price - Value);
+
+            return Value.Value;
+        }
+
         public void Restore(decimal value)
         {
             Value = value;

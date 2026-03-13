@@ -18,6 +18,7 @@ namespace KinetixFlowEngine.Core.Engine
         private readonly FlowRegimeEngine _flowRegimeEngine;
         private readonly FlowTradeBuffer _tradeBuffer;
 
+        private readonly Ema _probabilitySmoother = new(5);
         private readonly VwapEngine _vwapEngine;
         private readonly EfficiencyRatioEngine _erEngine;
         private readonly EfficiencyRatio30mEngine _er30m;
@@ -151,7 +152,6 @@ namespace KinetixFlowEngine.Core.Engine
             decimal erDec = (decimal)er5;
 
             var priceTrend = _priceEngine.Update(priceDec, erDec);
-            var scoreTrend = _scoreEngine.Update((decimal)adjustedScore, erDec);
             var pressure = _pressureEngine.Calculate(window, price, atr, (double)vwap);
 
             var scoreZ = _scoreNorm.Update(adjustedScore);
@@ -160,14 +160,18 @@ namespace KinetixFlowEngine.Core.Engine
             var exhZ = _exhNorm.Update(features.Exhaustion);
             var cmpZ = _cmpNorm.Update(features.Compression);
 
-            var persistenceSignal = _flowPersistenceEngine.Update(scoreTrend, scoreZ);
+            var persistenceSignal = _flowPersistenceEngine.Update(_scoreEngine.Fast > _scoreEngine.Slow ? FlowTrend.Bullish : _scoreEngine.Fast < _scoreEngine.Slow ? FlowTrend.Bearish : FlowTrend.Neutral, scoreZ);
+            int persistence = Math.Max(persistenceSignal.BullishDuration, persistenceSignal.BearishDuration);
+            var scoreTrend = _scoreEngine.Update((decimal)adjustedScore, persistence);
             var divergence = _divergenceEngine.Detect(priceTrend, scoreTrend, scoreZ, vwapDev);
             var vwapAbsorption = _vwapAbsorptionEngine.Detect(price, (double)vwap, adjustedScore, priceTrend);
             var flowState = _flowStateEngine.Detect(scoreZ, velZ, imbZ, cmpZ, exhZ, features.Persistence, scoreTrend);
 
             var probability = _flowProbabilityEngine.Calculate(scoreZ, velZ, imbZ, cmpZ, exhZ, flowState, scoreTrend, divergence.BullishAbsorption,
                 divergence.BearishDistribution, vwapAbsorption.BullishAbsorption, vwapAbsorption.BearishAbsorption, impact.BullishControl, impact.BearishControl);
-            var ProbTrend = _probEngine.Update((decimal)probability.LongProbability, erDec);
+
+            double smoothedLongProb = _probabilitySmoother.Update(probability.LongProbability);
+            var ProbTrend = _probEngine.Update((decimal)smoothedLongProb, persistence);
 
             bool longSignal = probability.LongProbability > 0.65 && scoreTrend == FlowTrend.Bullish;
             bool shortSignal = probability.ShortProbability > 0.65 && scoreTrend == FlowTrend.Bearish;
@@ -200,8 +204,8 @@ namespace KinetixFlowEngine.Core.Engine
                 ScoreMediumEma = (double)_scoreEngine.Medium,
                 FlowState = flowState,
 
-                LongProbability = probability.LongProbability,
-                ShortProbability = probability.ShortProbability,
+                LongProbability = smoothedLongProb,
+                ShortProbability = 1 - smoothedLongProb,
 
                 LongStable = stability.LongStable,
                 ShortStable = stability.ShortStable,
