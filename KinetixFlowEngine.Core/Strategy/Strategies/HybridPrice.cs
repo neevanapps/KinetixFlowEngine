@@ -21,7 +21,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
 
         public StrategySignal EvaluateEntry(KinetixEngineResult r)
         {
-            if (r.ProbFastEma > 0.60 && r.ProbMediumEma > 0.55 && r.ProbSlowEma > 0.50)
+            if (r.ProbFastEma > 0.60 && r.ProbMediumEma > 0.56 && r.ProbSlowEma > 0.52)
             {
                 return new StrategySignal
                 {
@@ -32,7 +32,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
                     NotifyThroughTelegram = _config.NotifyThroughTelegram
                 };
             }
-            if (r.ProbFastEma < 0.40 && r.ProbMediumEma < 0.45 && r.ProbSlowEma < 0.50)
+            if (r.ProbFastEma < 0.40 && r.ProbMediumEma < 0.44 && r.ProbSlowEma < 0.48)
             {
                 return new StrategySignal
                 {
@@ -55,7 +55,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
         {
             if (trade.Direction == SignalDirection.Long)
             {
-                bool trendBroken = r.ProbFastEma < 0.40 && r.ProbMediumEma < 0.45 && r.ProbSlowEma < 0.50;
+                bool trendBroken = r.ProbFastEma < 0.40 && r.ProbMediumEma < 0.44 && r.ProbSlowEma < 0.48;
 
                 if (trendBroken)
                 {
@@ -68,7 +68,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
             }
             if (trade.Direction == SignalDirection.Short)
             {
-                bool trendBroken = r.ProbFastEma > 0.60 && r.ProbMediumEma > 0.55 && r.ProbSlowEma > 0.50;
+                bool trendBroken = r.ProbFastEma > 0.60 && r.ProbMediumEma > 0.56 && r.ProbSlowEma > 0.52;
 
                 if (trendBroken)
                 {
