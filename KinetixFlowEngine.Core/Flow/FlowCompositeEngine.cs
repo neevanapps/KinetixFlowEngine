@@ -10,23 +10,62 @@ namespace KinetixFlowEngine.Core.Flow
 
         public FlowCompositeSnapshot Calculate(FlowFeatureSnapshot f)
         {
+            //------------------------------------------------
+            // Normalize persistence
+            //------------------------------------------------
+
             double persistenceNormalized =
                 Math.Clamp(f.Persistence / MaxPersistence, -1.0, 1.0);
 
-            // ------------------------------------------------
-            // Balanced composite weighting
-            // ------------------------------------------------
+            //------------------------------------------------
+            // Core flow structure
+            //------------------------------------------------
+
+            double imbalanceComponent = 0.35 * f.Imbalance;
+            double persistenceComponent = 0.25 * persistenceNormalized;
+
+            //------------------------------------------------
+            // Secondary flow structure
+            //------------------------------------------------
+
+            double momentumComponent = 0.15 * f.Momentum;
+
+            //------------------------------------------------
+            // Noise-prone signals (reduced influence)
+            //------------------------------------------------
+
+            double accelerationComponent = 0.08 * f.Acceleration;
+            double velocityComponent = 0.10 * f.DeltaVelocity;
+
+            //------------------------------------------------
+            // Institutional signals
+            //------------------------------------------------
+
+            double sizeBiasComponent = 0.05 * f.SizeBias;
+            double absorptionComponent = 0.07 * f.Absorption;
+
+            //------------------------------------------------
+            // Composite calculation
+            //------------------------------------------------
 
             double composite =
-                0.30 * f.Imbalance +
-                0.15 * f.Momentum +
-                0.15 * f.Acceleration +
-                0.10 * persistenceNormalized +
-                0.10 * f.SizeBias +
-                0.10 * f.DeltaVelocity;
+                imbalanceComponent +
+                persistenceComponent +
+                momentumComponent +
+                accelerationComponent +
+                velocityComponent +
+                sizeBiasComponent +
+                absorptionComponent;
 
-            // Absorption should influence but not dominate
-            composite += 0.10 * f.Absorption;
+            //------------------------------------------------
+            // Anti-spike clamp
+            //------------------------------------------------
+
+            composite = Math.Clamp(composite, -1.5, 1.5);
+
+            //------------------------------------------------
+            // EMA smoothing
+            //------------------------------------------------
 
             var smoothed = _ema.Update(composite);
 
