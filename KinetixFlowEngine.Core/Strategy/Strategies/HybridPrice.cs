@@ -6,14 +6,14 @@ using System.Text;
 
 namespace KinetixFlowEngine.Core.Strategy.Strategies
 {
-    internal class HybridStrategy : IKinetixStrategy
+    public class HybridPrice : IKinetixStrategy
     {
-        public string Name => "HybridStrategy";
+        public string Name => "HrbridPrice";
 
         private readonly StrategyConfig _config;
-        private readonly ILogger<HybridStrategy> _logger;
+        private readonly ILogger<HybridPrice> _logger;
 
-        public HybridStrategy(StrategyConfigLoader loader, ILogger<HybridStrategy> logger)
+        public HybridPrice(StrategyConfigLoader loader, ILogger<HybridPrice> logger)
         {
             _config = loader.Get(Name);
             _logger = logger;

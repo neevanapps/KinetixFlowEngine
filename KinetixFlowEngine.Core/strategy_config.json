@@ -43,5 +43,20 @@
     "Target2SizePercent": 50,
     "StopLossAtr": 1,
     "TrailingStopAtr": 1
+  },
+  {
+    "StrategyName": "HrbridPrice",
+    "Enabled": true,
+    "EnterOnlyAtFairPrice": true,
+    "NotifyThroughTelegram": true,
+    "MinConfidence": 0.7,
+    "CooldownSeconds": 0,
+    "PositionSize": 1,
+    "Target1Atr": 2,
+    "Target1SizePercent": 50,
+    "Target2Atr": 4,
+    "Target2SizePercent": 50,
+    "StopLossAtr": 1,
+    "TrailingStopAtr": 1
   }
 ]

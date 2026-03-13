@@ -27,7 +27,7 @@ namespace KinetixFlowEngine.Core.Persistence
                     "long_prob,short_prob,vwap,er5,er30,atr,oi," +
                     "delta_velocity,momentum,acceleration,persistence,size_bias,absorption," +
                     "buy_pressure,sell_pressure,net_pressure,bullish_absorption,bearish_distribution," +
-                    "vwap_bullish_absorption,vwap_bearish_absorption,whale_buy_trades,whale_sell_trades,impact_efficiency,bullish_control,bearish_control";
+                    "vwap_bullish_absorption,vwap_bearish_absorption,whale_buy_trades,whale_sell_trades,impact_efficiency,bullish_control,bearish_control,prob_fast,prob_Medium,prob_slow";
 
             File.WriteAllText(_filePath, header + Environment.NewLine);
         }
@@ -73,7 +73,10 @@ namespace KinetixFlowEngine.Core.Persistence
                 r.LargeSellTrades,
                 r.FlowImpactEfficiency.ToString(CultureInfo.InvariantCulture),
                 r.BullishPriceControl,
-                r.BearishPriceControl
+                r.BearishPriceControl,
+                r.ProbFastEma.ToString(CultureInfo.InvariantCulture),
+                r.ProbMediumEma.ToString(CultureInfo.InvariantCulture),
+                r.ProbSlowEma.ToString(CultureInfo.InvariantCulture)
             );
 
             File.AppendAllText(_filePath, line + Environment.NewLine);
