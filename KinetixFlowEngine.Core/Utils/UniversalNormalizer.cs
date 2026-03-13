@@ -29,9 +29,7 @@ namespace KinetixFlowEngine.Core.Utils
             _m2 += delta * (value - _mean);
 
             if (_window.Count > _maxSamples)
-            {
                 _window.Dequeue();
-            }
 
             if (_count < 100)
                 return 0;
@@ -49,7 +47,10 @@ namespace KinetixFlowEngine.Core.Utils
         {
             return new NormalizerState
             {
-                Values = _window.ToList()
+                Values = _window.ToList(),
+                Mean = _mean,
+                M2 = _m2,
+                Count = _count
             };
         }
 
@@ -58,14 +59,22 @@ namespace KinetixFlowEngine.Core.Utils
             _window.Clear();
 
             foreach (var v in state.Values)
-            {
-                Update(v);
-            }
+                _window.Enqueue(v);
+
+            _mean = state.Mean;
+            _m2 = state.M2;
+            _count = state.Count;
         }
     }
 
     public class NormalizerState
     {
         public List<double> Values { get; set; } = new();
+
+        public double Mean { get; set; }
+
+        public double M2 { get; set; }
+
+        public int Count { get; set; }
     }
 }
