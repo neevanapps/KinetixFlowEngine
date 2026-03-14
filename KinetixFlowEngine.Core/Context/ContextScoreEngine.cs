@@ -11,8 +11,8 @@
             double erMultiplier = 0.5 + er;
 
             double oiMultiplier = 1.0;
-            if (oiChange > 0)
-                oiMultiplier = 1.1;
+            //if (oiChange > 0)
+            //    oiMultiplier = 1.1;
 
             double vwapMultiplier = 1.0;
 

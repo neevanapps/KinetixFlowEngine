@@ -62,7 +62,7 @@ namespace KinetixFlowEngine.Core.Flow
             //------------------------------------------------
 
             composite = Math.Clamp(composite, -1.5, 1.5);
-
+            composite = Math.Tanh(composite);
             //------------------------------------------------
             // EMA smoothing
             //------------------------------------------------

@@ -1,59 +1,75 @@
-﻿using KinetixFlowEngine.Core.Models;
+﻿using KinetixFlowEngine.Core.Flow;
+using KinetixFlowEngine.Core.Models;
 
-namespace KinetixFlowEngine.Core.Flow
+public class FlowAggregationWindow
 {
-    public class FlowAggregationWindow
+    private readonly Queue<FlowTrade> _window = new();
+
+    private readonly int _windowSeconds;
+
+    private decimal _buyVolume;
+    private decimal _sellVolume;
+
+    private int _buyTrades;
+    private int _sellTrades;
+
+    public FlowAggregationWindow(int windowSeconds = 60)
     {
-        private readonly FlowTradeBuffer _buffer;
-        private readonly int _windowSeconds;
+        _windowSeconds = windowSeconds;
+    }
 
-        // Default window changed from 40 → 60 seconds
-        public FlowAggregationWindow(
-            FlowTradeBuffer buffer,
-            int windowSeconds = 60)
+    public void AddTrade(FlowTrade trade)
+    {
+        _window.Enqueue(trade);
+
+        if (!trade.IsBuyerMaker)
         {
-            _buffer = buffer;
-            _windowSeconds = windowSeconds;
+            _buyVolume += trade.Quantity;
+            _buyTrades++;
+        }
+        else
+        {
+            _sellVolume += trade.Quantity;
+            _sellTrades++;
         }
 
-        public FlowWindowSnapshot GetSnapshot()
+        Cleanup(trade.Timestamp);
+    }
+
+    private void Cleanup(long currentTimestamp)
+    {
+        long cutoff = currentTimestamp - (_windowSeconds * 1000);
+
+        while (_window.Count > 0)
         {
-            var trades = _buffer.GetSnapshot();
+            var t = _window.Peek();
 
-            long cutoff = DateTimeOffset.UtcNow
-                .AddSeconds(-_windowSeconds)
-                .ToUnixTimeMilliseconds();
+            if (t.Timestamp >= cutoff)
+                break;
 
-            decimal buyVolume = 0;
-            decimal sellVolume = 0;
+            _window.Dequeue();
 
-            int buyTrades = 0;
-            int sellTrades = 0;
-
-            foreach (var trade in trades)
+            if (!t.IsBuyerMaker)
             {
-                if (trade.Timestamp < cutoff)
-                    continue;
-
-                if (!trade.IsBuyerMaker)
-                {
-                    buyVolume += trade.Quantity;
-                    buyTrades++;
-                }
-                else
-                {
-                    sellVolume += trade.Quantity;
-                    sellTrades++;
-                }
+                _buyVolume -= t.Quantity;
+                _buyTrades--;
             }
-
-            return new FlowWindowSnapshot
+            else
             {
-                BuyVolume = buyVolume,
-                SellVolume = sellVolume,
-                BuyTrades = buyTrades,
-                SellTrades = sellTrades
-            };
+                _sellVolume -= t.Quantity;
+                _sellTrades--;
+            }
         }
+    }
+
+    public FlowWindowSnapshot GetSnapshot()
+    {
+        return new FlowWindowSnapshot
+        {
+            BuyVolume = _buyVolume,
+            SellVolume = _sellVolume,
+            BuyTrades = _buyTrades,
+            SellTrades = _sellTrades
+        };
     }
 }

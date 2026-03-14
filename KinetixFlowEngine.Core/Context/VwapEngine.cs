@@ -19,10 +19,8 @@ namespace KinetixFlowEngine.Core.Context
         private decimal _cumVolume;
         private decimal _cumPriceVolume;
 
-        public decimal Update(decimal price, decimal volume)
+        public decimal Update(decimal price, decimal volume, long now)
         {
-            long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-
             var trade = new Trade
             {
                 Price = price,
@@ -45,7 +43,7 @@ namespace KinetixFlowEngine.Core.Context
 
         private void RemoveOldTrades(long now)
         {
-            long cutoff = now - WindowSeconds;
+            long cutoff = now - (WindowSeconds * 1000);
 
             while (_trades.Count > 0)
             {

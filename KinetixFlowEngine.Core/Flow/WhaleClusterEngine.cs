@@ -4,6 +4,7 @@ namespace KinetixFlowEngine.Core.Flow
 {
     public class WhaleClusterSnapshot
     {
+        public long Timestamp { get; set; }
         public int LargeBuyTrades { get; set; }
         public int LargeSellTrades { get; set; }
 

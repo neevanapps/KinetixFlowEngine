@@ -1,11 +1,12 @@
-﻿using KinetixFlowEngine.Core.Models;
+﻿using KinetixFlowEngine.Core.Data;
+using KinetixFlowEngine.Core.Models;
 using KinetixFlowEngine.Core.Utils;
 using System.Globalization;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 
-public sealed class TradeStreamClient
+public sealed class TradeStreamClient : ITradeStreamClient
 {
     private int _started = 0;
     private readonly Uri _uri = new("wss://fstream.binance.com/ws/btcusdt@aggTrade");

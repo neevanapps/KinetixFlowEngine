@@ -6,6 +6,7 @@ using KinetixFlowEngine.Core.Models;
 using KinetixFlowEngine.Core.Signal;
 using KinetixFlowEngine.Core.Trend;
 using KinetixFlowEngine.Core.Utils;
+using System.Diagnostics;
 
 namespace KinetixFlowEngine.Core.Engine
 {
@@ -40,6 +41,7 @@ namespace KinetixFlowEngine.Core.Engine
         private readonly FlowPersistenceEngine _flowPersistenceEngine;
         private readonly FlowImpactEngine _flowImpactEngine;
         private double _previousPrice;
+        private readonly FifteenMinuteCandleBuilder _candle15mBuilder = new();
 
         private readonly ScoreNormalizer _scoreNorm;
         private readonly VelocityNormalizer _velNorm;
@@ -48,7 +50,10 @@ namespace KinetixFlowEngine.Core.Engine
         private readonly CompressionNormalizer _cmpNorm;
 
         private readonly OneMinuteCandleBuilder _candleBuilder = new();
-
+        private DateTime _lastWhaleCheck = DateTime.MinValue;
+        private WhaleClusterSnapshot _lastWhaleResult = new WhaleClusterSnapshot();
+        private readonly TimeSpan _whaleCheckIntervalLive = TimeSpan.FromSeconds(10);
+        private readonly TimeSpan _whaleCheckIntervalReplay = TimeSpan.FromSeconds(30);
         public KinetixEngineProcessor(
             FlowAggregationWindow flowAggregationWindow,
             FlowFeatureEngine flowFeatureEngine,
@@ -113,11 +118,35 @@ namespace KinetixFlowEngine.Core.Engine
             _tradeBuffer = tradeBuffer;
         }
 
-        public KinetixEngineResult Process(double price, decimal quantity, double openInterest)
+        public KinetixEngineResult Process(double price, decimal quantity, double openInterest, long timestamp, bool isReplay)
         {
-            var allTrades = _tradeBuffer.GetSnapshot();
-            long cutoff = DateTimeOffset.UtcNow.AddSeconds(-60).ToUnixTimeMilliseconds();
-            var whaleClusters = _whaleClusterEngine.Detect(allTrades, cutoff);
+            WhaleClusterSnapshot whaleClusters;
+            if (isReplay)
+            {
+                if (timestamp - _lastWhaleResult.Timestamp >= 30000)
+                {
+                    var allTrades = _tradeBuffer.GetSnapshot();
+                    whaleClusters = _whaleClusterEngine.Detect(allTrades, timestamp - 60000);
+                    _lastWhaleResult = whaleClusters;
+                    _lastWhaleResult.Timestamp = timestamp; // Track 'data time'
+                }
+                else
+                {
+                    whaleClusters = _lastWhaleResult;
+                }
+            }
+            else
+            {
+                var now = DateTime.UtcNow;
+                if ((now - _lastWhaleCheck) >= _whaleCheckIntervalLive)
+                {
+                    var allTrades = _tradeBuffer.GetSnapshot();
+                    whaleClusters = _whaleClusterEngine.Detect(allTrades, DateTimeOffset.UtcNow.AddSeconds(-60).ToUnixTimeMilliseconds());
+                    _lastWhaleResult = whaleClusters;
+                    _lastWhaleCheck = now;
+                }
+                else { whaleClusters = _lastWhaleResult; }
+            }
 
             var window = _flowAggregationWindow.GetSnapshot();
 
@@ -127,18 +156,22 @@ namespace KinetixFlowEngine.Core.Engine
 
             var score = _flowScoreEngine.CalculateScore(composite.CompositeSmoothed);
 
-            var vwap = _vwapEngine.Update((decimal)price, quantity);
-
+            var vwap = _vwapEngine.Update((decimal)price, quantity, timestamp);
             var vwapDev = _vwapEngine.Deviation((decimal)price, vwap);
 
             var er5 = _erEngine.Update(price);
             var er30 = _er30m.Update(price);
 
+            if (_candleBuilder.Update(price, timestamp, out var candle))
+            {
+                _atrEngine.Update(candle.High, candle.Low, candle.Close);
+            }
             double atr = _atrEngine.Value;
 
-            if (_candleBuilder.Update(price, out var candle))
+            // Inside Process method, after the 1m candle block:
+            if (_candle15mBuilder.Update(price, timestamp, out var candle15m))
             {
-                atr = _atrEngine.Update(candle.High, candle.Low, candle.Close);
+                _atr15m.Update(candle15m.High, candle15m.Low, candle15m.Close);
             }
 
             var impact = _flowImpactEngine.Calculate(price, _previousPrice, window, atr);
@@ -177,7 +210,6 @@ namespace KinetixFlowEngine.Core.Engine
             bool shortSignal = probability.ShortProbability > 0.65 && scoreTrend == FlowTrend.Bearish;
 
             var stability = _signalStabilityEngine.Update(longSignal, shortSignal);
-
             return new KinetixEngineResult
             {
                 Price = price,

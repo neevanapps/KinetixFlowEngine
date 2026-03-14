@@ -65,7 +65,18 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<MarketStateManager>();
                 builder.Services.AddSingleton<EngineBootstrapService>();
                 builder.Services.AddSingleton<EngineWarmupManager>();
-                builder.Services.AddSingleton<TradeStreamClient>();
+
+                var replayMode = builder.Configuration.GetValue<bool>("ReplayMode");
+                if (replayMode)
+                {
+                    var folder = builder.Configuration["ReplayFolder"];
+                    builder.Services.AddSingleton<ITradeStreamClient>(new ReplayTradeStreamClient(folder));
+                }
+                else
+                {
+                    builder.Services.AddSingleton<ITradeStreamClient, TradeStreamClient>();
+                }
+
                 builder.Services.AddSingleton<OpenInterestClient>();
                 builder.Services.AddSingleton<TelegramService>();
                 builder.Services.AddSingleton<ExceptionAlertAggregator>();
@@ -86,7 +97,7 @@ namespace KinetixFlowEngine.Core
 
                 builder.Services.AddSingleton<VwapEngine>();
                 builder.Services.AddSingleton<EfficiencyRatioEngine>(sp => new EfficiencyRatioEngine(60));
-                builder.Services.AddSingleton<EfficiencyRatio30mEngine>(); 
+                builder.Services.AddSingleton<EfficiencyRatio30mEngine>();
                 builder.Services.AddSingleton<AtrEngine>();  // 1m ATR
                 builder.Services.AddSingleton<Atr15mEngine>();   // 15m ATR
                 builder.Services.AddSingleton<OpenInterestEngine>();

@@ -31,11 +31,15 @@ namespace KinetixFlowEngine.Core.Bootstrap
             _er30 = er30;
         }
 
-        public async Task InitializeAsync()
+        public async Task InitializeAsync(bool isReplay)
         {
             _atr15m.Reset();
             _atr1m.Reset();
-
+            if (isReplay)
+            {
+                _logger.LogInformation("REPLAY MODE: Skipping Binance Bootstrap. Engine will warm up from data file.");
+                return;
+            }
             _logger.LogInformation("BOOTSTRAP | Loading historical candles");
 
             var klines = await _binance.UsdFuturesApi.ExchangeData.GetKlinesAsync(
@@ -91,7 +95,8 @@ namespace KinetixFlowEngine.Core.Bootstrap
             {
                 _vwap.Update(
                     c.ClosePrice,
-                    c.Volume);
+                    c.Volume,
+                    new DateTimeOffset(c.CloseTime).ToUnixTimeMilliseconds());
             }
 
             _logger.LogInformation(

@@ -25,7 +25,7 @@ namespace KinetixFlowEngine.Core.Flow
 
             double flow = buyVolume - sellVolume;
 
-            double resistance = Math.Abs(price - vwap) + atr;
+            double resistance = Math.Max(atr, Math.Abs(price - vwap));
 
             if (resistance <= 0)
                 resistance = 1;

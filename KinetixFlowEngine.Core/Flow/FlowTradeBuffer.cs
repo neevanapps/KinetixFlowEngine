@@ -30,9 +30,9 @@ namespace KinetixFlowEngine.Core.Flow
             }
         }
 
-        public FlowTrade[] GetSnapshot()
+        public IEnumerable<FlowTrade> GetSnapshot()
         {
-            return _trades.ToArray();
+            return _trades;
         }
 
         public bool TryGetLast(out FlowTrade trade)

@@ -55,4 +55,10 @@ namespace KinetixFlowEngine.Core.Engine
             return IsReady;
         }
     }
+
+    public class EngineState
+    {
+        public bool TradingEnabled { get; set; }
+        public long FirstTimestamp { get; set; }
+    }
 }

@@ -1,5 +1,7 @@
-﻿using KinetixFlowEngine.Core.Engine;
+﻿using KinetixFlowEngine.Core.Config;
+using KinetixFlowEngine.Core.Engine;
 using KinetixFlowEngine.Core.Strategy;
+using Microsoft.Extensions.Options;
 
 namespace KinetixFlowEngine.Core.Trading
 {
@@ -8,14 +10,20 @@ namespace KinetixFlowEngine.Core.Trading
         private readonly TradePersistence _persistence;
 
         public event Action<ActiveTrade>? Target1Reached;
-        public event Action<ActiveTrade, decimal>? TradeClosed;
-
+        public event Action<ActiveTrade, decimal, long>? TradeClosed;
         private readonly Dictionary<string, ActiveTrade> _activeTrades;
-
-        public PositionManager(TradePersistence persistence)
+        private readonly bool _replayMode;
+        private readonly Dictionary<string, long> _lastExitTime = new();
+        private readonly Dictionary<string, long> _lastEntryTimestamp = new();
+        public PositionManager(TradePersistence persistence, IOptions<FlowEngineOptions> options)
         {
             _persistence = persistence;
-            _activeTrades = _persistence.Load();
+            _replayMode = options.Value.ReplayMode;
+
+            if (_replayMode)
+                _activeTrades = new Dictionary<string, ActiveTrade>();
+            else
+                _activeTrades = _persistence.Load();
         }
 
         public bool HasPosition(string strategy)
@@ -34,10 +42,25 @@ namespace KinetixFlowEngine.Core.Trading
             return _activeTrades.Values;
         }
 
-        public void TryEnterTrade(StrategySignal signal, decimal price, double atr, KinetixEngineResult r)
+        public void TryEnterTrade(StrategySignal signal, decimal price, double atr, KinetixEngineResult r, long timestamp)
         {
             if (_activeTrades.ContainsKey(signal.StrategyName))
                 return;
+            if (_lastEntryTimestamp.TryGetValue(signal.StrategyName, out var lastTs))
+            {
+                if (lastTs == timestamp)
+                    return; // prevent duplicate entry in same timestamp
+            }
+
+            var now = _replayMode ? timestamp : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+            if (_lastExitTime.TryGetValue(signal.StrategyName, out var lastExit))
+            {
+                var cooldown = 60 * 1000;
+
+                if (now - lastExit < cooldown)
+                    return;
+            }
 
             decimal atrValue = (decimal)atr;
             decimal stopDistance = Math.Min(price * 0.01m, atrValue * 3);
@@ -59,7 +82,7 @@ namespace KinetixFlowEngine.Core.Trading
                 InitialSize = 1,
                 RemainingSize = 1,
 
-                EntryTimeMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                EntryTimeMs = timestamp,
                 NotifyThroughTelegram = signal.NotifyThroughTelegram,
 
                 MaxPrice = price,
@@ -78,10 +101,13 @@ namespace KinetixFlowEngine.Core.Trading
 
             _activeTrades[signal.StrategyName] = trade;
 
-            _persistence.Save(_activeTrades);
+            if (!_replayMode)
+                _persistence.Save(_activeTrades);
+
+            _lastEntryTimestamp[signal.StrategyName] = timestamp;
         }
 
-        public void Update(decimal price)
+        public void Update(decimal price, long timestamp)
         {
             var trades = _activeTrades.Values.ToList();
 
@@ -114,19 +140,20 @@ namespace KinetixFlowEngine.Core.Trading
 
                 if (trade.Direction == SignalDirection.Long && price <= trade.StopLoss)
                 {
-                    CloseTrade(trade.StrategyName, price);
+                    CloseTrade(trade.StrategyName, price, timestamp);
                 }
 
                 if (trade.Direction == SignalDirection.Short && price >= trade.StopLoss)
                 {
-                    CloseTrade(trade.StrategyName, price);
+                    CloseTrade(trade.StrategyName, price, timestamp);
                 }
             }
 
-            _persistence.Save(_activeTrades);
+            if (!_replayMode)
+                _persistence.Save(_activeTrades);
         }
 
-        public void CloseTrade(string strategyName, decimal exitPrice)
+        public void CloseTrade(string strategyName, decimal exitPrice, long timestamp)
         {
             if (!_activeTrades.TryGetValue(strategyName, out var trade))
                 return;
@@ -134,13 +161,15 @@ namespace KinetixFlowEngine.Core.Trading
             if (trade.Closed)
                 return;
 
+            _lastExitTime[strategyName] = timestamp;
+
             trade.Closed = true;
 
             _activeTrades.Remove(strategyName);
 
             _persistence.Save(_activeTrades);
 
-            TradeClosed?.Invoke(trade, exitPrice);
+            TradeClosed?.Invoke(trade, exitPrice, timestamp);
         }
     }
 }
