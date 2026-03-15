@@ -26,7 +26,7 @@ namespace KinetixFlowEngine.Core.Engine
         private readonly OpenInterestEngine _oiEngine;
         private readonly ContextScoreEngine _contextScoreEngine;
         private readonly Atr15mEngine _atr15m;
-
+        private readonly FifteenMinuteCandleBuilder _candle15m = new();
         private readonly PriceTrendEngine _priceEngine;
         private readonly ScoreTrendEngine _scoreEngine;
         private readonly ProbabilityTrendEngine _probEngine;
@@ -40,6 +40,7 @@ namespace KinetixFlowEngine.Core.Engine
         private readonly FlowPersistenceEngine _flowPersistenceEngine;
         private readonly FlowImpactEngine _flowImpactEngine;
         private double _previousPrice;
+        private readonly VolumeEngine _volumeEngine;
 
         private readonly ScoreNormalizer _scoreNorm;
         private readonly VelocityNormalizer _velNorm;
@@ -76,7 +77,7 @@ namespace KinetixFlowEngine.Core.Engine
             LiquidityPressureEngine pressureEngine,
             VwapAbsorptionEngine vwapAbsorptionEngine,
             WhaleClusterEngine whaleClusterEngine, FlowImpactEngine flowImpactEngine,
-            FlowPersistenceEngine flowPersistenceEngine, ProbabilityTrendEngine probEngine, FlowTradeBuffer tradeBuffer)
+            FlowPersistenceEngine flowPersistenceEngine, ProbabilityTrendEngine probEngine, FlowTradeBuffer tradeBuffer, FifteenMinuteCandleBuilder candle15m, VolumeEngine volumeEngine)
         {
             _flowAggregationWindow = flowAggregationWindow;
             _flowFeatureEngine = flowFeatureEngine;
@@ -111,9 +112,11 @@ namespace KinetixFlowEngine.Core.Engine
             _flowPersistenceEngine = flowPersistenceEngine;
             _probEngine = probEngine;
             _tradeBuffer = tradeBuffer;
+            _candle15m = candle15m;
+            _volumeEngine = volumeEngine;
         }
 
-        public KinetixEngineResult Process(double price, decimal quantity, double openInterest)
+        public KinetixEngineResult Process(double price, decimal quantity, long timeStamp, double openInterest)
         {
             var allTrades = _tradeBuffer.GetSnapshot();
             long cutoff = DateTimeOffset.UtcNow.AddSeconds(-60).ToUnixTimeMilliseconds();
@@ -121,7 +124,10 @@ namespace KinetixFlowEngine.Core.Engine
 
             var window = _flowAggregationWindow.GetSnapshot();
 
-            var features = _flowFeatureEngine.Calculate(window, price);
+            double totalVolume = (double)(window.BuyVolume + window.SellVolume);
+            _volumeEngine.Update(totalVolume);
+
+            var features = _flowFeatureEngine.Calculate(window, price, _previousPrice, _atrEngine.Value);
 
             var composite = _flowCompositeEngine.Calculate(features);
 
@@ -136,11 +142,14 @@ namespace KinetixFlowEngine.Core.Engine
 
             double atr = _atrEngine.Value;
 
-            if (_candleBuilder.Update(price, out var candle))
+            if (_candleBuilder.Update(price, timeStamp, out var candle))
             {
                 atr = _atrEngine.Update(candle.High, candle.Low, candle.Close);
             }
-
+            if (_candle15m.Update(price, timeStamp, out var candle15))
+            {
+                _atr15m.Update(candle15.High, candle15.Low, candle15.Close);
+            }
             var impact = _flowImpactEngine.Calculate(price, _previousPrice, window, atr);
             _previousPrice = price;
 
@@ -188,7 +197,7 @@ namespace KinetixFlowEngine.Core.Engine
                 ImbalanceZ = imbZ,
                 ExhaustionZ = exhZ,
                 CompressionZ = cmpZ,
-
+                Volume = _volumeEngine.Sum,
                 VWAP = (double)vwap,
                 ER = er5,
                 ER5 = er5,

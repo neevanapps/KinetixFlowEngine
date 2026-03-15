@@ -8,18 +8,22 @@
         private double _low;
         private double _close;
 
-        public bool Update(double price, out (double High, double Low, double Close) candle)
+        public bool Update(double price, long tradeTimestampMs, out (double High, double Low, double Close) candle)
         {
             candle = default;
 
+            var tradeTime = DateTimeOffset
+           .FromUnixTimeMilliseconds(tradeTimestampMs)
+           .UtcDateTime;
+
             var minute = new DateTime(
-                DateTime.UtcNow.Year,
-                DateTime.UtcNow.Month,
-                DateTime.UtcNow.Day,
-                DateTime.UtcNow.Hour,
-                DateTime.UtcNow.Minute,
-                0,
-                DateTimeKind.Utc);
+            tradeTime.Year,
+            tradeTime.Month,
+            tradeTime.Day,
+            tradeTime.Hour,
+            tradeTime.Minute,
+            0,
+            DateTimeKind.Utc);
 
             if (_currentMinute == DateTime.MinValue)
             {

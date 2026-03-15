@@ -16,7 +16,8 @@ namespace KinetixFlowEngine.Core.Flow
 
     public class WhaleClusterEngine
     {
-        private const decimal WhaleThreshold = 3m; // BTC size threshold
+        // multiplier for whale definition
+        private const decimal WhaleMultiplier = 5m;
 
         public WhaleClusterSnapshot Detect(IEnumerable<FlowTrade> trades, long cutoffTimestamp)
         {
@@ -26,12 +27,41 @@ namespace KinetixFlowEngine.Core.Flow
             decimal buyVolume = 0;
             decimal sellVolume = 0;
 
+            decimal totalVolume = 0;
+            int tradeCount = 0;
+
+            //------------------------------------------------
+            // First pass: calculate average trade size
+            //------------------------------------------------
+
             foreach (var trade in trades)
             {
                 if (trade.Timestamp < cutoffTimestamp)
                     continue;
 
-                if (trade.Quantity < WhaleThreshold)
+                totalVolume += trade.Quantity;
+                tradeCount++;
+            }
+
+            if (tradeCount == 0)
+            {
+                return new WhaleClusterSnapshot();
+            }
+
+            decimal avgTradeSize = totalVolume / tradeCount;
+
+            decimal whaleThreshold = avgTradeSize * WhaleMultiplier;
+
+            //------------------------------------------------
+            // Second pass: detect whale trades
+            //------------------------------------------------
+
+            foreach (var trade in trades)
+            {
+                if (trade.Timestamp < cutoffTimestamp)
+                    continue;
+
+                if (trade.Quantity < whaleThreshold)
                     continue;
 
                 if (!trade.IsBuyerMaker)

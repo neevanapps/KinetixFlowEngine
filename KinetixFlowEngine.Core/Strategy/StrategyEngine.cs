@@ -1,4 +1,5 @@
-﻿using KinetixFlowEngine.Core.Engine;
+﻿using KinetixFlowEngine.Core.Context;
+using KinetixFlowEngine.Core.Engine;
 using KinetixFlowEngine.Core.Trading;
 using KinetixFlowEngine.Core.Utils;
 
@@ -8,11 +9,12 @@ namespace KinetixFlowEngine.Core.Strategy
     {
         private readonly List<IKinetixStrategy> _strategies;
         private readonly FairPriceEngine _fairPriceEngine;
-
-        public StrategyEngine(IEnumerable<IKinetixStrategy> strategies, FairPriceEngine fairPriceEngine)
+        private readonly VolumeEngine _volumeEngine;
+        public StrategyEngine(IEnumerable<IKinetixStrategy> strategies, FairPriceEngine fairPriceEngine, VolumeEngine volumeEngine)
         {
             _strategies = strategies.ToList();
             _fairPriceEngine = fairPriceEngine;
+            _volumeEngine = volumeEngine;
         }
 
         public List<StrategySignal> Evaluate(KinetixEngineResult result)
@@ -21,6 +23,9 @@ namespace KinetixFlowEngine.Core.Strategy
 
             foreach (var strategy in _strategies)
             {
+                if (!_volumeEngine.IsVolumeExpansion(result.NetPressure))
+                    continue;
+
                 var signal = strategy.EvaluateEntry(result);
 
                 if (signal.Direction != SignalDirection.None)

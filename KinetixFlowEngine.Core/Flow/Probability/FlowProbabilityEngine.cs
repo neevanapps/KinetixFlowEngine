@@ -45,13 +45,19 @@ namespace KinetixFlowEngine.Core.Flow.Probability
             shortScore += Math.Max(-v, 0) * 1.1;
 
             //------------------------------------------------
-            // Compression penalty (stronger)
+            // Compression breakout setup
             //------------------------------------------------
 
             if (compression > 0.8)
             {
-                longScore *= 0.45;
-                shortScore *= 0.45;
+                if (Math.Abs(velocityZ) > 1.0)
+                {
+                    if (velocityZ > 0)
+                        longScore += 0.35;
+
+                    if (velocityZ < 0)
+                        shortScore += 0.35;
+                }
             }
 
             //------------------------------------------------
@@ -152,21 +158,15 @@ namespace KinetixFlowEngine.Core.Flow.Probability
             if (shortScore < 0) shortScore = 0;
 
             //------------------------------------------------
-            // Conflict penalty
+            // Softmax probability normalization
             //------------------------------------------------
 
-            double conflict = Math.Min(longScore, shortScore) * 0.25;
+            double expLong = Math.Exp(longScore);
+            double expShort = Math.Exp(shortScore);
 
-            longScore -= conflict;
-            shortScore -= conflict;
+            double sum = expLong + expShort;
 
-            //------------------------------------------------
-            // Convert to probabilities
-            //------------------------------------------------
-
-            double total = longScore + shortScore;
-
-            if (total <= 0)
+            if (sum <= 0)
             {
                 return new FlowProbabilitySnapshot
                 {
@@ -177,8 +177,8 @@ namespace KinetixFlowEngine.Core.Flow.Probability
 
             return new FlowProbabilitySnapshot
             {
-                LongProbability = longScore / total,
-                ShortProbability = shortScore / total
+                LongProbability = expLong / sum,
+                ShortProbability = expShort / sum
             };
         }
     }

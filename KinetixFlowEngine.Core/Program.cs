@@ -69,6 +69,7 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<OpenInterestClient>();
                 builder.Services.AddSingleton<TelegramService>();
                 builder.Services.AddSingleton<ExceptionAlertAggregator>();
+                builder.Services.AddSingleton<VolumeEngine>();
 
                 builder.Services.AddSingleton<FlowTradeBuffer>();
                 builder.Services.AddSingleton<FlowAggregationWindow>();
@@ -85,6 +86,7 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<FlowImpactEngine>();
 
                 builder.Services.AddSingleton<VwapEngine>();
+                builder.Services.AddSingleton<FifteenMinuteCandleBuilder>();
                 builder.Services.AddSingleton<EfficiencyRatioEngine>(sp => new EfficiencyRatioEngine(60));
                 builder.Services.AddSingleton<EfficiencyRatio30mEngine>(); 
                 builder.Services.AddSingleton<AtrEngine>();  // 1m ATR

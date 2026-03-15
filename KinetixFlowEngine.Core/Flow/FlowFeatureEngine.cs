@@ -11,7 +11,7 @@ namespace KinetixFlowEngine.Core.Flow
         private readonly FlowCompressionEngine _compression = new();
         private readonly LiquidityExhaustionEngine _exhaustion = new();
 
-        public FlowFeatureSnapshot Calculate(FlowWindowSnapshot window, double price)
+        public FlowFeatureSnapshot Calculate(FlowWindowSnapshot window, double price, double previousPrice, double atr)
         {
             var imbalance = FlowImbalance.Calculate(window.BuyVolume, window.SellVolume);
 
@@ -36,8 +36,9 @@ namespace KinetixFlowEngine.Core.Flow
             var absorption = AbsorptionDetector.Detect(
                 window.BuyVolume,
                 window.SellVolume,
-                window.BuyTrades,
-                window.SellTrades);
+                price,
+                previousPrice,
+                atr);
 
             return new FlowFeatureSnapshot
             {

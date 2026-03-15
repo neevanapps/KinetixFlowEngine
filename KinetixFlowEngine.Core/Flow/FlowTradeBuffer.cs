@@ -7,25 +7,35 @@ namespace KinetixFlowEngine.Core.Flow
     {
         private readonly ConcurrentQueue<FlowTrade> _trades = new();
 
-        private readonly int _maxTrades;
+        private readonly int _retentionSeconds;
 
-        // Cache last trade for O(1) access
         private volatile FlowTrade? _lastTrade;
 
-        public FlowTradeBuffer(int maxTrades = 50000)
+        public FlowTradeBuffer(int retentionSeconds = 120)
         {
-            _maxTrades = maxTrades;
+            _retentionSeconds = retentionSeconds;
         }
 
         public void AddTrade(FlowTrade trade)
         {
             _trades.Enqueue(trade);
 
-            // Update cached last trade
             _lastTrade = trade;
 
-            while (_trades.Count > _maxTrades)
+            RemoveExpiredTrades();
+        }
+
+        private void RemoveExpiredTrades()
+        {
+            long cutoff = DateTimeOffset.UtcNow
+                .AddSeconds(-_retentionSeconds)
+                .ToUnixTimeMilliseconds();
+
+            while (_trades.TryPeek(out var oldTrade))
             {
+                if (oldTrade.Timestamp >= cutoff)
+                    break;
+
                 _trades.TryDequeue(out _);
             }
         }

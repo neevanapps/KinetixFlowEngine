@@ -84,5 +84,7 @@ namespace KinetixFlowEngine.Core.Engine
 
         public bool BullishPriceControl { get; set; }
         public bool BearishPriceControl { get; set; }
+
+        public double Volume { get; set; }
     }
 }

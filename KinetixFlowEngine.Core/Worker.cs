@@ -25,6 +25,7 @@ namespace KinetixFlowEngine.Core
         private readonly EngineBootstrapService _bootstrap;
         private readonly TelegramService _telegram;
         private readonly ExceptionAlertAggregator _exceptionAggregator;
+        private readonly FlowAggregationWindow _flowAggregationWindow;
 
         private readonly ScoreNormalizer _scoreNorm;
         private readonly VelocityNormalizer _velNorm;
@@ -51,7 +52,8 @@ namespace KinetixFlowEngine.Core
         public Worker(FlowTradeBuffer flowTradeBuffer, TradeStreamClient tradeStreamClient, ILogger<Worker> logger, KinetixEngineProcessor engineProcessor, ScoreNormalizer scoreNorm, EngineBootstrapService bootstrap,
                     VelocityNormalizer velNorm, ImbalanceNormalizer imbNorm, ExhaustionNormalizer exhNorm, CompressionNormalizer cmpNorm, MarketStateManager snapshotManager, PositionManager positionManager,
                     EngineWarmupManager warmup, PriceTrendEngine priceEngine, ScoreTrendEngine scoreEngine, OpenInterestClient openInterestClient, FlowMetricsRecorder recorder, StrategyEngine strategyEngine,
-                    StrategyAggregator strategyAggregator, TelegramService telegram, IOptions<FlowEngineOptions> options, TradeJournalRecorder tradeJournal, ExceptionAlertAggregator exceptionAggregator, ProbabilityTrendEngine probEngine)
+                    StrategyAggregator strategyAggregator, TelegramService telegram, IOptions<FlowEngineOptions> options, TradeJournalRecorder tradeJournal, ExceptionAlertAggregator exceptionAggregator, 
+                    ProbabilityTrendEngine probEngine, FlowAggregationWindow flowAggregationWindow)
         {
             _logger = logger;
             _bootstrap = bootstrap;
@@ -79,9 +81,11 @@ namespace KinetixFlowEngine.Core
             _openInterestClient = openInterestClient;
             _recorder = recorder;
 
+            _flowAggregationWindow = flowAggregationWindow;
             _tradeStreamClient.OnTrade += trade =>
             {
                 _flowTradeBuffer.AddTrade(trade);
+                _flowAggregationWindow.AddTrade(trade);
             };
 
             _positionManager.Target1Reached += async trade =>
@@ -222,7 +226,7 @@ namespace KinetixFlowEngine.Core
 
                 try
                 {
-                    result = _engineProcessor.Process(price, lastTrade.Quantity, _lastOiValue);
+                    result = _engineProcessor.Process(price, lastTrade.Quantity, lastTrade.Timestamp, _lastOiValue);
                 }
                 catch (Exception ex)
                 {

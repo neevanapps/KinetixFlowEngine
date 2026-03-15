@@ -21,15 +21,14 @@ namespace KinetixFlowEngine.Core.Utils
         public double Update(double value)
         {
             _window.Enqueue(value);
+            if(_window.Count > _maxSamples)
+                _window.Dequeue();
 
             _count++;
 
             double delta = value - _mean;
             _mean += delta / _count;
             _m2 += delta * (value - _mean);
-
-            if (_window.Count > _maxSamples)
-                _window.Dequeue();
 
             if (_count < 100)
                 return 0;
