@@ -10,7 +10,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
     {
         public string Name => "ScoreVolume";
         private readonly StrategyConfig _config;
-        double threshold = 1;
+        double threshold = 2;
         public ScoreVolume(StrategyConfigLoader loader)
         {
             _config = loader.Get(Name);
@@ -31,7 +31,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
                 };
             }
 
-            if (r.ScoreFastEma < -threshold - 2 && r.ScoreMediumEma < -threshold - 2 && r.ScoreSlowEma < -threshold)
+            if (r.ScoreFastEma < -threshold - 2 && r.ScoreMediumEma < -threshold - 1 && r.ScoreSlowEma < -threshold)
             {
                 return new StrategySignal
                 {
