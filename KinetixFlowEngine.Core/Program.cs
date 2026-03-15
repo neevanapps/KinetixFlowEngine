@@ -101,9 +101,11 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<KinetixEngineProcessor>();
                 builder.Services.AddSingleton<ProbabilityTrendEngine>();
                 builder.Services.AddSingleton<IKinetixStrategy, ScoreStrategy>();
+                builder.Services.AddSingleton<IKinetixStrategy, ScoreVolume>();
+                builder.Services.AddSingleton<IKinetixStrategy, ScorePrice>();
                 builder.Services.AddSingleton<IKinetixStrategy, ProbabilityStrategy>();
-                builder.Services.AddSingleton<IKinetixStrategy, HybridStrategy>();
-                builder.Services.AddSingleton<IKinetixStrategy, HybridPrice>();
+                builder.Services.AddSingleton<IKinetixStrategy, ProbabilityVolume>();
+                builder.Services.AddSingleton<IKinetixStrategy, ProbabilityPrice>();
                 builder.Services.AddSingleton<StrategyEngine>();
                 builder.Services.AddSingleton<StrategyAggregator>();
                 builder.Services.AddSingleton<TradePersistence>();

@@ -1,16 +1,19 @@
 ﻿using KinetixFlowEngine.Core.Engine;
 using KinetixFlowEngine.Core.Trading;
+using System;
+using System.Collections.Generic;
+using System.Text;
 
 namespace KinetixFlowEngine.Core.Strategy.Strategies
 {
-    public class ProbabilityStrategy : IKinetixStrategy
+    public class ProbabilityPrice : IKinetixStrategy
     {
-        public string Name => "Probability";
+        public string Name => "ProbPrice";
 
         private readonly StrategyConfig _config;
-        private readonly ILogger<ProbabilityStrategy> _logger;
+        private readonly ILogger<ProbabilityPrice> _logger;
 
-        public ProbabilityStrategy(StrategyConfigLoader loader, ILogger<ProbabilityStrategy> logger)
+        public ProbabilityPrice(StrategyConfigLoader loader, ILogger<ProbabilityPrice> logger)
         {
             _config = loader.Get(Name);
             _logger = logger;

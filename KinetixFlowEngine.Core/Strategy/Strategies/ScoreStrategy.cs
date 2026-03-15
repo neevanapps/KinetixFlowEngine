@@ -7,7 +7,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
     {
         public string Name => "ScoreStrategy";
         private readonly StrategyConfig _config;
-
+        double threshold = 1;
         public ScoreStrategy(StrategyConfigLoader loader)
         {
             _config = loader.Get(Name);
@@ -15,7 +15,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
 
         public StrategySignal EvaluateEntry(KinetixEngineResult r)
         {
-            if (r.ScoreFastEma > 1 && r.ScoreMediumEma > 1 && r.ScoreSlowEma > 1)
+            if (r.ScoreFastEma > threshold + 2 && r.ScoreMediumEma > threshold + 1 && r.ScoreSlowEma > threshold)
             {
                 return new StrategySignal
                 {
@@ -23,11 +23,12 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
                     Direction = SignalDirection.Long,
                     Confidence = r.ScoreZ,
                     EnterOnlyAtFairPrice = _config.EnterOnlyAtFairPrice,
-                    NotifyThroughTelegram = _config.NotifyThroughTelegram
+                    NotifyThroughTelegram = _config.NotifyThroughTelegram,
+                    IsVolumeBased=_config.VolumeBased
                 };
             }
 
-            if (r.ScoreFastEma < -1 && r.ScoreMediumEma < -1 && r.ScoreSlowEma < -1)
+            if (r.ScoreFastEma < -threshold - 2 && r.ScoreMediumEma < -threshold - 2 && r.ScoreSlowEma < -threshold)
             {
                 return new StrategySignal
                 {
@@ -35,7 +36,8 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
                     Direction = SignalDirection.Short,
                     Confidence = r.ScoreZ,
                     EnterOnlyAtFairPrice = _config.EnterOnlyAtFairPrice,
-                    NotifyThroughTelegram = _config.NotifyThroughTelegram
+                    NotifyThroughTelegram = _config.NotifyThroughTelegram,
+                    IsVolumeBased = _config.VolumeBased
                 };
             }
 
@@ -50,7 +52,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
         {
             if (trade.Direction == SignalDirection.Long)
             {
-                bool trendBroken = r.ScoreFastEma < -1 && r.ScoreMediumEma < -1 && r.ScoreSlowEma < -1;
+                bool trendBroken = r.ScoreFastEma < -threshold - 2 && r.ScoreMediumEma < -threshold - 1 && r.ScoreSlowEma < -threshold;
 
                 if (trendBroken)
                 {
@@ -64,7 +66,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
 
             if (trade.Direction == SignalDirection.Short)
             {
-                bool trendBroken = r.ScoreFastEma > 1&& r.ScoreMediumEma >1 && r.ScoreSlowEma > 1;
+                bool trendBroken = r.ScoreFastEma > threshold + 2 && r.ScoreMediumEma > threshold + 1 && r.ScoreSlowEma > threshold;
 
                 if (trendBroken)
                 {

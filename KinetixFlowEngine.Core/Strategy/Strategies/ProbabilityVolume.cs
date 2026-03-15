@@ -6,14 +6,14 @@ using System.Text;
 
 namespace KinetixFlowEngine.Core.Strategy.Strategies
 {
-    internal class HybridStrategy : IKinetixStrategy
+    public class ProbabilityVolume : IKinetixStrategy
     {
-        public string Name => "HybridStrategy";
+        public string Name => "ProbVolume";
 
         private readonly StrategyConfig _config;
-        private readonly ILogger<HybridStrategy> _logger;
+        private readonly ILogger<ProbabilityVolume> _logger;
 
-        public HybridStrategy(StrategyConfigLoader loader, ILogger<HybridStrategy> logger)
+        public ProbabilityVolume(StrategyConfigLoader loader, ILogger<ProbabilityVolume> logger)
         {
             _config = loader.Get(Name);
             _logger = logger;
@@ -21,7 +21,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
 
         public StrategySignal EvaluateEntry(KinetixEngineResult r)
         {
-            if (r.ProbFastEma > 0.60 && r.ProbMediumEma > 0.56 && r.ProbSlowEma > 0.52)
+            if (r.ProbFastEma > 0.55 && r.ProbMediumEma > 0.55 && r.ProbSlowEma > 0.55)
             {
                 return new StrategySignal
                 {
@@ -29,10 +29,12 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
                     Direction = SignalDirection.Long,
                     Confidence = r.ScoreZ,
                     EnterOnlyAtFairPrice = _config.EnterOnlyAtFairPrice,
-                    NotifyThroughTelegram = _config.NotifyThroughTelegram
+                    NotifyThroughTelegram = _config.NotifyThroughTelegram,
+                    IsVolumeBased = _config.VolumeBased
                 };
             }
-            if (r.ProbFastEma < 0.40 && r.ProbMediumEma < 0.44 && r.ProbSlowEma < 0.48)
+
+            if (r.ProbFastEma < 0.45 && r.ProbMediumEma < 0.45 && r.ProbSlowEma < 0.45)
             {
                 return new StrategySignal
                 {
@@ -40,7 +42,8 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
                     Direction = SignalDirection.Short,
                     Confidence = r.ScoreZ,
                     EnterOnlyAtFairPrice = _config.EnterOnlyAtFairPrice,
-                    NotifyThroughTelegram = _config.NotifyThroughTelegram
+                    NotifyThroughTelegram = _config.NotifyThroughTelegram,
+                    IsVolumeBased = _config.VolumeBased
                 };
             }
 
@@ -55,7 +58,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
         {
             if (trade.Direction == SignalDirection.Long)
             {
-                bool trendBroken = r.ProbFastEma < 0.40 && r.ProbMediumEma < 0.44 && r.ProbSlowEma < 0.48;
+                bool trendBroken = r.ProbFastEma < 0.45 && r.ProbMediumEma < 0.45 && r.ProbSlowEma < 0.45;
 
                 if (trendBroken)
                 {
@@ -66,9 +69,10 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
                     };
                 }
             }
+
             if (trade.Direction == SignalDirection.Short)
             {
-                bool trendBroken = r.ProbFastEma > 0.60 && r.ProbMediumEma > 0.56 && r.ProbSlowEma > 0.52;
+                bool trendBroken = r.ProbFastEma > 0.55 && r.ProbMediumEma > 0.55 && r.ProbSlowEma > 0.55;
 
                 if (trendBroken)
                 {

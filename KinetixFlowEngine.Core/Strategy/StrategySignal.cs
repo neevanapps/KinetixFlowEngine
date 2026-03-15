@@ -16,6 +16,8 @@
 
         public bool FairPriceApproved { get; set; }
 
+        public bool IsVolumeBased { get; set; }
+
         public bool ExitSignal { get; set; }
     }
 }

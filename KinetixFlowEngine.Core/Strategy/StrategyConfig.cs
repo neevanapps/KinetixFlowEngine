@@ -27,5 +27,7 @@
         public decimal StopLossAtr { get; set; } = 1;
 
         public decimal TrailingStopAtr { get; set; } = 1;
+
+        public bool VolumeBased { get; set; }
     }
 }

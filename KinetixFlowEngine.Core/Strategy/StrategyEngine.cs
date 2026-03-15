@@ -23,10 +23,11 @@ namespace KinetixFlowEngine.Core.Strategy
 
             foreach (var strategy in _strategies)
             {
-                if (!_volumeEngine.IsVolumeExpansion(result.NetPressure))
-                    continue;
-
                 var signal = strategy.EvaluateEntry(result);
+
+                if (signal.IsVolumeBased)
+                    if (!_volumeEngine.IsVolumeExpansion(result.NetPressure))
+                        continue;
 
                 if (signal.Direction != SignalDirection.None)
                 {

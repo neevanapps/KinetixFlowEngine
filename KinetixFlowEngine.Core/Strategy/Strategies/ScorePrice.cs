@@ -1,24 +1,24 @@
 ﻿using KinetixFlowEngine.Core.Engine;
 using KinetixFlowEngine.Core.Trading;
+using System;
+using System.Collections.Generic;
+using System.Text;
 
 namespace KinetixFlowEngine.Core.Strategy.Strategies
 {
-    public class ProbabilityStrategy : IKinetixStrategy
+    public class ScorePrice: IKinetixStrategy
     {
-        public string Name => "Probability";
-
+        public string Name => "ScorePrice";
         private readonly StrategyConfig _config;
-        private readonly ILogger<ProbabilityStrategy> _logger;
-
-        public ProbabilityStrategy(StrategyConfigLoader loader, ILogger<ProbabilityStrategy> logger)
+        double threshold = 1;
+        public ScorePrice(StrategyConfigLoader loader)
         {
             _config = loader.Get(Name);
-            _logger = logger;
         }
 
         public StrategySignal EvaluateEntry(KinetixEngineResult r)
         {
-            if (r.ProbFastEma > 0.55 && r.ProbMediumEma > 0.55 && r.ProbSlowEma > 0.55)
+            if (r.ScoreFastEma > threshold + 2 && r.ScoreMediumEma > threshold + 1 && r.ScoreSlowEma > threshold)
             {
                 return new StrategySignal
                 {
@@ -31,7 +31,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
                 };
             }
 
-            if (r.ProbFastEma < 0.45 && r.ProbMediumEma < 0.45 && r.ProbSlowEma < 0.45)
+            if (r.ScoreFastEma < -threshold - 2 && r.ScoreMediumEma < -threshold - 2 && r.ScoreSlowEma < -threshold)
             {
                 return new StrategySignal
                 {
@@ -55,7 +55,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
         {
             if (trade.Direction == SignalDirection.Long)
             {
-                bool trendBroken = r.ProbFastEma < 0.45 && r.ProbMediumEma < 0.45 && r.ProbSlowEma < 0.45;
+                bool trendBroken = r.ScoreFastEma < -threshold - 2 && r.ScoreMediumEma < -threshold - 1 && r.ScoreSlowEma < -threshold;
 
                 if (trendBroken)
                 {
@@ -69,7 +69,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
 
             if (trade.Direction == SignalDirection.Short)
             {
-                bool trendBroken = r.ProbFastEma > 0.55 && r.ProbMediumEma > 0.55 && r.ProbSlowEma > 0.55;
+                bool trendBroken = r.ScoreFastEma > threshold + 2 && r.ScoreMediumEma > threshold + 1 && r.ScoreSlowEma > threshold;
 
                 if (trendBroken)
                 {
