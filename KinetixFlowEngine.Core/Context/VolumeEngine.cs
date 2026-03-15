@@ -10,7 +10,7 @@ namespace KinetixFlowEngine.Core.Context
 
         public double Sum;
 
-        public VolumeEngine(int windowSize = 60)
+        public VolumeEngine(int windowSize = 180)
         {
             _windowSize = windowSize;
         }
@@ -28,7 +28,7 @@ namespace KinetixFlowEngine.Core.Context
 
         public double Average => _volumeWindow.Count == 0 ? 0 : Sum / _volumeWindow.Count;
 
-        public bool IsVolumeExpansion(double currentVolume, double multiplier = 1.3)
+        public bool IsVolumeExpansion(double currentVolume, double multiplier = 1.25)
         {
             if (_volumeWindow.Count < _windowSize)
                 return true;
