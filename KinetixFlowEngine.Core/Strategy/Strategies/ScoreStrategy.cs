@@ -5,7 +5,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
 {
     public class ScoreStrategy : IKinetixStrategy
     {
-        public string Name => "ScoreStrategy";
+        public string Name => "Score";
         private readonly StrategyConfig _config;
         double threshold = 1;
         public ScoreStrategy(StrategyConfigLoader loader)
