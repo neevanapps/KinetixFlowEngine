@@ -169,7 +169,7 @@ namespace KinetixFlowEngine.Core.Engine
             var exhZ = _exhNorm.Update(features.Exhaustion);
             var cmpZ = _cmpNorm.Update(features.Compression);
 
-            var persistenceSignal = _flowPersistenceEngine.Update(_scoreEngine.Fast > _scoreEngine.Slow ? FlowTrend.Bullish : _scoreEngine.Fast < _scoreEngine.Slow ? FlowTrend.Bearish : FlowTrend.Neutral, scoreZ);
+            var persistenceSignal = _flowPersistenceEngine.Update(scoreZ);
             int persistence = Math.Max(persistenceSignal.BullishDuration, persistenceSignal.BearishDuration);
             var scoreTrend = _scoreEngine.Update((decimal)adjustedScore, persistence);
             var divergence = _divergenceEngine.Detect(priceTrend, scoreTrend, scoreZ, vwapDev);
@@ -197,7 +197,8 @@ namespace KinetixFlowEngine.Core.Engine
                 ImbalanceZ = imbZ,
                 ExhaustionZ = exhZ,
                 CompressionZ = cmpZ,
-                Volume = _volumeEngine.Sum,
+                Volume15 = _volumeEngine.Average,
+                Volume1 = _volumeEngine.CumulativeSum,
                 VWAP = (double)vwap,
                 ER = er5,
                 ER5 = er5,

@@ -5,35 +5,46 @@ namespace KinetixFlowEngine.Core.Context
     public class VolumeEngine
     {
         private readonly Queue<double> _volumeWindow = new();
+        private readonly Queue<double> _CumulativeWindow = new();
 
         private readonly int _windowSize;
+        private readonly int _CumulativeSize;
 
         public double Sum;
+        public double CumulativeSum;
 
         public VolumeEngine(int windowSize = 180)
         {
             _windowSize = windowSize;
+            _CumulativeSize = 12;
         }
 
         public void Update(double volume)
         {
             _volumeWindow.Enqueue(volume);
+            _CumulativeWindow.Enqueue(volume);
             Sum += volume;
+            CumulativeSum += volume;
 
             if (_volumeWindow.Count > _windowSize)
             {
                 Sum -= _volumeWindow.Dequeue();
             }
+
+            if (_CumulativeWindow.Count > _CumulativeSize)
+            {
+                CumulativeSum -= _CumulativeWindow.Dequeue();
+            }
         }
 
-        public double Average => _volumeWindow.Count == 0 ? 0 : Sum / _volumeWindow.Count;
+        public double Average => _volumeWindow.Count == 0 ? 0 : Sum / 15;
 
-        public bool IsVolumeExpansion(double currentVolume, double multiplier = 1.25)
+        public bool IsVolumeExpansion(double multiplier = 1.25)
         {
             if (_volumeWindow.Count < _windowSize)
-                return true;
+                return false;
 
-            return currentVolume > Average * multiplier;
+            return CumulativeSum > Average * multiplier;
         }
     }
 }

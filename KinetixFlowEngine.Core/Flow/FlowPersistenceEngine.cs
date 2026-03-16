@@ -16,19 +16,19 @@ namespace KinetixFlowEngine.Core.Flow
         private int _bullishCount = 0;
         private int _bearishCount = 0;
 
-        public FlowPersistenceSnapshot Update(
-            FlowTrend scoreTrend,
-            double scoreZ)
+        public FlowPersistenceSnapshot Update(double scoreZ)
         {
-            if (scoreTrend == FlowTrend.Bullish && scoreZ > 0.5)
+            const double threshold = 0.5;
+
+            if (scoreZ > threshold)
             {
                 _bullishCount++;
-                _bearishCount = 0;
+                _bearishCount = Math.Max(0, _bearishCount - 1);
             }
-            else if (scoreTrend == FlowTrend.Bearish && scoreZ < -0.5)
+            else if (scoreZ < -threshold)
             {
                 _bearishCount++;
-                _bullishCount = 0;
+                _bullishCount = Math.Max(0, _bullishCount - 1);
             }
             else
             {

@@ -26,7 +26,7 @@ namespace KinetixFlowEngine.Core.Strategy
                 var signal = strategy.EvaluateEntry(result);
 
                 if (signal.IsVolumeBased)
-                    if (!_volumeEngine.IsVolumeExpansion(result.NetPressure))
+                    if (!_volumeEngine.IsVolumeExpansion())
                         continue;
 
                 if (signal.Direction != SignalDirection.None)
