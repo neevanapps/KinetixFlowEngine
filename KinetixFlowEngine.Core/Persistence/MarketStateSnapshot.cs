@@ -20,6 +20,7 @@ namespace KinetixFlowEngine.Core.Persistence
         public decimal ProbSlowEma { get; set; }
         public decimal ProbMediumEma { get; set; }
         public decimal ProbFastEma { get; set; }
+        public double MomentumRun { get; set; }
 
         public NormalizerState ScoreNormalizer { get; set; } = new();
         public NormalizerState VelocityNormalizer { get; set; } = new();

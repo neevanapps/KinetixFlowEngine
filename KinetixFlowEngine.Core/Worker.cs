@@ -41,6 +41,7 @@ namespace KinetixFlowEngine.Core
         private readonly StrategyAggregator _strategyAggregator;
         private readonly PositionManager _positionManager;
         private readonly TradeJournalRecorder _tradeJournal;
+        private readonly FlowMomentumRun _momentumRun;
 
         private DateTime _lastSnapshot = DateTime.MinValue;
         private DateTime _lastOiFetch = DateTime.MinValue;
@@ -52,8 +53,8 @@ namespace KinetixFlowEngine.Core
         public Worker(FlowTradeBuffer flowTradeBuffer, TradeStreamClient tradeStreamClient, ILogger<Worker> logger, KinetixEngineProcessor engineProcessor, ScoreNormalizer scoreNorm, EngineBootstrapService bootstrap,
                     VelocityNormalizer velNorm, ImbalanceNormalizer imbNorm, ExhaustionNormalizer exhNorm, CompressionNormalizer cmpNorm, MarketStateManager snapshotManager, PositionManager positionManager,
                     EngineWarmupManager warmup, PriceTrendEngine priceEngine, ScoreTrendEngine scoreEngine, OpenInterestClient openInterestClient, FlowMetricsRecorder recorder, StrategyEngine strategyEngine,
-                    StrategyAggregator strategyAggregator, TelegramService telegram, IOptions<FlowEngineOptions> options, TradeJournalRecorder tradeJournal, ExceptionAlertAggregator exceptionAggregator, 
-                    ProbabilityTrendEngine probEngine, FlowAggregationWindow flowAggregationWindow)
+                    StrategyAggregator strategyAggregator, TelegramService telegram, IOptions<FlowEngineOptions> options, TradeJournalRecorder tradeJournal, ExceptionAlertAggregator exceptionAggregator,
+                    ProbabilityTrendEngine probEngine, FlowAggregationWindow flowAggregationWindow, FlowMomentumRun momentumRun)
         {
             _logger = logger;
             _bootstrap = bootstrap;
@@ -167,6 +168,7 @@ namespace KinetixFlowEngine.Core
             };
             _exceptionAggregator = exceptionAggregator;
             _probEngine = probEngine;
+            _momentumRun = momentumRun;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -188,6 +190,13 @@ namespace KinetixFlowEngine.Core
                 _imbNorm.Restore(snapshot.ImbalanceNormalizer);
                 _exhNorm.Restore(snapshot.ExhaustionNormalizer);
                 _cmpNorm.Restore(snapshot.CompressionNormalizer);
+
+                if (snapshot.MomentumRun == 0)
+                {
+                    _momentumRun.Bootstrap(0); // neutral start
+                }
+                else
+                    _momentumRun.Restore(snapshot.MomentumRun);
 
                 _priceEngine.Restore(snapshot.PriceFastEma, snapshot.PriceSlowEma);
                 _scoreEngine.Restore(snapshot.ScoreFastEma, snapshot.ScoreSlowEma, snapshot.ScoreMediumEma);
@@ -349,7 +358,7 @@ namespace KinetixFlowEngine.Core
                             "Fast {Fast:F2} Medium {Medium:F2} Slow {Slow:F2} " +
                             "VWAP {VWAP:F2} ER5 {ER:F3} ER30 {ER30:F3} ATR {ATR:F2} OIΔ {OI:F2} " + "Pressure B {BuyP:F2} S {SellP:F2} Net {NetP:F2} | BFast {BFast:F4} BMedium {BMedium:F4} BSlow {BSlow:F4} | vol15 {v15:F2} vol {v1:F2} Factor {Factor:F3}",
 
-                            result.Price, result.RawScore, result.AdjustedScore, result.ScoreFastEma, result.ScoreMediumEma, result.ScoreSlowEma,result.VWAP, result.ER, result.ER30, result.ATR, result.OIChange,
+                            result.Price, result.RawScore, result.AdjustedScore, result.ScoreFastEma, result.ScoreMediumEma, result.ScoreSlowEma, result.VWAP, result.ER, result.ER30, result.ATR, result.OIChange,
                             result.BuyPressure, result.SellPressure, result.NetPressure,
                             (result.ProbFastEma), (result.ProbMediumEma), (result.ProbSlowEma), result.Volume15, result.Volume1, result.TrendFactor);
 
@@ -370,6 +379,7 @@ namespace KinetixFlowEngine.Core
                         ProbFastEma = _probEngine.Fast,
                         ProbSlowEma = _probEngine.Slow,
                         ProbMediumEma = _probEngine.Medium,
+                        MomentumRun = _momentumRun.Run,
 
                         ScoreNormalizer = _scoreNorm.GetState(),
                         VelocityNormalizer = _velNorm.GetState(),
