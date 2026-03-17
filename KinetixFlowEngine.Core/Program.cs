@@ -84,6 +84,7 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<WhaleClusterEngine>();
                 builder.Services.AddSingleton<FlowPersistenceEngine>();
                 builder.Services.AddSingleton<FlowImpactEngine>();
+                builder.Services.AddSingleton<FlowMomentumRun>();
 
                 builder.Services.AddSingleton<VwapEngine>();
                 builder.Services.AddSingleton<FifteenMinuteCandleBuilder>();

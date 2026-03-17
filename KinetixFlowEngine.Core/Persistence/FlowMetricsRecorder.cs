@@ -28,7 +28,7 @@ namespace KinetixFlowEngine.Core.Persistence
                     "delta_velocity,momentum,acceleration,persistence,size_bias,absorption," +
                     "buy_pressure,sell_pressure,net_pressure,bullish_absorption,bearish_distribution," +
                     "vwap_bullish_absorption,vwap_bearish_absorption,whale_buy_trades,whale_sell_trades," +
-                    "impact_efficiency,bullish_control,bearish_control,prob_fast,prob_Medium,prob_slow,long_persist,short_persist,v15,v1";
+                    "impact_efficiency,bullish_control,bearish_control,prob_fast,prob_Medium,prob_slow,long_persist,short_persist,v15,v1,factor";
 
             File.WriteAllText(_filePath, header + Environment.NewLine);
         }
@@ -81,7 +81,8 @@ namespace KinetixFlowEngine.Core.Persistence
                 r.LongPersistence,
                 r.ShortPersistence,
                 r.Volume15.ToString(CultureInfo.InvariantCulture),
-                 r.Volume1.ToString(CultureInfo.InvariantCulture)
+                r.Volume1.ToString(CultureInfo.InvariantCulture),
+                r.TrendFactor.ToString(CultureInfo.InvariantCulture)
             );
 
             File.AppendAllText(_filePath, line + Environment.NewLine);

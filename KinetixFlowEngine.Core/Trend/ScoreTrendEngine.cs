@@ -1,4 +1,5 @@
-﻿using KinetixFlowEngine.Core.Utils;
+﻿using KinetixFlowEngine.Core.Flow;
+using KinetixFlowEngine.Core.Utils;
 
 namespace KinetixFlowEngine.Core.Trend
 {
@@ -14,9 +15,15 @@ namespace KinetixFlowEngine.Core.Trend
         public decimal Slow => _slow.Value ?? 0;
         public decimal Medium => _medium.Value ?? 0;
 
-        public FlowTrend Update(decimal score, int persistence)
+        private readonly FlowMomentumRun _momentumRun;
+        public ScoreTrendEngine(FlowMomentumRun momentumRun)
         {
-            decimal factor = PersistenceFactor(persistence);
+            _momentumRun = momentumRun;
+        }
+
+        public FlowTrend Update(decimal score, double velocityZ)
+        {
+            decimal factor = _momentumRun.GetFactor((double)score, velocityZ);
 
             var fast = _fast.UpdateWithFactor(score, factor, 6 * minTick, 20 * minTick);
             var medium = _medium.UpdateWithFactor(score, factor, 20 * minTick, 60 * minTick);
@@ -31,19 +38,6 @@ namespace KinetixFlowEngine.Core.Trend
                 return FlowTrend.Bearish;
 
             return FlowTrend.Neutral;
-        }
-
-        private decimal PersistenceFactor(int persistence)
-        {
-            persistence = Math.Abs(persistence);
-
-            if (persistence <= 2)
-                return 0.20m;
-
-            if (persistence <= 5)
-                return 0.35m;
-
-            return 0.55m;
         }
 
         public void Restore(decimal fast, decimal slow, decimal medium)

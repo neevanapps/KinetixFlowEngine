@@ -47,6 +47,7 @@ namespace KinetixFlowEngine.Core.Engine
         private readonly ImbalanceNormalizer _imbNorm;
         private readonly ExhaustionNormalizer _exhNorm;
         private readonly CompressionNormalizer _cmpNorm;
+        private readonly FlowMomentumRun _momentumRun;
 
         private readonly OneMinuteCandleBuilder _candleBuilder = new();
 
@@ -77,7 +78,7 @@ namespace KinetixFlowEngine.Core.Engine
             LiquidityPressureEngine pressureEngine,
             VwapAbsorptionEngine vwapAbsorptionEngine,
             WhaleClusterEngine whaleClusterEngine, FlowImpactEngine flowImpactEngine,
-            FlowPersistenceEngine flowPersistenceEngine, ProbabilityTrendEngine probEngine, FlowTradeBuffer tradeBuffer, FifteenMinuteCandleBuilder candle15m, VolumeEngine volumeEngine)
+            FlowPersistenceEngine flowPersistenceEngine, ProbabilityTrendEngine probEngine, FlowTradeBuffer tradeBuffer, FifteenMinuteCandleBuilder candle15m, VolumeEngine volumeEngine, FlowMomentumRun momentumRun)
         {
             _flowAggregationWindow = flowAggregationWindow;
             _flowFeatureEngine = flowFeatureEngine;
@@ -114,6 +115,7 @@ namespace KinetixFlowEngine.Core.Engine
             _tradeBuffer = tradeBuffer;
             _candle15m = candle15m;
             _volumeEngine = volumeEngine;
+            _momentumRun = momentumRun;
         }
 
         public KinetixEngineResult Process(double price, decimal quantity, long timeStamp, double openInterest)
@@ -124,8 +126,7 @@ namespace KinetixFlowEngine.Core.Engine
 
             var window = _flowAggregationWindow.GetSnapshot();
 
-            double totalVolume = (double)(window.BuyVolume + window.SellVolume);
-            _volumeEngine.Update(totalVolume);
+            _volumeEngine.Update((double)quantity);
 
             var features = _flowFeatureEngine.Calculate(window, price, _previousPrice, _atrEngine.Value);
 
@@ -169,9 +170,7 @@ namespace KinetixFlowEngine.Core.Engine
             var exhZ = _exhNorm.Update(features.Exhaustion);
             var cmpZ = _cmpNorm.Update(features.Compression);
 
-            var persistenceSignal = _flowPersistenceEngine.Update(scoreZ);
-            int persistence = Math.Max(persistenceSignal.BullishDuration, persistenceSignal.BearishDuration);
-            var scoreTrend = _scoreEngine.Update((decimal)adjustedScore, persistence);
+            var scoreTrend = _scoreEngine.Update((decimal)adjustedScore, velZ);
             var divergence = _divergenceEngine.Detect(priceTrend, scoreTrend, scoreZ, vwapDev);
             var vwapAbsorption = _vwapAbsorptionEngine.Detect(price, (double)vwap, adjustedScore, priceTrend);
             var flowState = _flowStateEngine.Detect(scoreZ, velZ, imbZ, cmpZ, exhZ, features.Persistence, scoreTrend);
@@ -180,7 +179,7 @@ namespace KinetixFlowEngine.Core.Engine
                 divergence.BearishDistribution, vwapAbsorption.BullishAbsorption, vwapAbsorption.BearishAbsorption, impact.BullishControl, impact.BearishControl);
 
             double smoothedLongProb = _probabilitySmoother.Update(probability.LongProbability);
-            var ProbTrend = _probEngine.Update((decimal)smoothedLongProb, persistence);
+            var ProbTrend = _probEngine.Update((decimal)smoothedLongProb, velZ);
 
             bool longSignal = probability.LongProbability > 0.65 && scoreTrend == FlowTrend.Bullish;
             bool shortSignal = probability.ShortProbability > 0.65 && scoreTrend == FlowTrend.Bearish;
@@ -245,16 +244,13 @@ namespace KinetixFlowEngine.Core.Engine
                 LargeSellTrades = whaleClusters.LargeSellTrades,
                 BuyClusterStrength = whaleClusters.BuyClusterStrength,
                 SellClusterStrength = whaleClusters.SellClusterStrength,
-                BullishPersistence = persistenceSignal.BullishDuration,
-                BearishPersistence = persistenceSignal.BearishDuration,
-                StrongBullishPersistence = persistenceSignal.StrongBullish,
-                StrongBearishPersistence = persistenceSignal.StrongBearish,
                 FlowImpactEfficiency = impact.Efficiency,
                 BullishPriceControl = impact.BullishControl,
                 BearishPriceControl = impact.BearishControl,
                 ProbFastEma = (double)_probEngine.Fast,
                 ProbSlowEma = (double)_probEngine.Slow,
                 ProbMediumEma = (double)_probEngine.Medium,
+                TrendFactor = (double)_momentumRun.LastFactor,
             };
         }
     }

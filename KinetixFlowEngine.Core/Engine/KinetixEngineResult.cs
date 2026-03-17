@@ -87,5 +87,7 @@ namespace KinetixFlowEngine.Core.Engine
 
         public double Volume15 { get; set; }
         public double Volume1 { get; set; }
+
+        public double TrendFactor { get; set; }
     }
 }

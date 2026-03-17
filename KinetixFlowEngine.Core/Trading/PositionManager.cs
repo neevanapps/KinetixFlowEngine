@@ -108,6 +108,18 @@ namespace KinetixFlowEngine.Core.Trading
                         trade.Target1Hit = true;
                         trade.RemainingSize *= 0.3m;
 
+                        if (!trade.MovedToBreakeven)
+                        {
+                            decimal buffer = trade.EntryPrice * 0.0002m; // ~0.02% buffer (optional)
+
+                            if (trade.Direction == SignalDirection.Long)
+                                trade.StopLoss = trade.EntryPrice + buffer;
+                            else
+                                trade.StopLoss = trade.EntryPrice - buffer;
+
+                            trade.MovedToBreakeven = true;
+                        }
+
                         Target1Reached?.Invoke(trade);
                     }
                 }

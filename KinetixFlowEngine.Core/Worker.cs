@@ -346,17 +346,12 @@ namespace KinetixFlowEngine.Core
 
                 _recorder.Record(result);
                 _logger.LogInformation("FLOW | Price {Price:F2} RawScore {RawScore:F2} AdjScore {AdjScore:F2} " +
-                            "Fast {Fast:F2} Medium {Medium:F2} Slow {Slow:F2} " + "ScoreZ {ScoreZ:F2} VelZ {VelZ:F2} ImbZ {ImbZ:F2} ExhZ {ExhZ:F2} CmpZ {CmpZ:F2} " +
-                            "VWAP {VWAP:F2} ER5 {ER:F3} ER30 {ER30:F3} ATR {ATR:F2} OIΔ {OI:F2} " + "Trend {Trend} State {State} " +
-                            "LongProb {LongProb:F3} ShortProb {ShortProb:F3} " + "LongStable {LongStable} ShortStable {ShortStable} " +
-                            "LongPersist {LongPersist} ShortPersist {ShortPersist} " + "Impact {Impact:F3} ControlB {BullCtrl} ControlS {BearCtrl} " +
-                            "WhaleStr B {WhaleStrB:F2} S {WhaleStrS:F2} " + "Pressure B {BuyP:F2} S {SellP:F2} Net {NetP:F2} | BFast {BFast:F4} BMedium {BMedium:F4} BSlow {BSlow:F4} | vol15 {v15} vol {v1}",
+                            "Fast {Fast:F2} Medium {Medium:F2} Slow {Slow:F2} " +
+                            "VWAP {VWAP:F2} ER5 {ER:F3} ER30 {ER30:F3} ATR {ATR:F2} OIΔ {OI:F2} " + "Pressure B {BuyP:F2} S {SellP:F2} Net {NetP:F2} | BFast {BFast:F4} BMedium {BMedium:F4} BSlow {BSlow:F4} | vol15 {v15:F2} vol {v1:F2} Factor {Factor:F3}",
 
-                            result.Price, result.RawScore, result.AdjustedScore, result.ScoreFastEma, result.ScoreMediumEma, result.ScoreSlowEma, result.ScoreZ, result.VelocityZ,
-                            result.ImbalanceZ, result.ExhaustionZ, result.CompressionZ, result.VWAP, result.ER, result.ER30, result.ATR, result.OIChange, result.ScoreTrend, result.FlowState.State,
-                            result.LongProbability, result.ShortProbability, result.LongStable, result.ShortStable, result.LongPersistence, result.ShortPersistence, result.FlowImpactEfficiency,
-                            result.BullishPriceControl, result.BearishPriceControl, result.BuyClusterStrength, result.SellClusterStrength, result.BuyPressure, result.SellPressure, result.NetPressure,
-                            (result.ProbFastEma), (result.ProbMediumEma), (result.ProbSlowEma), result.Volume15, result.Volume1);
+                            result.Price, result.RawScore, result.AdjustedScore, result.ScoreFastEma, result.ScoreMediumEma, result.ScoreSlowEma,result.VWAP, result.ER, result.ER30, result.ATR, result.OIChange,
+                            result.BuyPressure, result.SellPressure, result.NetPressure,
+                            (result.ProbFastEma), (result.ProbMediumEma), (result.ProbSlowEma), result.Volume15, result.Volume1, result.TrendFactor);
 
                 if ((DateTime.UtcNow - _lastSnapshot).TotalSeconds > 60)
                 {
