@@ -354,11 +354,11 @@ namespace KinetixFlowEngine.Core
                 _positionManager.Update((decimal)price);
 
                 _recorder.Record(result);
-                _logger.LogInformation("FLOW | Price {Price:F2} RawScore {RawScore:F2} AdjScore {AdjScore:F2} " +
-                            "Fast {Fast:F2} Medium {Medium:F2} Slow {Slow:F2} " +
-                            "VWAP {VWAP:F2} ER5 {ER:F3} ER30 {ER30:F3} ATR {ATR:F2} OIΔ {OI:F2} " + "Pressure B {BuyP:F2} S {SellP:F2} Net {NetP:F2} | BFast {BFast:F4} BMedium {BMedium:F4} BSlow {BSlow:F4} | vol15 {v15:F2} vol {v1:F2} Factor {Factor:F3}",
+                _logger.LogInformation("FLOW | P {Price:F2} Raw {RawScore:F2} Adj {AdjScore:F2} " +
+                            "FS {Fast:F2} MS {Medium:F2} SS {Slow:F2} " +
+                            "VWAP {VWAP:F2} ER5 {ER:F3} ER30 {ER30:F3} ATR {ATR:F2}" + "B {BuyP:F2} S {SellP:F2} Net {NetP:F2} | FB {BFast:F4} MB {BMedium:F4} MS {BSlow:F4} | v15 {v15:F2} v1 {v1:F2} F {Factor:F3}",
 
-                            result.Price, result.RawScore, result.AdjustedScore, result.ScoreFastEma, result.ScoreMediumEma, result.ScoreSlowEma, result.VWAP, result.ER, result.ER30, result.ATR, result.OIChange,
+                            result.Price, result.RawScore, result.AdjustedScore, result.ScoreFastEma, result.ScoreMediumEma, result.ScoreSlowEma, result.VWAP, result.ER, result.ER30, result.ATR, 
                             result.BuyPressure, result.SellPressure, result.NetPressure,
                             (result.ProbFastEma), (result.ProbMediumEma), (result.ProbSlowEma), result.Volume15, result.Volume1, result.TrendFactor);
 
