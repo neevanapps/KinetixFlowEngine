@@ -23,10 +23,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<Content Update="active_trade.json">
-			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
-			<CopyToPublishDirectory>Never</CopyToPublishDirectory>
-		</Content>
 
 		<Content Update="market_state.json">
 			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
