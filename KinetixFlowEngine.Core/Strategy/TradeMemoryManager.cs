@@ -39,33 +39,43 @@ namespace KinetixFlowEngine.Core.Strategy
                 WriteIndented = true
             });
 
-            File.WriteAllText(_filePath, json);
+            var tempFile = _filePath + ".tmp";
+
+            File.WriteAllText(tempFile, json);
+
+            if (File.Exists(_filePath))
+                File.Delete(_filePath);
+
+            File.Move(tempFile, _filePath);
         }
 
         // ✅ Called on trade close
-        public void Record(TradeMemory trade)
+        public void Record(string accountId, TradeMemory trade)
         {
-            _memory[trade.StrategyName] = trade;
+            var key = GetKey(trade.StrategyName, accountId);
+            _memory[key] = trade;
             Save();
         }
 
-        public TradeMemory? Get(string strategy)
+        public TradeMemory? Get(string strategy, string accountId)
         {
-            _memory.TryGetValue(strategy, out var value);
+            _memory.TryGetValue(GetKey(strategy, accountId), out var value);
             return value;
         }
 
+        private static string GetKey(string strategy, string accountId) => $"{accountId}::{strategy}";
+
         // ✅ Entry gate
-        public bool IsBlocked(string strategy, SignalDirection direction)
+        public bool IsBlocked(string strategy, string accountId, SignalDirection direction)
         {
-            if (!_memory.TryGetValue(strategy, out var last))
+            var key = GetKey(strategy, accountId);
+
+            if (!_memory.TryGetValue(key, out var last))
                 return false;
 
-            // Only block SAME direction
             if (last.Direction != direction)
                 return false;
 
-            // Only block SL / TSL
             if (last.ExitReason != "SL" && last.ExitReason != "TSL")
                 return false;
 

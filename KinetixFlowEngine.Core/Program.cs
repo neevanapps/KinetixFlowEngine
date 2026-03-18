@@ -8,15 +8,16 @@ using KinetixFlowEngine.Core.Flow;
 using KinetixFlowEngine.Core.Flow.Probability;
 using KinetixFlowEngine.Core.Flow.State;
 using KinetixFlowEngine.Core.Persistence;
+using KinetixFlowEngine.Core.Prop;
 using KinetixFlowEngine.Core.Signal;
 using KinetixFlowEngine.Core.Strategy;
 using KinetixFlowEngine.Core.Strategy.Strategies;
 using KinetixFlowEngine.Core.Trading;
 using KinetixFlowEngine.Core.Trend;
 using KinetixFlowEngine.Core.Utils;
+using Microsoft.Extensions.Hosting.WindowsServices;
 using Serilog;
 using Serilog.Events;
-using Microsoft.Extensions.Hosting.WindowsServices;
 
 namespace KinetixFlowEngine.Core
 {
@@ -53,11 +54,19 @@ namespace KinetixFlowEngine.Core
 
                 builder.Services.Configure<FlowEngineOptions>(builder.Configuration.GetSection("FlowEngine"));
                 builder.Services.Configure<NormalizationOptions>(builder.Configuration.GetSection("Normalization"));
+                builder.Services.Configure<PropAccountsOptions>(builder.Configuration.GetSection("PropAccounts"));
 
                 builder.Services.AddHttpClient<OpenInterestClient>(client =>
                 {
                     client.BaseAddress = new Uri("https://fapi.binance.com");
                     client.Timeout = TimeSpan.FromSeconds(15);
+                });
+                builder.Services.AddSingleton<PropAccountRuntimeFactory>();
+
+                builder.Services.AddSingleton<List<AccountRuntime>>(sp =>
+                {
+                    var factory = sp.GetRequiredService<PropAccountRuntimeFactory>();
+                    return factory.GetAccounts();
                 });
 
                 builder.Services.AddSingleton<ScoreNormalizer>();
@@ -92,7 +101,7 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<VwapEngine>();
                 builder.Services.AddSingleton<FifteenMinuteCandleBuilder>();
                 builder.Services.AddSingleton<EfficiencyRatioEngine>(sp => new EfficiencyRatioEngine(60));
-                builder.Services.AddSingleton<EfficiencyRatio30mEngine>(); 
+                builder.Services.AddSingleton<EfficiencyRatio30mEngine>();
                 builder.Services.AddSingleton<AtrEngine>();  // 1m ATR
                 builder.Services.AddSingleton<Atr15mEngine>();   // 15m ATR
                 builder.Services.AddSingleton<OpenInterestEngine>();
@@ -113,13 +122,17 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<StrategyEngine>();
                 builder.Services.AddSingleton<StrategyAggregator>();
                 builder.Services.AddSingleton<TradePersistence>();
+                builder.Services.AddSingleton<PositionPersistence>();
                 builder.Services.AddSingleton<PositionManager>();
                 builder.Services.AddSingleton<StrategyConfigLoader>();
                 builder.Services.AddSingleton<FairPriceEngine>();
                 builder.Services.AddSingleton<TradeJournalRecorder>();
                 builder.Services.AddSingleton<TradeMemoryManager>();
-
+                builder.Services.AddSingleton<PropOrchestrator>();
+                builder.Services.AddSingleton<PropAlertService>();
+                builder.Services.AddSingleton<PropAccountStatePersistence>();
                 builder.Services.AddHostedService<Worker>();
+                builder.Services.AddSingleton<ITradeExecutor, SimulatedExecutor>();
 
                 // Configure Windows Service lifetime using options because 'Host' is not available on HostApplicationBuilder.
                 builder.Services.AddWindowsService(options =>

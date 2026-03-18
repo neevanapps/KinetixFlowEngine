@@ -19,5 +19,6 @@
         public bool IsVolumeBased { get; set; }
 
         public bool ExitSignal { get; set; }
+        public decimal RiskPercent { get; set; } = 0.01m; // default 1%
     }
 }

@@ -1,31 +1,35 @@
 ﻿using KinetixFlowEngine.Core.Engine;
+using KinetixFlowEngine.Core.Flow.State;
 using KinetixFlowEngine.Core.Strategy;
+using System.Diagnostics;
+using System.Drawing;
 
 namespace KinetixFlowEngine.Core.Trading
 {
     public class PositionManager
     {
-        private readonly TradePersistence _persistence;
+        private readonly PositionPersistence _persistence;
 
         public event Action<ActiveTrade>? Target1Reached;
         public event Action<ActiveTrade, decimal>? TradeClosed;
+        private DateTime _lastSave = DateTime.MinValue;
+        private readonly Dictionary<string, ActiveTrade> _activeTrades = new();
+        private static string GetKey(string strategy, string accountId)
+    => $"{accountId}::{strategy}";
 
-        private readonly Dictionary<string, ActiveTrade> _activeTrades;
-
-        public PositionManager(TradePersistence persistence)
+        public PositionManager(PositionPersistence persistence)
         {
             _persistence = persistence;
-            _activeTrades = _persistence.Load();
         }
 
-        public bool HasPosition(string strategy)
+        public bool HasPosition(string strategy, string accountId)
         {
-            return _activeTrades.ContainsKey(strategy);
+            return _activeTrades.ContainsKey(GetKey(strategy, accountId));
         }
 
-        public ActiveTrade? GetPosition(string strategy)
+        public ActiveTrade? GetPosition(string strategy, string accountId)
         {
-            _activeTrades.TryGetValue(strategy, out var trade);
+            _activeTrades.TryGetValue(GetKey(strategy, accountId), out var trade);
             return trade;
         }
 
@@ -34,9 +38,11 @@ namespace KinetixFlowEngine.Core.Trading
             return _activeTrades.Values;
         }
 
-        public void TryEnterTrade(StrategySignal signal, decimal price, double atr, KinetixEngineResult r)
+        public void TryEnterTrade(StrategySignal signal, decimal price, double atr, KinetixEngineResult r, decimal size, string accountId)
         {
-            if (_activeTrades.ContainsKey(signal.StrategyName))
+            var key = GetKey(signal.StrategyName, accountId);
+
+            if (_activeTrades.ContainsKey(key))
                 return;
 
             decimal atrValue = (decimal)atr;
@@ -44,6 +50,7 @@ namespace KinetixFlowEngine.Core.Trading
 
             var trade = new ActiveTrade
             {
+                AccountId = accountId,
                 StrategyName = signal.StrategyName,
                 Direction = signal.Direction,
                 EntryPrice = price,
@@ -56,8 +63,8 @@ namespace KinetixFlowEngine.Core.Trading
                     : price - stopDistance,
 
                 TrailingStop = stopDistance,
-                InitialSize = 1,
-                RemainingSize = 1,
+                InitialSize = size,
+                RemainingSize = size,
 
                 EntryTimeMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                 NotifyThroughTelegram = signal.NotifyThroughTelegram,
@@ -65,20 +72,21 @@ namespace KinetixFlowEngine.Core.Trading
                 MaxPrice = price,
                 MinPrice = price,
 
-                EntryScoreZ = r.ScoreZ,
-                EntryVelocityZ = r.VelocityZ,
-                EntryImbalanceZ = r.ImbalanceZ,
-                EntryCompressionZ = r.CompressionZ,
-                EntryATR = r.ATR,
-                EntryER = r.ER,
-                EntryFlowState = r.FlowState.State.ToString(),
-
-                Closed = false
+                EntryScoreZ = r?.ScoreZ ?? 0,
+                EntryVelocityZ = r?.VelocityZ ?? 0,
+                EntryImbalanceZ = r?.ImbalanceZ ?? 0,
+                EntryCompressionZ = r?.CompressionZ ?? 0,
+                EntryATR = r?.ATR ?? 0,
+                EntryER = r?.ER ?? 0,
+                EntryFlowState = r?.FlowState.State.ToString() ?? "Unknown",
+                Closed = false,
+                EntryPriceTrend = (double)r.PriceTrend,
+                EntryScoreTrend = (double)r.ScoreTrend,
             };
 
-            _activeTrades[signal.StrategyName] = trade;
+            _activeTrades[key] = trade;
 
-            _persistence.Save(_activeTrades);
+            SaveThrottled();
         }
 
         public void Update(decimal price)
@@ -126,21 +134,23 @@ namespace KinetixFlowEngine.Core.Trading
 
                 if (trade.Direction == SignalDirection.Long && price <= trade.StopLoss)
                 {
-                    CloseTrade(trade.StrategyName, price, trade.Target1Hit ? "TSL" : "SL");
+                    CloseTrade(trade.StrategyName, trade.AccountId, price, trade.Target1Hit ? "TSL" : "SL");
                 }
 
                 if (trade.Direction == SignalDirection.Short && price >= trade.StopLoss)
                 {
-                    CloseTrade(trade.StrategyName, price, trade.Target1Hit ? "TSL" : "SL");
+                    CloseTrade(trade.StrategyName, trade.AccountId, price, trade.Target1Hit ? "TSL" : "SL");
                 }
             }
 
-            _persistence.Save(_activeTrades);
+            SaveThrottled();
         }
 
-        public void CloseTrade(string strategyName, decimal exitPrice, string reason = "SL")
+        public void CloseTrade(string strategyName, string accountId, decimal exitPrice, string reason = "SL")
         {
-            if (!_activeTrades.TryGetValue(strategyName, out var trade))
+            var key = GetKey(strategyName, accountId);
+
+            if (!_activeTrades.TryGetValue(key, out var trade))
                 return;
 
             if (trade.Closed)
@@ -149,11 +159,62 @@ namespace KinetixFlowEngine.Core.Trading
             trade.Closed = true;
             trade.ExitReason = reason;
 
-            _activeTrades.Remove(strategyName);
+            _activeTrades.Remove(key);
 
-            _persistence.Save(_activeTrades);
-
+            SaveThrottled();
             TradeClosed?.Invoke(trade, exitPrice);
+        }
+
+        private void SaveThrottled()
+        {
+            if ((DateTime.UtcNow - _lastSave).TotalSeconds < 5)
+                return;
+
+            _persistence.Save(GetAllPositions());
+            _lastSave = DateTime.UtcNow;
+        }
+
+        public void Restore(IEnumerable<PersistedPosition> persisted)
+        {
+            foreach (var p in persisted)
+            {
+                var trade = new ActiveTrade
+                {
+                    AccountId = p.AccountId,
+                    StrategyName = p.StrategyName,
+                    Direction = p.Direction,
+                    EntryPrice = p.EntryPrice,
+                    StopLoss = p.StopLoss,
+                    Target1 = p.Target1,
+                    InitialSize = p.Size,
+                    RemainingSize = p.Size * (p.Target1Hit ? 0.3m : 1m),
+                    EntryTimeMs = p.EntryTimeMs,
+                    Target1Hit = p.Target1Hit,
+                    MaxPrice = p.MaxPrice,
+                    MinPrice = p.MinPrice,
+                    EntryScoreZ = p.EntryScoreZ,
+                    EntryVelocityZ = p.EntryVelocityZ,
+                    EntryImbalanceZ = p.EntryImbalanceZ,
+                    EntryCompressionZ = p.EntryCompressionZ,
+                    EntryATR = p.EntryATR,
+                    EntryER = p.EntryER,
+                    EntryFlowState = p.EntryFlowState,
+                    NotifyThroughTelegram = true, // safe default
+                    Closed = false,
+                    TrailingStop = Math.Abs(p.EntryPrice - p.StopLoss),
+                    MovedToBreakeven = p.Target1Hit,
+                    EntryPriceTrend = p.EntryPriceTrend,
+                    EntryScoreTrend = p.EntryScoreTrend,
+                };
+
+                AddRestoredTrade(trade);
+            }
+        }
+
+        private void AddRestoredTrade(ActiveTrade trade)
+        {
+            var key = GetKey(trade.StrategyName, trade.AccountId);
+            _activeTrades[key] = trade;
         }
     }
 }

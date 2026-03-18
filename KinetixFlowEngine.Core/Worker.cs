@@ -5,6 +5,7 @@ using KinetixFlowEngine.Core.Data;
 using KinetixFlowEngine.Core.Engine;
 using KinetixFlowEngine.Core.Flow;
 using KinetixFlowEngine.Core.Persistence;
+using KinetixFlowEngine.Core.Prop;
 using KinetixFlowEngine.Core.Strategy;
 using KinetixFlowEngine.Core.Trading;
 using KinetixFlowEngine.Core.Trend;
@@ -49,6 +50,11 @@ namespace KinetixFlowEngine.Core
         private DateTime _lastSnapshot = DateTime.MinValue;
         private DateTime _lastOiFetch = DateTime.MinValue;
         private double _lastOiValue = 0;
+        private readonly PositionPersistence _positionPersistence;
+        private readonly PropAccountStatePersistence _accountStatePersistence;
+        private readonly PropAlertService _alerts;
+        private readonly PropOrchestrator _propOrchestrator;
+        private readonly List<AccountRuntime> _accounts;
 
         private readonly FlowEngineOptions _options;
         private DateTime _lastEngineCycle = DateTime.MinValue;
@@ -57,7 +63,8 @@ namespace KinetixFlowEngine.Core
                     VelocityNormalizer velNorm, ImbalanceNormalizer imbNorm, ExhaustionNormalizer exhNorm, CompressionNormalizer cmpNorm, MarketStateManager snapshotManager, PositionManager positionManager,
                     EngineWarmupManager warmup, PriceTrendEngine priceEngine, ScoreTrendEngine scoreEngine, OpenInterestClient openInterestClient, FlowMetricsRecorder recorder, StrategyEngine strategyEngine,
                     StrategyAggregator strategyAggregator, TelegramService telegram, IOptions<FlowEngineOptions> options, TradeJournalRecorder tradeJournal, ExceptionAlertAggregator exceptionAggregator,
-                    ProbabilityTrendEngine probEngine, FlowAggregationWindow flowAggregationWindow, FlowMomentumRun momentumRun, TradeMemoryManager tradeMemory, VolumeEngine volumeEngine, FairPriceEngine fairPriceEngine)
+                    ProbabilityTrendEngine probEngine, FlowAggregationWindow flowAggregationWindow, FlowMomentumRun momentumRun, TradeMemoryManager tradeMemory, VolumeEngine volumeEngine, FairPriceEngine fairPriceEngine,
+                    PropOrchestrator propOrchestrator, List<AccountRuntime> accounts, PropAlertService alerts, PropAccountStatePersistence accountStatePersistence, PositionPersistence positionPersistence)
         {
             _logger = logger;
             _bootstrap = bootstrap;
@@ -73,20 +80,27 @@ namespace KinetixFlowEngine.Core
             _cmpNorm = cmpNorm;
             _options = options.Value;
             _tradeMemory = tradeMemory;
-
+            _propOrchestrator = propOrchestrator;
             _marketStateManager = snapshotManager;
-
             _priceEngine = priceEngine;
             _scoreEngine = scoreEngine;
-
             _strategyEngine = strategyEngine;
             _strategyAggregator = strategyAggregator;
             _positionManager = positionManager;
-
             _openInterestClient = openInterestClient;
             _recorder = recorder;
-
             _flowAggregationWindow = flowAggregationWindow;
+            _tradeJournal = tradeJournal;
+            _exceptionAggregator = exceptionAggregator;
+            _probEngine = probEngine;
+            _momentumRun = momentumRun;
+            _volumeEngine = volumeEngine;
+            _fairPriceEngine = fairPriceEngine;
+            _accounts = accounts;
+            _alerts = alerts;
+            _accountStatePersistence = accountStatePersistence;
+            _positionPersistence = positionPersistence;
+
             _tradeStreamClient.OnTrade += trade =>
             {
                 _flowTradeBuffer.AddTrade(trade);
@@ -98,25 +112,8 @@ namespace KinetixFlowEngine.Core
                 if (!trade.NotifyThroughTelegram)
                     return;
 
-                await _telegram.SendMessageAsync(
-                    $"""
-                    TARGET1 HIT | {trade.Direction} | Strategy: {trade.StrategyName}
-
-                    Entry={trade.EntryPrice:F1}
-                    Remaining={trade.RemainingSize:P0}
-
-                    Score
-                    Fast={_scoreEngine.Fast:F2}
-                    Medium={_scoreEngine.Medium:F2}
-                    Slow={_scoreEngine.Slow:F2}
-
-                    Prob
-                    Fast={_probEngine.Fast:F2}
-                    Medium={_probEngine.Medium:F2}
-                    Slow={_probEngine.Slow:F2}
-                    """);
+                await _alerts.SendTarget1Async(trade);
             };
-            _tradeJournal = tradeJournal;
             _positionManager.TradeClosed += (trade, exitPrice) =>
             {
                 var duration = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - trade.EntryTimeMs) / 1000;
@@ -184,7 +181,7 @@ namespace KinetixFlowEngine.Core
                 });
 
                 string reason = trade.ExitReason;
-                _tradeMemory.Record(new TradeMemory
+                _tradeMemory.Record(trade.AccountId, new TradeMemory
                 {
                     StrategyName = trade.StrategyName,
                     Direction = trade.Direction,
@@ -193,12 +190,15 @@ namespace KinetixFlowEngine.Core
                     ExitReason = reason,
                     ExitTime = DateTime.UtcNow
                 });
+
+                var account = _accounts.FirstOrDefault(x => x.Config.AccountId == trade.AccountId);
+                if (account != null)
+                {
+                    account.Guard.OnTradeClosed(account.State, pnlPoints);
+                    _accountStatePersistence.Update(account.Config.AccountId, account.State);
+                    account.Guard.UpdateEquity(account.State, account.State.CurrentEquity);
+                }
             };
-            _exceptionAggregator = exceptionAggregator;
-            _probEngine = probEngine;
-            _momentumRun = momentumRun;
-            _volumeEngine = volumeEngine;
-            _fairPriceEngine = fairPriceEngine;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -207,8 +207,31 @@ namespace KinetixFlowEngine.Core
 
             await _tradeStreamClient.StartAsync(stoppingToken);
 
-            var snapshot = _marketStateManager.Load();
 
+            var persisted = _positionPersistence.Load();
+            if (persisted.Any())
+            {
+                _positionManager.Restore(persisted);
+                _logger.LogInformation("Restored {count} open positions", persisted.Count);
+            }
+
+            // ---- RESTORE PROP ACCOUNT STATE ----
+            foreach (var acc in _accounts)
+            {
+                var state = _accountStatePersistence.Load(acc.Config.AccountId);
+
+                if (state != null)
+                {
+                    acc.State = state;
+                    _logger.LogInformation("Restored account state for {account}", acc.Config.AccountId);
+                }
+                else
+                {
+                    _logger.LogWarning("No persisted state found for {account}, using defaults", acc.Config.AccountId);
+                }
+            }
+
+            var snapshot = _marketStateManager.Load();
             if (snapshot != null)
             {
                 _scoreNorm.Restore(snapshot.ScoreNormalizer);
@@ -230,6 +253,7 @@ namespace KinetixFlowEngine.Core
 
                 _logger.LogInformation("Snapshot restored successfully.");
             }
+
 
             while (!stoppingToken.IsCancellationRequested)
             {
@@ -284,7 +308,7 @@ namespace KinetixFlowEngine.Core
 
                     if (exitSignal?.ExitSignal == true)
                     {
-                        _positionManager.CloseTrade(trade.StrategyName, (decimal)price, "SignalFlip");
+                        _positionManager.CloseTrade(trade.StrategyName, trade.AccountId, (decimal)price, "SignalFlip");
                         if (trade.NotifyThroughTelegram)
                         {
                             var exitPrice = (decimal)price;
@@ -320,25 +344,19 @@ namespace KinetixFlowEngine.Core
                             pnlPoints -= feePoints;
 
                             var duration = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - trade.EntryTimeMs) / 1000;
-                            await _telegram.SendMessageAsync(
-                            $"""
-                            EXIT | {trade.StrategyName} | {trade.Direction}
+                            var acc = _accounts.FirstOrDefault(x => x.Config.AccountId == trade.AccountId);
 
-                            Entry={entry:F1}  Exit={exitPrice:F1}
-
-                            PnL={pnlPoints:F1} Fee={feePoints:F0}
-                            Duration={(duration / 60):F1}Mins
-
-                            Score
-                            Fast={result.ScoreFastEma:F2}
-                            Medium={result.ScoreMediumEma:F2}
-                            Slow={result.ScoreSlowEma:F2}
-
-                            Prob
-                            Fast={result.ProbFastEma:F2}
-                            Medium={result.ProbMediumEma:F2}
-                            Slow={result.ProbSlowEma:F2}
-                            """);
+                            if (acc != null && trade.NotifyThroughTelegram)
+                            {
+                                await _alerts.SendExitAsync(
+                                    trade,
+                                    exitPrice,
+                                    pnlPoints,
+                                    feePoints,
+                                    acc.State.CurrentEquity,
+                                    acc.State.DailyDrawdownPct,
+                                    acc.State.OverallDrawdownPct);
+                            }
                         }
                         continue;
                     }
@@ -346,60 +364,56 @@ namespace KinetixFlowEngine.Core
 
                 // ---------- ENTRY SECOND ----------
                 var signals = _strategyEngine.Evaluate(result);
-                foreach (var signal in signals)
+                foreach (var acc in _accounts)
                 {
-                    if (signal.Direction == SignalDirection.None)
+                    if (!acc.Config.Enabled)
                         continue;
 
-                    bool isFairPrice = signal.Direction == SignalDirection.Long ?
-                                    _fairPriceEngine.IsFairLongEntry((decimal)price, result.VWAP, result.ATR) :
-                                    _fairPriceEngine.IsFairShortEntry((decimal)price, result.VWAP, result.ATR); // or your existing fair price logic
-                    bool isVolumeExpansion = _volumeEngine.IsVolumeExpansion();
-
-                    if (!IsReentryAllowed(signal, result, (decimal)price, isFairPrice, isVolumeExpansion))
-                        continue;
-
-                    if (!_positionManager.HasPosition(signal.StrategyName))
+                    foreach (var signal in signals)
                     {
-                        _positionManager.TryEnterTrade(signal, (decimal)result.Price, result.ATR15m, result);
+                        if (signal.Direction == SignalDirection.None)
+                            continue;
+
+                        bool isFairPrice = signal.Direction == SignalDirection.Long ?
+                            _fairPriceEngine.IsFairLongEntry((decimal)price, result.VWAP, result.ATR) :
+                            _fairPriceEngine.IsFairShortEntry((decimal)price, result.VWAP, result.ATR);
+
+                        bool isVolumeExpansion = _volumeEngine.IsVolumeExpansion();
+
+                        if (!IsReentryAllowed(signal, result, (decimal)price, isFairPrice, isVolumeExpansion, acc.Config.AccountId))
+                            continue;
+
+                        _propOrchestrator.ProcessSignal(signal, (decimal)result.Price, (decimal)result.ATR15m);
 
                         if (signal.NotifyThroughTelegram)
                         {
-                            var trade = _positionManager.GetPosition(signal.StrategyName);
+                            var newTrades = _positionManager.GetAllPositions()
+                                .Where(t => t.StrategyName == signal.StrategyName &&
+                                            t.AccountId == acc.Config.AccountId &&
+                                            !t.EntryAlertSent &&
+                                            !t.Closed);
 
-                            await _telegram.SendMessageAsync(
-                            $"""
-                         ENTRY | {signal.Direction} | Strategy {signal.StrategyName}
-                         
-                         Price={result.Price:F1}  SL={trade?.StopLoss:F1}
-                         TP1={trade?.Target1:F1}
+                            foreach (var trade in newTrades)
+                            {
+                                await _alerts.SendEntryAsync(
+                                    trade,
+                                    acc.State.CurrentEquity,
+                                    acc.State.DailyDrawdownPct,
+                                    acc.State.OverallDrawdownPct);
 
-                         Score={result.ScoreZ:F2}
-                         ER={result.ER:F2}  ATR15={result.ATR15m:F1}
-                         State={result.FlowState.State}
-                         
-                         Score
-                         Fast={result.ScoreFastEma:F2}
-                         Medium={result.ScoreMediumEma:F2}
-                         Slow={result.ScoreSlowEma:F2}
-
-                         Prob
-                         Fast={result.ProbFastEma:F2}
-                         Medium={result.ProbMediumEma:F2}
-                         Slow={result.ProbSlowEma:F2}
-                         """);
+                                trade.EntryAlertSent = true;
+                            }
                         }
-                        _logger.LogInformation("STRATEGY SIGNAL | Strategy {Strategy} Direction {Direction} Confidence {Confidence}",
-                            signal.StrategyName, signal.Direction, signal.Confidence);
+
+                        _logger.LogInformation("STRATEGY SIGNAL | Account {Account} Strategy {Strategy} Direction {Direction}", acc.Config.AccountId, signal.StrategyName, signal.Direction);
                     }
                 }
                 _positionManager.Update((decimal)price);
+                await _propOrchestrator.UpdateEquity((decimal)price);
 
                 _recorder.Record(result);
-                _logger.LogInformation("FLOW | P {Price:F2} Raw {RawScore:F2} Adj {AdjScore:F2} | " +
-                            "FS {Fast:F2} MS {Medium:F2} SS {Slow:F2}" +
+                _logger.LogInformation("FLOW | P {Price:F2} Raw {RawScore:F2} Adj {AdjScore:F2} | " + "FS {Fast:F2} MS {Medium:F2} SS {Slow:F2}" +
                             " | VWAP {VWAP:F2} ER5 {ER:F2} ER30 {ER30:F2} ATR {ATR:F2} " + "| B {BuyP:F2} S {SellP:F2} Net {NetP:F2} | FP {BFast:F4} MP {BMedium:F4} SP {BSlow:F4} | v15 {v15:F2} v1 {v1:F2} F {Factor:F3}",
-
                             result.Price, result.RawScore, result.AdjustedScore, result.ScoreFastEma, result.ScoreMediumEma, result.ScoreSlowEma, result.VWAP, result.ER, result.ER30, result.ATR,
                             result.BuyPressure, result.SellPressure, result.NetPressure,
                             (result.ProbFastEma), (result.ProbMediumEma), (result.ProbSlowEma), result.Volume15, result.Volume1, result.TrendFactor);
@@ -436,10 +450,11 @@ namespace KinetixFlowEngine.Core
             }
         }
 
-        private bool IsReentryAllowed(StrategySignal signal, KinetixEngineResult r, decimal price, bool isFairPrice, bool isVolumeExpansion)
+        private bool IsReentryAllowed(StrategySignal signal, KinetixEngineResult r, decimal price, bool isFairPrice, bool isVolumeExpansion, string accountId)
         {
+            //Naveen need to make it account wise
             // No previous trade → allow
-            var last = _tradeMemory.Get(signal.StrategyName);
+            var last = _tradeMemory.Get(signal.StrategyName, accountId);
             if (last == null)
                 return true;
 

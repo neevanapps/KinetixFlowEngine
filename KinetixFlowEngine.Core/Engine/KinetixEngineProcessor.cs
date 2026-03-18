@@ -156,23 +156,30 @@ namespace KinetixFlowEngine.Core.Engine
 
             var oiChange = _oiEngine.Update(openInterest);
 
-            var adjustedScore = _contextScoreEngine.AdjustScore(score, vwapDev, er30, oiChange);
-
             decimal priceDec = (decimal)price;
             decimal erDec = (decimal)er5;
 
             var priceTrend = _priceEngine.Update(priceDec, erDec);
             var pressure = _pressureEngine.Calculate(window, price, atr, (double)vwap);
 
-            var scoreZ = _scoreNorm.Update(adjustedScore);
+            var baseAdjustedScore = _contextScoreEngine.AdjustScoreBase(score, vwapDev, er30, oiChange);
+            var baseScoreZ = _scoreNorm.Update(baseAdjustedScore);
             var velZ = _velNorm.Update(features.DeltaVelocity);
+            var initialScoreTrend = _scoreEngine.Update((decimal)baseAdjustedScore, velZ);
+            var divergence = _divergenceEngine.Detect(priceTrend, initialScoreTrend, baseScoreZ, vwapDev);
+
+            var vwapAbsorption = _vwapAbsorptionEngine.Detect(price, (double)vwap, baseAdjustedScore, priceTrend);
+
+            bool bearishTrap = divergence.BearishDistribution || vwapAbsorption.BearishAbsorption;
+            bool bullishTrap = divergence.BullishAbsorption || vwapAbsorption.BullishAbsorption;
+
+            var adjustedScore = _contextScoreEngine.ApplyPenalty(baseAdjustedScore, priceTrend, impact, bearishTrap, bullishTrap);
+            var scoreZ = _scoreNorm.Update(adjustedScore);
             var imbZ = _imbNorm.Update(features.Imbalance);
             var exhZ = _exhNorm.Update(features.Exhaustion);
             var cmpZ = _cmpNorm.Update(features.Compression);
 
             var scoreTrend = _scoreEngine.Update((decimal)adjustedScore, velZ);
-            var divergence = _divergenceEngine.Detect(priceTrend, scoreTrend, scoreZ, vwapDev);
-            var vwapAbsorption = _vwapAbsorptionEngine.Detect(price, (double)vwap, adjustedScore, priceTrend);
             var flowState = _flowStateEngine.Detect(scoreZ, velZ, imbZ, cmpZ, exhZ, features.Persistence, scoreTrend);
 
             var probability = _flowProbabilityEngine.Calculate(scoreZ, velZ, imbZ, cmpZ, exhZ, flowState, scoreTrend, divergence.BullishAbsorption,
