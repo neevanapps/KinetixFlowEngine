@@ -41,5 +41,6 @@ namespace KinetixFlowEngine.Core.Persistence
         public double ER { get; set; }
 
         public string FlowState { get; set; } = "";
+        public decimal FeePoints { get; set; }
     }
 }

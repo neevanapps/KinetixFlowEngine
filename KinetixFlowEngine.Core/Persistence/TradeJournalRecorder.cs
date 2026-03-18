@@ -22,7 +22,7 @@ namespace KinetixFlowEngine.Core.Persistence
             var header =
                 "timestamp,strategy,direction,entry,exit,stop,target1,duration_sec," +
                 "pnl_points,pnl_r,mfe,mae," +
-                "score_z,velocity_z,imbalance_z,compression_z,atr,er,flow_state";
+                "score_z,velocity_z,imbalance_z,compression_z,atr,er,flow_state, fee";
 
             File.WriteAllText(_filePath, header + Environment.NewLine);
         }
@@ -48,7 +48,8 @@ namespace KinetixFlowEngine.Core.Persistence
                 r.CompressionZ.ToString(CultureInfo.InvariantCulture),
                 r.ATR.ToString(CultureInfo.InvariantCulture),
                 r.ER.ToString(CultureInfo.InvariantCulture),
-                r.FlowState
+                r.FlowState,
+                r.FeePoints.ToString(CultureInfo.InvariantCulture)
             );
 
             File.AppendAllText(_filePath, line + Environment.NewLine);

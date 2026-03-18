@@ -10,6 +10,7 @@ using KinetixFlowEngine.Core.Trading;
 using KinetixFlowEngine.Core.Trend;
 using KinetixFlowEngine.Core.Utils;
 using Microsoft.Extensions.Options;
+using System.Globalization;
 
 namespace KinetixFlowEngine.Core
 {
@@ -141,6 +142,18 @@ namespace KinetixFlowEngine.Core
                 {
                     pnlPoints = trade.Direction == SignalDirection.Long ? exitPrice - entry : entry - exitPrice;
                 }
+                // -------------------------------
+                // Fee simulation (Bybit maker)
+                // -------------------------------
+                decimal size = trade.InitialSize; // currently 1
+                decimal notional = trade.EntryPrice * size;
+
+                decimal totalFee = notional * _options.FeeRate * 2; // entry + exit
+
+                decimal feePoints = totalFee / size;
+
+                // Apply fee
+                pnlPoints -= feePoints;
 
                 decimal risk = Math.Abs(entry - trade.StopLoss);
                 decimal pnlR = risk == 0 ? 0 : pnlPoints / risk;
@@ -166,7 +179,8 @@ namespace KinetixFlowEngine.Core
                     CompressionZ = trade.EntryCompressionZ,
                     ATR = trade.EntryATR,
                     ER = trade.EntryER,
-                    FlowState = trade.EntryFlowState
+                    FlowState = trade.EntryFlowState,
+                    FeePoints = feePoints,
                 });
 
                 string reason = trade.ExitReason;
@@ -292,6 +306,19 @@ namespace KinetixFlowEngine.Core
                             {
                                 pnlPoints = trade.Direction == SignalDirection.Long ? exitPrice - entry : entry - exitPrice;
                             }
+                            // -------------------------------
+                            // Fee simulation (Bybit maker)
+                            // -------------------------------
+                            decimal size = trade.InitialSize; // currently 1
+                            decimal notional = trade.EntryPrice * size;
+
+                            decimal totalFee = notional * _options.FeeRate * 2; // entry + exit
+
+                            decimal feePoints = totalFee / size;
+
+                            // Apply fee
+                            pnlPoints -= feePoints;
+
                             var duration = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - trade.EntryTimeMs) / 1000;
                             await _telegram.SendMessageAsync(
                             $"""
@@ -299,7 +326,7 @@ namespace KinetixFlowEngine.Core
 
                             Entry={entry:F1}  Exit={exitPrice:F1}
 
-                            PnL={pnlPoints:F1}
+                            PnL={pnlPoints:F1} Fee={feePoints:F0}
                             Duration={(duration / 60):F1}Mins
 
                             Score

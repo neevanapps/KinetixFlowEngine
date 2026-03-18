@@ -18,8 +18,9 @@ namespace KinetixFlowEngine.Core.Bootstrap
         private readonly PriceTrendEngine _priceTrend;
         private readonly VwapEngine _vwap;
         private readonly ILogger<EngineBootstrapService> _logger;
+        private readonly VolumeEngine _volumeEngine;
 
-        public EngineBootstrapService(EfficiencyRatioEngine er, PriceTrendEngine priceTrend, VwapEngine vwap, ILogger<EngineBootstrapService> logger, AtrEngine atr1m, Atr15mEngine atr15m, EfficiencyRatio30mEngine er30)
+        public EngineBootstrapService(EfficiencyRatioEngine er, PriceTrendEngine priceTrend, VwapEngine vwap, ILogger<EngineBootstrapService> logger, AtrEngine atr1m, Atr15mEngine atr15m, EfficiencyRatio30mEngine er30, VolumeEngine volumeEngine)
         {
             _binance = new BinanceRestClient();
             _atr1m = atr1m;
@@ -29,6 +30,7 @@ namespace KinetixFlowEngine.Core.Bootstrap
             _vwap = vwap;
             _logger = logger;
             _er30 = er30;
+            _volumeEngine = volumeEngine;
         }
 
         public async Task InitializeAsync()
@@ -94,6 +96,23 @@ namespace KinetixFlowEngine.Core.Bootstrap
                     c.Volume);
             }
 
+            // ---------- Volume bootstrap (last 15 minutes) ----------
+            var volumeCandles = candles.TakeLast(15);
+
+            foreach (var c in volumeCandles)
+            {
+                double vol = (double)c.Volume;
+
+                // distribute 1m volume into 12 ticks (5s engine)
+                double perTick = vol / 12.0;
+
+                for (int i = 0; i < 12; i++)
+                {
+                    _volumeEngine.Update(perTick);
+                }
+            }
+
+            _logger.LogInformation("BOOTSTRAP | Volume initialized from candle data");
             _logger.LogInformation(
                 "BOOTSTRAP COMPLETE | ATR1m {ATR1:F2} ATR15m {ATR15:F2}",
                 _atr1m.Value,

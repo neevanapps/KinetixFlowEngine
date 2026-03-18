@@ -46,5 +46,18 @@ namespace KinetixFlowEngine.Core.Context
 
             return CumulativeSum > Average * multiplier;
         }
+
+        public void BootstrapFromCandles(List<double> volumes)
+        {
+            foreach (var v in volumes)
+            {
+                double perTick = v / 12.0;
+
+                for (int i = 0; i < 12; i++)
+                {
+                    Update(perTick);
+                }
+            }
+        }
     }
 }
