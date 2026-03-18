@@ -27,6 +27,9 @@ namespace KinetixFlowEngine.Core
             Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
                 .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Information)
+                .MinimumLevel.Override("System.Net.Http.HttpClient", LogEventLevel.Warning)
+                .MinimumLevel.Override("System.Net.Http.HttpClient.*", LogEventLevel.Warning)
+                .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
                 .Enrich.FromLogContext()
                 .WriteTo.Console()
                 .WriteTo.File(Path.Combine(AppContext.BaseDirectory, "logs", "kinetixflowengine-.txt"),
@@ -114,6 +117,7 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<StrategyConfigLoader>();
                 builder.Services.AddSingleton<FairPriceEngine>();
                 builder.Services.AddSingleton<TradeJournalRecorder>();
+                builder.Services.AddSingleton<TradeMemoryManager>();
 
                 builder.Services.AddHostedService<Worker>();
 

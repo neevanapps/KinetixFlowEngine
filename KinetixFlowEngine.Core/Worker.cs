@@ -1,5 +1,6 @@
 using KinetixFlowEngine.Core.Bootstrap;
 using KinetixFlowEngine.Core.Config;
+using KinetixFlowEngine.Core.Context;
 using KinetixFlowEngine.Core.Data;
 using KinetixFlowEngine.Core.Engine;
 using KinetixFlowEngine.Core.Flow;
@@ -32,7 +33,7 @@ namespace KinetixFlowEngine.Core
         private readonly ImbalanceNormalizer _imbNorm;
         private readonly ExhaustionNormalizer _exhNorm;
         private readonly CompressionNormalizer _cmpNorm;
-
+        private readonly FairPriceEngine _fairPriceEngine;
         private readonly MarketStateManager _marketStateManager;
         private readonly FlowMetricsRecorder _recorder;
         private readonly OpenInterestClient _openInterestClient;
@@ -42,7 +43,8 @@ namespace KinetixFlowEngine.Core
         private readonly PositionManager _positionManager;
         private readonly TradeJournalRecorder _tradeJournal;
         private readonly FlowMomentumRun _momentumRun;
-
+        private readonly TradeMemoryManager _tradeMemory;
+        private readonly VolumeEngine _volumeEngine;
         private DateTime _lastSnapshot = DateTime.MinValue;
         private DateTime _lastOiFetch = DateTime.MinValue;
         private double _lastOiValue = 0;
@@ -54,7 +56,7 @@ namespace KinetixFlowEngine.Core
                     VelocityNormalizer velNorm, ImbalanceNormalizer imbNorm, ExhaustionNormalizer exhNorm, CompressionNormalizer cmpNorm, MarketStateManager snapshotManager, PositionManager positionManager,
                     EngineWarmupManager warmup, PriceTrendEngine priceEngine, ScoreTrendEngine scoreEngine, OpenInterestClient openInterestClient, FlowMetricsRecorder recorder, StrategyEngine strategyEngine,
                     StrategyAggregator strategyAggregator, TelegramService telegram, IOptions<FlowEngineOptions> options, TradeJournalRecorder tradeJournal, ExceptionAlertAggregator exceptionAggregator,
-                    ProbabilityTrendEngine probEngine, FlowAggregationWindow flowAggregationWindow, FlowMomentumRun momentumRun)
+                    ProbabilityTrendEngine probEngine, FlowAggregationWindow flowAggregationWindow, FlowMomentumRun momentumRun, TradeMemoryManager tradeMemory, VolumeEngine volumeEngine, FairPriceEngine fairPriceEngine)
         {
             _logger = logger;
             _bootstrap = bootstrap;
@@ -69,6 +71,7 @@ namespace KinetixFlowEngine.Core
             _exhNorm = exhNorm;
             _cmpNorm = cmpNorm;
             _options = options.Value;
+            _tradeMemory = tradeMemory;
 
             _marketStateManager = snapshotManager;
 
@@ -165,10 +168,23 @@ namespace KinetixFlowEngine.Core
                     ER = trade.EntryER,
                     FlowState = trade.EntryFlowState
                 });
+
+                string reason = trade.ExitReason;
+                _tradeMemory.Record(new TradeMemory
+                {
+                    StrategyName = trade.StrategyName,
+                    Direction = trade.Direction,
+                    EntryPrice = trade.EntryPrice,
+                    ExitPrice = exitPrice,
+                    ExitReason = reason,
+                    ExitTime = DateTime.UtcNow
+                });
             };
             _exceptionAggregator = exceptionAggregator;
             _probEngine = probEngine;
             _momentumRun = momentumRun;
+            _volumeEngine = volumeEngine;
+            _fairPriceEngine = fairPriceEngine;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -181,10 +197,6 @@ namespace KinetixFlowEngine.Core
 
             if (snapshot != null)
             {
-                var age = DateTime.UtcNow - snapshot.Timestamp;
-
-                //if (age.TotalMinutes < 60)
-                //{
                 _scoreNorm.Restore(snapshot.ScoreNormalizer);
                 _velNorm.Restore(snapshot.VelocityNormalizer);
                 _imbNorm.Restore(snapshot.ImbalanceNormalizer);
@@ -203,11 +215,6 @@ namespace KinetixFlowEngine.Core
                 _probEngine.Restore(snapshot.ProbFastEma, snapshot.ProbSlowEma, snapshot.ProbMediumEma);
 
                 _logger.LogInformation("Snapshot restored successfully.");
-                //}
-                //else
-                //{
-                //    await _telegram.SendMessageAsync("Market state is older than 60mins, fresh state started.");
-                //}
             }
 
             while (!stoppingToken.IsCancellationRequested)
@@ -263,7 +270,7 @@ namespace KinetixFlowEngine.Core
 
                     if (exitSignal?.ExitSignal == true)
                     {
-                        _positionManager.CloseTrade(trade.StrategyName, (decimal)price);
+                        _positionManager.CloseTrade(trade.StrategyName, (decimal)price, "SignalFlip");
                         if (trade.NotifyThroughTelegram)
                         {
                             var exitPrice = (decimal)price;
@@ -317,6 +324,14 @@ namespace KinetixFlowEngine.Core
                     if (signal.Direction == SignalDirection.None)
                         continue;
 
+                    bool isFairPrice = signal.Direction == SignalDirection.Long ?
+                                    _fairPriceEngine.IsFairLongEntry((decimal)price, result.VWAP, result.ATR) :
+                                    _fairPriceEngine.IsFairShortEntry((decimal)price, result.VWAP, result.ATR); // or your existing fair price logic
+                    bool isVolumeExpansion = _volumeEngine.IsVolumeExpansion();
+
+                    if (!IsReentryAllowed(signal, result, (decimal)price, isFairPrice, isVolumeExpansion))
+                        continue;
+
                     if (!_positionManager.HasPosition(signal.StrategyName))
                     {
                         _positionManager.TryEnterTrade(signal, (decimal)result.Price, result.ATR15m, result);
@@ -354,11 +369,11 @@ namespace KinetixFlowEngine.Core
                 _positionManager.Update((decimal)price);
 
                 _recorder.Record(result);
-                _logger.LogInformation("FLOW | P {Price:F2} Raw {RawScore:F2} Adj {AdjScore:F2} " +
-                            "FS {Fast:F2} MS {Medium:F2} SS {Slow:F2} " +
-                            "VWAP {VWAP:F2} ER5 {ER:F3} ER30 {ER30:F3} ATR {ATR:F2}" + "B {BuyP:F2} S {SellP:F2} Net {NetP:F2} | FB {BFast:F4} MB {BMedium:F4} MS {BSlow:F4} | v15 {v15:F2} v1 {v1:F2} F {Factor:F3}",
+                _logger.LogInformation("FLOW | P {Price:F2} Raw {RawScore:F2} Adj {AdjScore:F2} | " +
+                            "FS {Fast:F2} MS {Medium:F2} SS {Slow:F2}" +
+                            " | VWAP {VWAP:F2} ER5 {ER:F2} ER30 {ER30:F2} ATR {ATR:F2} " + "| B {BuyP:F2} S {SellP:F2} Net {NetP:F2} | FP {BFast:F4} MP {BMedium:F4} SP {BSlow:F4} | v15 {v15:F2} v1 {v1:F2} F {Factor:F3}",
 
-                            result.Price, result.RawScore, result.AdjustedScore, result.ScoreFastEma, result.ScoreMediumEma, result.ScoreSlowEma, result.VWAP, result.ER, result.ER30, result.ATR, 
+                            result.Price, result.RawScore, result.AdjustedScore, result.ScoreFastEma, result.ScoreMediumEma, result.ScoreSlowEma, result.VWAP, result.ER, result.ER30, result.ATR,
                             result.BuyPressure, result.SellPressure, result.NetPressure,
                             (result.ProbFastEma), (result.ProbMediumEma), (result.ProbSlowEma), result.Volume15, result.Volume1, result.TrendFactor);
 
@@ -392,6 +407,38 @@ namespace KinetixFlowEngine.Core
                 }
                 await Task.Delay(1000, stoppingToken);
             }
+        }
+
+        private bool IsReentryAllowed(StrategySignal signal, KinetixEngineResult r, decimal price, bool isFairPrice, bool isVolumeExpansion)
+        {
+            // No previous trade → allow
+            var last = _tradeMemory.Get(signal.StrategyName);
+            if (last == null)
+                return true;
+
+            // Only restrict SAME direction after SL / TSL
+            if (last.Direction != signal.Direction)
+                return true;
+
+            if (last.ExitReason != "SL" && last.ExitReason != "TSL")
+                return true;
+
+            // -------------------------------
+            // Path A: Pullback entry
+            // -------------------------------
+            if (isFairPrice && isVolumeExpansion)
+                return true;
+
+            // -------------------------------
+            // Path B: Breakout entry
+            // -------------------------------
+            if (signal.Direction == SignalDirection.Long && (decimal)r.ProbMediumEma >= 0.60m && isVolumeExpansion)
+                return true;
+
+            if (signal.Direction == SignalDirection.Short && (decimal)r.ProbMediumEma <= 0.40m && isVolumeExpansion)
+                return true;
+
+            return false;
         }
     }
 }

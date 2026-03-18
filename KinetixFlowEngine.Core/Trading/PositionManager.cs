@@ -126,19 +126,19 @@ namespace KinetixFlowEngine.Core.Trading
 
                 if (trade.Direction == SignalDirection.Long && price <= trade.StopLoss)
                 {
-                    CloseTrade(trade.StrategyName, price);
+                    CloseTrade(trade.StrategyName, price, trade.Target1Hit ? "TSL" : "SL");
                 }
 
                 if (trade.Direction == SignalDirection.Short && price >= trade.StopLoss)
                 {
-                    CloseTrade(trade.StrategyName, price);
+                    CloseTrade(trade.StrategyName, price, trade.Target1Hit ? "TSL" : "SL");
                 }
             }
 
             _persistence.Save(_activeTrades);
         }
 
-        public void CloseTrade(string strategyName, decimal exitPrice)
+        public void CloseTrade(string strategyName, decimal exitPrice, string reason = "SL")
         {
             if (!_activeTrades.TryGetValue(strategyName, out var trade))
                 return;
@@ -147,6 +147,7 @@ namespace KinetixFlowEngine.Core.Trading
                 return;
 
             trade.Closed = true;
+            trade.ExitReason = reason;
 
             _activeTrades.Remove(strategyName);
 

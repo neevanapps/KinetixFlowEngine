@@ -9,7 +9,7 @@ namespace KinetixFlowEngine.Core.Trend
         private readonly AdaptiveEma _medium = new();
         private readonly AdaptiveEma _slow = new();
 
-        private const int minTick = 8;
+        private const int minTick = 6;
 
         public decimal Fast => _fast.Value ?? 0;
         public decimal Slow => _slow.Value ?? 0;

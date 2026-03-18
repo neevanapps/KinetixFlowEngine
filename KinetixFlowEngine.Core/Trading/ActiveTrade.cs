@@ -39,5 +39,6 @@ namespace KinetixFlowEngine.Core.Trading
         public double EntryER { get; set; }
         public string EntryFlowState { get; set; } = "";
         public bool MovedToBreakeven { get; set; } = false;
+        public string ExitReason { get; set; } = "";
     }
 }

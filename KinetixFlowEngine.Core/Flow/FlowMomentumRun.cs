@@ -13,10 +13,8 @@ namespace KinetixFlowEngine.Core.Flow
 
         public decimal LastFactor { get; private set; }
 
-        // ✅ NEW: expose run for persistence
         public double Run => _run;
 
-        // ✅ NEW: restore state
         public void Restore(double run)
         {
             _run = Math.Clamp(run, -MAX_RUN, MAX_RUN);
@@ -24,31 +22,28 @@ namespace KinetixFlowEngine.Core.Flow
 
         public decimal GetFactor(double score, double velocityZ)
         {
-            // ✅ FIX 3: correct scaling for probability (0–1 input)
-            double normalized = Math.Abs(score - 0.5) * 2.0; // 0 → 1
-            double strength = Math.Min(normalized, 1.0);
+            double absScore = Math.Abs(score);
+            double strength = Math.Min(absScore / 2.2, 1.0);   // was /2.5 → slightly faster build
 
-            if (score > 0.55)
-                _run = Math.Min(MAX_RUN, _run + strength);
-            else if (score < 0.45)
-                _run = Math.Max(-MAX_RUN, _run - strength);
+            if (score > 0.35)                                  // lowered from 0.4
+                _run = Math.Min(MAX_RUN, _run + strength * 1.05);   // slight bullish bias if you want
+            else if (score < -0.35)                            // lowered from -0.4
+                _run = Math.Max(-MAX_RUN, _run - strength * 1.15); // faster bearish build (important!)
             else
-                _run *= DECAY;
+                _run *= 0.58;                                  // was 0.65 → faster normal decay
 
-            if (Math.Abs(velocityZ) < 0.3)
-                _run *= 0.75;
+            // Stronger momentum-based decay
+            if (Math.Abs(velocityZ) < 0.4)                     // was 0.3
+                _run *= 0.58;                                  // was 0.75
 
             double absRun = Math.Abs(_run);
-            double normalizedRun = absRun / MAX_RUN;
+            double normalized = absRun / MAX_RUN;
+            double factor = 0.18 + (0.26 * normalized);        // was 0.30 → softer max
 
-            double factor = 0.18 + (0.30 * normalizedRun);
-
-            LastFactor = (decimal)Math.Clamp(factor, 0.18, 0.48);
-
+            LastFactor = (decimal)Math.Clamp(factor, 0.18, 0.46);  // hard cap lowered to 0.46
             return LastFactor;
         }
 
-        // ✅ FIX 2: bootstrap
         public void Bootstrap(double scoreZ)
         {
             _run = Math.Clamp(scoreZ * 2.0, -6, 6);

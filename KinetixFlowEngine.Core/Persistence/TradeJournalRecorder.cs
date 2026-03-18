@@ -11,8 +11,7 @@ namespace KinetixFlowEngine.Core.Persistence
             var folder = Path.Combine(AppContext.BaseDirectory, "journal");
             Directory.CreateDirectory(folder);
 
-            var date = DateTime.UtcNow.ToString("yyyyMMdd");
-            _filePath = Path.Combine(folder, $"trade_journal_{date}.csv");
+            _filePath = Path.Combine(folder, $"trade_journal.csv");
 
             if (!File.Exists(_filePath))
                 WriteHeader();

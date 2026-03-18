@@ -8,6 +8,9 @@ namespace KinetixFlowEngine.Core.Utils
         private readonly TelegramBotClient _botClient;
         private readonly string _chatId;
         private readonly string _groupChatChatId;
+        private const int MaxRetries = 3;
+        private const int RetryDelayMs = 2000;
+
 
         public TelegramService()
         {
@@ -18,51 +21,69 @@ namespace KinetixFlowEngine.Core.Utils
 
         public async Task SendMessageAsync(string message)
         {
-            try
+            _ = Task.Run(async () =>
             {
-                await _botClient.SendMessage(chatId: _chatId, text: message);
-            }
-            catch (Exception ex)
-            {
-                // Log the error (you can replace this with your logging mechanism)
-                Console.WriteLine($"Failed to send Telegram message: {ex.Message}");
-                throw;
-            }
+                await SendWithRetry(message, _chatId);
+            });
         }
 
-        public async Task SendGroupMessageAsync(string message)
+        private async Task SendWithRetry(string message, string chatId)
         {
-            try
+            for (int attempt = 1; attempt <= MaxRetries; attempt++)
             {
-                await _botClient.SendMessage(chatId: _groupChatChatId, text: message);
-            }
-            catch (Exception ex)
-            {
-                // Log the error (you can replace this with your logging mechanism)
-                Console.WriteLine($"Failed to send Telegram message: {ex.Message}");
-                throw;
+                try
+                {
+                    await _botClient.SendMessage(chatId: chatId, text: message);
+                    return; // success
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Telegram] Attempt {attempt} failed: {ex.Message}");
+
+                    if (attempt == MaxRetries)
+                    {
+                        Console.WriteLine("[Telegram] Dropping message after retries.");
+                        return;
+                    }
+
+                    await Task.Delay(RetryDelayMs);
+                }
             }
         }
 
-        public async Task SendPhotoAsync(Stream photoStream, string caption = null)
-        {
-            try
-            {
-                // Ensure the stream position is at the beginning
-                photoStream.Position = 0;
+        //public async Task SendGroupMessageAsync(string message)
+        //{
+        //    try
+        //    {
+        //        await _botClient.SendMessage(chatId: _groupChatChatId, text: message);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        // Log the error (you can replace this with your logging mechanism)
+        //        Console.WriteLine($"Failed to send Telegram message: {ex.Message}");
+        //        throw;
+        //    }
+        //}
 
-                await _botClient.SendPhoto(
-                    chatId: _chatId,
-                    photo: new InputFileStream(photoStream, "screenshot.png"),
-                    caption: caption
-                );
-            }
-            catch (Exception ex)
-            {
-                // Log the error
-                Console.WriteLine($"Failed to send Telegram photo: {ex.Message}");
-                throw;
-            }
-        }
+        //public async Task SendPhotoAsync(Stream photoStream, string caption = null)
+        //{
+        //    try
+        //    {
+        //        // Ensure the stream position is at the beginning
+        //        photoStream.Position = 0;
+
+        //        await _botClient.SendPhoto(
+        //            chatId: _chatId,
+        //            photo: new InputFileStream(photoStream, "screenshot.png"),
+        //            caption: caption
+        //        );
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        // Log the error
+        //        Console.WriteLine($"Failed to send Telegram photo: {ex.Message}");
+        //        throw;
+        //    }
+        //}
     }
 }
