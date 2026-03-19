@@ -133,7 +133,7 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<PropAccountStatePersistence>();
                 builder.Services.AddHostedService<Worker>();
                 builder.Services.AddSingleton<ITradeExecutor, SimulatedExecutor>();
-
+                builder.Services.AddSingleton<StrategyConfigLoader>();
                 // Configure Windows Service lifetime using options because 'Host' is not available on HostApplicationBuilder.
                 builder.Services.AddWindowsService(options =>
                 {

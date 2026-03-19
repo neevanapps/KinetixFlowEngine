@@ -35,7 +35,7 @@ namespace KinetixFlowEngine.Core.Prop
             {
                 var trades = _positionManager
                     .GetAllPositions()
-                    .Where(t => t.AccountId == acc.Config.AccountId);
+                    .Where(t => t.AccountId == acc.Config.AccountId && !t.Closed);
 
                 var unrealized = PropPnLCalculator.CalculateUnrealizedPnL(trades, currentPrice);
                 var equity = acc.State.CurrentEquity + unrealized;
@@ -102,13 +102,16 @@ namespace KinetixFlowEngine.Core.Prop
                     ? price - atr
                     : price + atr;
 
-                var riskAmount = acc.State.CurrentEquity * signal.RiskPercent;
-                var stopDistance = Math.Abs(price - stopLoss);
+                decimal risk = acc.State.CurrentEquity * 0.005m; // 0.5%
 
-                if (stopDistance == 0)
+                decimal stopDistance = Math.Abs(price - stopLoss);
+
+                decimal size = stopDistance > 0
+                    ? risk / stopDistance
+                    : 0;
+
+                if (size <= 0)
                     continue;
-
-                var size = riskAmount / stopDistance;
 
                 // leverage cap
                 var maxNotional = acc.State.CurrentEquity * acc.Config.LeverageCap;
@@ -120,6 +123,9 @@ namespace KinetixFlowEngine.Core.Prop
 
                 if (!guard.Allowed)
                     continue;
+
+                decimal maxSize = (acc.State.CurrentEquity * acc.Config.LeverageCap) / price;
+                size = Math.Min(size, maxSize);
 
                 var request = new ExecutionRequest
                 {

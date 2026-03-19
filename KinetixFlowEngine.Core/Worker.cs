@@ -55,7 +55,7 @@ namespace KinetixFlowEngine.Core
         private readonly PropAlertService _alerts;
         private readonly PropOrchestrator _propOrchestrator;
         private readonly List<AccountRuntime> _accounts;
-
+        private readonly StrategyConfigLoader _strategyConfigLoader;
         private readonly FlowEngineOptions _options;
         private DateTime _lastEngineCycle = DateTime.MinValue;
 
@@ -64,7 +64,7 @@ namespace KinetixFlowEngine.Core
                     EngineWarmupManager warmup, PriceTrendEngine priceEngine, ScoreTrendEngine scoreEngine, OpenInterestClient openInterestClient, FlowMetricsRecorder recorder, StrategyEngine strategyEngine,
                     StrategyAggregator strategyAggregator, TelegramService telegram, IOptions<FlowEngineOptions> options, TradeJournalRecorder tradeJournal, ExceptionAlertAggregator exceptionAggregator,
                     ProbabilityTrendEngine probEngine, FlowAggregationWindow flowAggregationWindow, FlowMomentumRun momentumRun, TradeMemoryManager tradeMemory, VolumeEngine volumeEngine, FairPriceEngine fairPriceEngine,
-                    PropOrchestrator propOrchestrator, List<AccountRuntime> accounts, PropAlertService alerts, PropAccountStatePersistence accountStatePersistence, PositionPersistence positionPersistence)
+                    PropOrchestrator propOrchestrator, List<AccountRuntime> accounts, PropAlertService alerts, PropAccountStatePersistence accountStatePersistence, PositionPersistence positionPersistence, StrategyConfigLoader strategyConfigLoader)
         {
             _logger = logger;
             _bootstrap = bootstrap;
@@ -100,6 +100,7 @@ namespace KinetixFlowEngine.Core
             _alerts = alerts;
             _accountStatePersistence = accountStatePersistence;
             _positionPersistence = positionPersistence;
+            _strategyConfigLoader = strategyConfigLoader;
 
             _tradeStreamClient.OnTrade += trade =>
             {
@@ -124,42 +125,18 @@ namespace KinetixFlowEngine.Core
                 // -------------------------------
                 // ✅ CORRECT PnL WITH SIZE
                 // -------------------------------
-                decimal pnlPoints;
 
-                if (trade.Target1Hit)
-                {
-                    if (trade.Direction == SignalDirection.Long)
-                    {
-                        pnlPoints =
-                            ((target1 - entry) * trade.InitialSize * 0.7m) +
-                            ((exitPrice - entry) * trade.InitialSize * 0.3m);
-                    }
-                    else
-                    {
-                        pnlPoints =
-                            ((entry - target1) * trade.InitialSize * 0.7m) +
-                            ((entry - exitPrice) * trade.InitialSize * 0.3m);
-                    }
-                }
-                else
-                {
-                    pnlPoints = trade.Direction == SignalDirection.Long
-                        ? (exitPrice - entry) * trade.InitialSize
-                        : (entry - exitPrice) * trade.InitialSize;
-                }
+                var config = _strategyConfigLoader.Get(trade.StrategyName);
+                decimal t1Percent = config?.Target1SizePercent > 0 ? config.Target1SizePercent / 100m : 0.5m; // fallback
 
-                // -------------------------------
-                // ✅ CORRECT FEE (NO DIVISION)
-                // -------------------------------
-                decimal fee = trade.EntryPrice * trade.InitialSize * _options.FeeRate * 2;
-
-                pnlPoints -= fee;
+                decimal pnl = trade.Target1Hit ? PropPnLCalculator.CalculatePartial(trade.EntryPrice, trade.Target1, exitPrice, trade.InitialSize, t1Percent, trade.Direction, _options.FeeRate)
+                                        : PropPnLCalculator.Calculate(trade.EntryPrice, exitPrice, trade.InitialSize, trade.Direction, _options.FeeRate);
 
                 // -------------------------------
                 // JOURNAL
                 // -------------------------------
-                decimal risk = Math.Abs(entry - trade.StopLoss);
-                decimal pnlR = risk == 0 ? 0 : pnlPoints / risk;
+                decimal riskUsd = Math.Abs(entry - trade.StopLoss) * trade.InitialSize;
+                decimal pnlR = riskUsd == 0 ? 0 : pnl / riskUsd;
 
                 decimal mfe = trade.Direction == SignalDirection.Long
                     ? (trade.MaxPrice - entry) * trade.InitialSize
@@ -179,7 +156,7 @@ namespace KinetixFlowEngine.Core
                     StopLoss = trade.StopLoss,
                     Target1 = target1,
                     DurationSeconds = duration,
-                    PnlPoints = pnlPoints,
+                    PnlPoints = pnl,
                     PnlR = pnlR,
                     MFE = mfe,
                     MAE = mae,
@@ -190,7 +167,6 @@ namespace KinetixFlowEngine.Core
                     ATR = trade.EntryATR,
                     ER = trade.EntryER,
                     FlowState = trade.EntryFlowState,
-                    FeePoints = fee,
                 });
 
                 // -------------------------------
@@ -214,10 +190,7 @@ namespace KinetixFlowEngine.Core
                 if (account != null)
                 {
                     // 🔴 CRITICAL FIX
-                    account.State.CurrentEquity += pnlPoints;
-
-                    account.Guard.UpdateEquity(account.State, account.State.CurrentEquity);
-
+                    account.State.CurrentEquity += pnl;
                     _accountStatePersistence.Update(account.Config.AccountId, account.State);
                 }
             };
@@ -336,35 +309,7 @@ namespace KinetixFlowEngine.Core
                             var exitPrice = (decimal)price;
                             var entry = trade.EntryPrice;
                             var target1 = trade.Target1;
-                            decimal pnlPoints;
-                            if (trade.Target1Hit)
-                            {
-                                if (trade.Direction == SignalDirection.Long)
-                                {
-                                    pnlPoints = (target1 - entry) * 0.7m + (exitPrice - entry) * 0.3m;
-                                }
-                                else
-                                {
-                                    pnlPoints = (entry - target1) * 0.7m + (entry - exitPrice) * 0.3m;
-                                }
-                            }
-                            else
-                            {
-                                pnlPoints = trade.Direction == SignalDirection.Long ? exitPrice - entry : entry - exitPrice;
-                            }
-                            // -------------------------------
-                            // Fee simulation (Bybit maker)
-                            // -------------------------------
-                            decimal size = trade.InitialSize; // currently 1
-                            decimal notional = trade.EntryPrice * size;
-
-                            decimal totalFee = notional * _options.FeeRate * 2; // entry + exit
-
-                            decimal feePoints = totalFee / size;
-
-                            // Apply fee
-                            pnlPoints -= feePoints;
-
+                            decimal pnl = PropPnLCalculator.Calculate(trade.EntryPrice, exitPrice, trade.InitialSize, trade.Direction, _options.FeeRate);
                             var duration = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - trade.EntryTimeMs) / 1000;
                             var acc = _accounts.FirstOrDefault(x => x.Config.AccountId == trade.AccountId);
 
@@ -373,8 +318,8 @@ namespace KinetixFlowEngine.Core
                                 await _alerts.SendExitAsync(
                                     trade,
                                     exitPrice,
-                                    pnlPoints,
-                                    feePoints,
+                                    pnl,
+                                    0m,
                                     acc.State.CurrentEquity,
                                     acc.State.DailyDrawdownPct,
                                     acc.State.OverallDrawdownPct);
