@@ -30,7 +30,15 @@ namespace KinetixFlowEngine.Core.Persistence
                     "vwap_bullish_absorption,vwap_bearish_absorption,whale_buy_trades,whale_sell_trades," +
                     "impact_efficiency,bullish_control,bearish_control,prob_fast,prob_Medium,prob_slow,long_persist,short_persist,v15,v1,factor";
 
-            File.WriteAllText(_filePath, header + Environment.NewLine);
+            SafeWrite(_filePath, header + Environment.NewLine);
+        }
+
+        private void SafeWrite(string path, string content)
+        {
+            var temp = path + ".tmp";
+            File.WriteAllText(temp, content);
+            File.Copy(temp, path, true);
+            File.Delete(temp);
         }
 
         public void Record(KinetixEngineResult r)

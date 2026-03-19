@@ -121,41 +121,54 @@ namespace KinetixFlowEngine.Core
                 var entry = trade.EntryPrice;
                 var target1 = trade.Target1;
 
+                // -------------------------------
+                // ✅ CORRECT PnL WITH SIZE
+                // -------------------------------
                 decimal pnlPoints;
 
-                // SAME LOGIC AS TELEGRAM EXIT
                 if (trade.Target1Hit)
                 {
                     if (trade.Direction == SignalDirection.Long)
                     {
-                        pnlPoints = (target1 - entry) * 0.7m + (exitPrice - entry) * 0.3m;
+                        pnlPoints =
+                            ((target1 - entry) * trade.InitialSize * 0.7m) +
+                            ((exitPrice - entry) * trade.InitialSize * 0.3m);
                     }
                     else
                     {
-                        pnlPoints = (entry - target1) * 0.7m + (entry - exitPrice) * 0.3m;
+                        pnlPoints =
+                            ((entry - target1) * trade.InitialSize * 0.7m) +
+                            ((entry - exitPrice) * trade.InitialSize * 0.3m);
                     }
                 }
                 else
                 {
-                    pnlPoints = trade.Direction == SignalDirection.Long ? exitPrice - entry : entry - exitPrice;
+                    pnlPoints = trade.Direction == SignalDirection.Long
+                        ? (exitPrice - entry) * trade.InitialSize
+                        : (entry - exitPrice) * trade.InitialSize;
                 }
+
                 // -------------------------------
-                // Fee simulation (Bybit maker)
+                // ✅ CORRECT FEE (NO DIVISION)
                 // -------------------------------
-                decimal size = trade.InitialSize; // currently 1
-                decimal notional = trade.EntryPrice * size;
+                decimal fee = trade.EntryPrice * trade.InitialSize * _options.FeeRate * 2;
 
-                decimal totalFee = notional * _options.FeeRate * 2; // entry + exit
+                pnlPoints -= fee;
 
-                decimal feePoints = totalFee / size;
-
-                // Apply fee
-                pnlPoints -= feePoints;
-
+                // -------------------------------
+                // JOURNAL
+                // -------------------------------
                 decimal risk = Math.Abs(entry - trade.StopLoss);
                 decimal pnlR = risk == 0 ? 0 : pnlPoints / risk;
-                decimal mfe = trade.Direction == SignalDirection.Long ? trade.MaxPrice - entry : entry - trade.MinPrice;
-                decimal mae = trade.Direction == SignalDirection.Long ? entry - trade.MinPrice : trade.MaxPrice - entry;
+
+                decimal mfe = trade.Direction == SignalDirection.Long
+                    ? (trade.MaxPrice - entry) * trade.InitialSize
+                    : (entry - trade.MinPrice) * trade.InitialSize;
+
+                decimal mae = trade.Direction == SignalDirection.Long
+                    ? (entry - trade.MinPrice) * trade.InitialSize
+                    : (trade.MaxPrice - entry) * trade.InitialSize;
+
                 _tradeJournal.Record(new TradeJournalRecord
                 {
                     Timestamp = DateTime.UtcNow,
@@ -177,26 +190,35 @@ namespace KinetixFlowEngine.Core
                     ATR = trade.EntryATR,
                     ER = trade.EntryER,
                     FlowState = trade.EntryFlowState,
-                    FeePoints = feePoints,
+                    FeePoints = fee,
                 });
 
-                string reason = trade.ExitReason;
+                // -------------------------------
+                // MEMORY
+                // -------------------------------
                 _tradeMemory.Record(trade.AccountId, new TradeMemory
                 {
                     StrategyName = trade.StrategyName,
                     Direction = trade.Direction,
                     EntryPrice = trade.EntryPrice,
                     ExitPrice = exitPrice,
-                    ExitReason = reason,
+                    ExitReason = trade.ExitReason,
                     ExitTime = DateTime.UtcNow
                 });
 
+                // -------------------------------
+                // ✅ FIXED EQUITY UPDATE
+                // -------------------------------
                 var account = _accounts.FirstOrDefault(x => x.Config.AccountId == trade.AccountId);
+
                 if (account != null)
                 {
-                    account.Guard.OnTradeClosed(account.State, pnlPoints);
-                    _accountStatePersistence.Update(account.Config.AccountId, account.State);
+                    // 🔴 CRITICAL FIX
+                    account.State.CurrentEquity += pnlPoints;
+
                     account.Guard.UpdateEquity(account.State, account.State.CurrentEquity);
+
+                    _accountStatePersistence.Update(account.Config.AccountId, account.State);
                 }
             };
         }
@@ -383,7 +405,7 @@ namespace KinetixFlowEngine.Core
                         if (!IsReentryAllowed(signal, result, (decimal)price, isFairPrice, isVolumeExpansion, acc.Config.AccountId))
                             continue;
 
-                        _propOrchestrator.ProcessSignal(signal, (decimal)result.Price, (decimal)result.ATR15m);
+                        _propOrchestrator.ProcessSignal(signal, (decimal)result.Price, (decimal)result.ATR15m, result);
 
                         if (signal.NotifyThroughTelegram)
                         {
@@ -403,9 +425,8 @@ namespace KinetixFlowEngine.Core
 
                                 trade.EntryAlertSent = true;
                             }
+                            //_logger.LogInformation("STRATEGY SIGNAL | Account {Account} Strategy {Strategy} Direction {Direction}", acc.Config.AccountId, signal.StrategyName, signal.Direction);
                         }
-
-                        _logger.LogInformation("STRATEGY SIGNAL | Account {Account} Strategy {Strategy} Direction {Direction}", acc.Config.AccountId, signal.StrategyName, signal.Direction);
                     }
                 }
                 _positionManager.Update((decimal)price);

@@ -11,9 +11,9 @@
 
     public class PropChallengeGuard
     {
-        private const decimal DAILY_DD_LIMIT = 0.04m;
-        private const decimal OVERALL_DD_LIMIT = 0.10m;
-        private const decimal PER_TRADE_RISK = 0.015m;
+        private const decimal DAILY_DD_LIMIT = 4m;
+        private const decimal OVERALL_DD_LIMIT = 10m;
+        private const decimal PER_TRADE_RISK = .15m;
 
         public GuardResult EvaluateEntry(PropAccountConfig config, PropAccountState state,
             decimal entry, decimal stopLoss, decimal size)
@@ -39,33 +39,46 @@
         {
             state.CurrentEquity = equity;
 
-            // --- Update high watermarks ---
-            if (equity > state.HighWaterMarkDaily)
-                state.HighWaterMarkDaily = equity;
-
-            if (equity > state.HighWaterMarkOverall)
+            // -------------------------------
+            // PROTECT INITIAL STATE
+            // -------------------------------
+            if (state.HighWaterMarkOverall == 0)
                 state.HighWaterMarkOverall = equity;
 
-            // --- Drawdown calculations ---
-            state.DailyDrawdownPct =
-                (state.HighWaterMarkDaily - equity) / state.HighWaterMarkDaily;
+            if (state.HighWaterMarkDaily == 0)
+                state.HighWaterMarkDaily = equity;
 
+            // -------------------------------
+            // UPDATE HIGH WATERMARKS
+            // -------------------------------
+            state.HighWaterMarkOverall = Math.Max(state.HighWaterMarkOverall, equity);
+            state.HighWaterMarkDaily = Math.Max(state.HighWaterMarkDaily, equity);
+
+            // -------------------------------
+            // CALCULATE DD (%) — SINGLE SOURCE
+            // -------------------------------
             state.OverallDrawdownPct =
-                (state.HighWaterMarkOverall - equity) / state.HighWaterMarkOverall;
+                state.HighWaterMarkOverall == 0
+                    ? 0
+                    : (state.HighWaterMarkOverall - equity) / state.HighWaterMarkOverall * 100;
 
-            // --- Daily DD breach ---
+            state.DailyDrawdownPct =
+                state.HighWaterMarkDaily == 0
+                    ? 0
+                    : (state.HighWaterMarkDaily - equity) / state.HighWaterMarkDaily * 100;
+
+            // -------------------------------
+            // LIMIT CHECKS (USE SAME UNIT: %)
+            // -------------------------------
             if (state.DailyDrawdownPct >= DAILY_DD_LIMIT)
                 state.IsPaused = true;
 
-            // --- Overall DD breach ---
-            if (equity <= state.HighWaterMarkOverall * (1 - OVERALL_DD_LIMIT))
+            if (state.OverallDrawdownPct >= OVERALL_DD_LIMIT)
                 state.IsStopped = true;
         }
 
         public void OnTradeClosed(PropAccountState state, decimal pnl)
         {
-            state.CurrentEquity += pnl;
-
             var today = DateTime.UtcNow.Date;
 
             if (state.LastTradeDate != today)

@@ -32,5 +32,9 @@ namespace KinetixFlowEngine.Core.Trading
 
         public double EntryPriceTrend { get; set; }
         public double EntryScoreTrend { get; set; }
+        public bool EntryAlertSent { get; set; }   // ✅ ADD
+        public bool MovedToBreakeven { get; set; } // ✅ ADD
+        public decimal RemainingSize { get; set; } // ✅ ADD
+        public decimal TrailingStop { get; set; }  // ✅ ADD
     }
 }

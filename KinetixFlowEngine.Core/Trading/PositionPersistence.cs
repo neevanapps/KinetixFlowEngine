@@ -67,6 +67,7 @@ namespace KinetixFlowEngine.Core.Trading
             }
             catch
             {
+                File.Move(_filePath, _filePath + ".corrupt_" + DateTime.UtcNow.Ticks);
                 return new List<PersistedPosition>();
             }
         }

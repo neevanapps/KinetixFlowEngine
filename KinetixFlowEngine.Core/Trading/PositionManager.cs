@@ -20,6 +20,7 @@ namespace KinetixFlowEngine.Core.Trading
         public PositionManager(PositionPersistence persistence)
         {
             _persistence = persistence;
+            _activeTrades = new Dictionary<string, ActiveTrade>();
         }
 
         public bool HasPosition(string strategy, string accountId)
@@ -41,7 +42,6 @@ namespace KinetixFlowEngine.Core.Trading
         public void TryEnterTrade(StrategySignal signal, decimal price, double atr, KinetixEngineResult r, decimal size, string accountId)
         {
             var key = GetKey(signal.StrategyName, accountId);
-
             if (_activeTrades.ContainsKey(key))
                 return;
 
@@ -187,11 +187,16 @@ namespace KinetixFlowEngine.Core.Trading
                     StopLoss = p.StopLoss,
                     Target1 = p.Target1,
                     InitialSize = p.Size,
-                    RemainingSize = p.Size * (p.Target1Hit ? 0.3m : 1m),
+                    RemainingSize = p.RemainingSize,   // ✅ FIX
+                    TrailingStop = p.TrailingStop,     // ✅ FIX
+
                     EntryTimeMs = p.EntryTimeMs,
                     Target1Hit = p.Target1Hit,
+                    MovedToBreakeven = p.MovedToBreakeven, // ✅ FIX
+
                     MaxPrice = p.MaxPrice,
                     MinPrice = p.MinPrice,
+
                     EntryScoreZ = p.EntryScoreZ,
                     EntryVelocityZ = p.EntryVelocityZ,
                     EntryImbalanceZ = p.EntryImbalanceZ,
@@ -199,15 +204,13 @@ namespace KinetixFlowEngine.Core.Trading
                     EntryATR = p.EntryATR,
                     EntryER = p.EntryER,
                     EntryFlowState = p.EntryFlowState,
-                    NotifyThroughTelegram = true, // safe default
-                    Closed = false,
-                    TrailingStop = Math.Abs(p.EntryPrice - p.StopLoss),
-                    MovedToBreakeven = p.Target1Hit,
-                    EntryPriceTrend = p.EntryPriceTrend,
-                    EntryScoreTrend = p.EntryScoreTrend,
+
+                    EntryAlertSent = p.EntryAlertSent, // ✅ FIX
+                    Closed = false
                 };
 
-                AddRestoredTrade(trade);
+                var key = GetKey(trade.StrategyName, trade.AccountId);
+                _activeTrades[key] = trade;
             }
         }
 

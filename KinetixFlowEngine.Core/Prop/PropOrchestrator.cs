@@ -1,4 +1,5 @@
-﻿using KinetixFlowEngine.Core.Signal;
+﻿using KinetixFlowEngine.Core.Engine;
+using KinetixFlowEngine.Core.Signal;
 using KinetixFlowEngine.Core.Strategy;
 using KinetixFlowEngine.Core.Trading;
 
@@ -76,7 +77,7 @@ namespace KinetixFlowEngine.Core.Prop
             }
         }
 
-        public void ProcessSignal(StrategySignal signal, decimal price, decimal atr)
+        public void ProcessSignal(StrategySignal signal, decimal price, decimal atr, KinetixEngineResult r)
         {
             foreach (var acc in _accounts)
             {
@@ -143,7 +144,7 @@ namespace KinetixFlowEngine.Core.Prop
                     signal,
                     result.FilledPrice,
                     (double)atr,
-                    null,
+                    r,
                     result.FilledQuantity,
                     acc.Config.AccountId);
             }
