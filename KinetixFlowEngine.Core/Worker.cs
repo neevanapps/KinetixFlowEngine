@@ -118,7 +118,6 @@ namespace KinetixFlowEngine.Core
             _positionManager.TradeClosed += (trade, exitPrice) =>
             {
                 var duration = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - trade.EntryTimeMs) / 1000;
-
                 var entry = trade.EntryPrice;
                 var target1 = trade.Target1;
 
@@ -127,17 +126,58 @@ namespace KinetixFlowEngine.Core
                 // -------------------------------
 
                 var config = _strategyConfigLoader.Get(trade.StrategyName);
-                decimal t1Percent = config?.Target1SizePercent > 0 ? config.Target1SizePercent / 100m : 0.5m; // fallback
 
-                decimal pnl = trade.Target1Hit ? PropPnLCalculator.CalculatePartial(trade.EntryPrice, trade.Target1, exitPrice, trade.InitialSize, t1Percent, trade.Direction, _options.FeeRate)
-                                        : PropPnLCalculator.Calculate(trade.EntryPrice, exitPrice, trade.InitialSize, trade.Direction, _options.FeeRate);
+                decimal t1Percent = config?.Target1SizePercent > 0
+                    ? config.Target1SizePercent / 100m
+                    : 0.5m;
 
+                // -------------------------------
+                // PnL WITH BREAKDOWN
+                // -------------------------------
+                decimal gross, fee, pnl;
+
+                if (trade.Target1Hit)
+                {
+                    // partial → approximate breakdown (still correct net)
+                    var result = PropPnLCalculator.CalculatePartial(
+                        trade.EntryPrice,
+                        trade.Target1,
+                        exitPrice,
+                        trade.InitialSize,
+                        t1Percent,
+                        trade.Direction,
+                        _options.FeeRate);
+
+                    // fallback (we don’t split gross/fee per leg precisely)
+                    var breakdown = PropPnLCalculator.CalculateWithBreakdown(
+                        trade.EntryPrice,
+                        exitPrice,
+                        trade.InitialSize,
+                        trade.Direction,
+                        _options.FeeRate);
+
+                    gross = breakdown.gross;
+                    fee = breakdown.fee;
+                    pnl = result;
+                }
+                else
+                {
+                    var breakdown = PropPnLCalculator.CalculateWithBreakdown(
+                        trade.EntryPrice,
+                        exitPrice,
+                        trade.InitialSize,
+                        trade.Direction,
+                        _options.FeeRate);
+
+                    gross = breakdown.gross;
+                    fee = breakdown.fee;
+                    pnl = breakdown.net;
+                }
                 // -------------------------------
                 // JOURNAL
                 // -------------------------------
-                decimal riskUsd = Math.Abs(entry - trade.StopLoss) * trade.InitialSize;
+                decimal riskUsd = Math.Abs(trade.EntryPrice - trade.StopLoss) * trade.InitialSize;
                 decimal pnlR = riskUsd == 0 ? 0 : pnl / riskUsd;
-
                 decimal mfe = trade.Direction == SignalDirection.Long
                     ? (trade.MaxPrice - entry) * trade.InitialSize
                     : (entry - trade.MinPrice) * trade.InitialSize;
@@ -151,21 +191,28 @@ namespace KinetixFlowEngine.Core
                     Timestamp = DateTime.UtcNow,
                     Strategy = trade.StrategyName,
                     Direction = trade.Direction,
-                    EntryPrice = entry,
+                    EntryPrice = trade.EntryPrice,
                     ExitPrice = exitPrice,
                     StopLoss = trade.StopLoss,
-                    Target1 = target1,
+                    Target1 = trade.Target1,
+                    Size = trade.InitialSize,
                     DurationSeconds = duration,
-                    PnlPoints = pnl,
+                    PnlUsd = pnl,            
+                    GrossPnlUsd = gross,       
+                    FeeUsd = fee,
                     PnlR = pnlR,
-                    MFE = mfe,
-                    MAE = mae,
+                    MFE = trade.Direction == SignalDirection.Long
+                                    ? (trade.MaxPrice - trade.EntryPrice) * trade.InitialSize
+                                    : (trade.EntryPrice - trade.MinPrice) * trade.InitialSize,
+                    MAE = trade.Direction == SignalDirection.Long
+                                 ? (trade.EntryPrice - trade.MinPrice) * trade.InitialSize
+                                 : (trade.MaxPrice - trade.EntryPrice) * trade.InitialSize,
                     ScoreZ = trade.EntryScoreZ,
                     VelocityZ = trade.EntryVelocityZ,
                     ImbalanceZ = trade.EntryImbalanceZ,
                     CompressionZ = trade.EntryCompressionZ,
-                    ATR = trade.EntryATR,
-                    ER = trade.EntryER,
+                    ATR = (decimal)trade.EntryATR,
+                    ER = (decimal)trade.EntryER,
                     FlowState = trade.EntryFlowState,
                 });
 

@@ -58,12 +58,27 @@ namespace KinetixFlowEngine.Core.Prop
                 if (t.Closed)
                     continue;
 
-                pnl += t.Direction == SignalDirection.Long
-                    ? (currentPrice - t.EntryPrice) * t.InitialSize
-                    : (t.EntryPrice - currentPrice) * t.InitialSize;
+                decimal move = t.Direction == SignalDirection.Long
+                    ? (currentPrice - t.EntryPrice)
+                    : (t.EntryPrice - currentPrice);
+
+                pnl += move * t.InitialSize;
             }
 
             return pnl;
+        }
+
+        public static (decimal gross, decimal fee, decimal net) CalculateWithBreakdown(decimal entry, decimal exit, decimal size, SignalDirection direction, decimal feeRate)
+        {
+            decimal gross = direction == SignalDirection.Long
+                ? (exit - entry) * size
+                : (entry - exit) * size;
+
+            decimal fee = (entry + exit) * size * feeRate;
+
+            decimal net = gross - fee;
+
+            return (gross, fee, net);
         }
     }
 }

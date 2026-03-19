@@ -11,9 +11,9 @@
 
     public class PropChallengeGuard
     {
-        private const decimal DAILY_DD_LIMIT = 4m;
-        private const decimal OVERALL_DD_LIMIT = 10m;
-        private const decimal PER_TRADE_RISK = .15m;
+        private const decimal DAILY_DD_LIMIT = 0.05m;     // 5%
+        private const decimal OVERALL_DD_LIMIT = 0.10m;   // 10%
+        private const decimal PER_TRADE_RISK = 0.01m; // 0.5%
 
         public GuardResult EvaluateEntry(PropAccountConfig config, PropAccountState state,
             decimal entry, decimal stopLoss, decimal size)
@@ -37,7 +37,7 @@
 
         public void UpdateEquity(PropAccountState state, decimal equity)
         {
-            state.CurrentEquity = equity;
+            //state.CurrentEquity = equity;
 
             // -------------------------------
             // PROTECT INITIAL STATE
@@ -55,20 +55,20 @@
             state.HighWaterMarkDaily = Math.Max(state.HighWaterMarkDaily, equity);
 
             // -------------------------------
-            // CALCULATE DD (%) — SINGLE SOURCE
+            // CALCULATE DD (DECIMAL: 0–1)
             // -------------------------------
             state.OverallDrawdownPct =
                 state.HighWaterMarkOverall == 0
                     ? 0
-                    : (state.HighWaterMarkOverall - equity) / state.HighWaterMarkOverall * 100;
+                    : (state.HighWaterMarkOverall - equity) / state.HighWaterMarkOverall;
 
             state.DailyDrawdownPct =
                 state.HighWaterMarkDaily == 0
                     ? 0
-                    : (state.HighWaterMarkDaily - equity) / state.HighWaterMarkDaily * 100;
+                    : (state.HighWaterMarkDaily - equity) / state.HighWaterMarkDaily;
 
             // -------------------------------
-            // LIMIT CHECKS (USE SAME UNIT: %)
+            // LIMIT CHECKS (MATCH UNIT: 0–1)
             // -------------------------------
             if (state.DailyDrawdownPct >= DAILY_DD_LIMIT)
                 state.IsPaused = true;

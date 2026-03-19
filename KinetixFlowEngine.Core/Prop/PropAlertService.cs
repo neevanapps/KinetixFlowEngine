@@ -37,7 +37,7 @@ namespace KinetixFlowEngine.Core.Prop
             EXIT | {trade.AccountId} | {trade.Direction} | {trade.StrategyName}
 
             Entry={trade.EntryPrice:F1}  Exit={exitPrice:F1}
-            PnL={pnl:F1}  Fee={fee:F0}
+            PnL Net={pnl:F1}
 
             Equity={equity:F0}
             DailyDD={dailyDd:P2}  OverallDD={overallDd:P2}
