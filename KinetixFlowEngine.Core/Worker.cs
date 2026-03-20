@@ -545,91 +545,6 @@ namespace KinetixFlowEngine.Core
             return false;
         }
 
-        private void UpdateLiveEquityAndDrawdown(decimal currentPrice)
-        {
-            var activeTrades = _positionManager.GetAllPositions();   // or .GetAllActiveTrades() if you rename later
-
-            var tradesByAccount = activeTrades
-                .GroupBy(t => t.AccountId)
-                .ToDictionary(g => g.Key, g => g.ToList());
-
-            bool shouldPersist = (++_drawdownCheckCounter % DRAW_DOWN_PERSIST_EVERY_N_CYCLES) == 0;
-
-            foreach (var runtime in _accounts.Where(a => a.Config.Enabled))
-            {
-                string accId = runtime.Config.AccountId;
-                var state = runtime.State;   // already loaded & attached
-
-                if (!tradesByAccount.TryGetValue(accId, out var trades) || trades.Count == 0)
-                {
-                    // still update HWM if equity somehow increased (very rare)
-                    if (state.CurrentEquity > state.HighWaterMarkDaily)
-                        state.HighWaterMarkDaily = state.CurrentEquity;
-
-                    if (state.CurrentEquity > state.HighWaterMarkOverall)
-                        state.HighWaterMarkOverall = state.CurrentEquity;
-
-                    continue;
-                }
-
-                decimal unrealized = trades.Sum(t =>
-                {
-                    if (t.Direction == SignalDirection.Long)
-                        return (currentPrice - t.EntryPrice) * t.RemainingSize;
-                    if (t.Direction == SignalDirection.Short)
-                        return (t.EntryPrice - currentPrice) * t.RemainingSize;
-                    return 0m;
-                });
-
-                decimal newEquity = state.CurrentEquity + unrealized;
-
-                // ------------------------------
-                // ✅ HWM MUST USE REALIZED ONLY
-                // ------------------------------
-                if (state.CurrentEquity > state.HighWaterMarkDaily)
-                    state.HighWaterMarkDaily = state.CurrentEquity;
-
-                if (state.CurrentEquity > state.HighWaterMarkOverall)
-                    state.HighWaterMarkOverall = state.CurrentEquity;
-
-                // Drawdown in percent
-                decimal dailyDD = state.HighWaterMarkDaily > 0 ? (state.HighWaterMarkDaily - newEquity) / state.HighWaterMarkDaily * 100m : 0m;
-                decimal overallDD = state.HighWaterMarkOverall > 0 ? (state.HighWaterMarkOverall - newEquity) / state.HighWaterMarkOverall * 100m : 0m;
-
-                state.DailyDrawdownPct = Math.Max(0, dailyDD);
-                state.OverallDrawdownPct = Math.Max(0, overallDD);
-
-                // ── Prop firm protection ───────────────────────────────────────
-                const decimal DAILY_LIMIT = 4.8m;   // slightly below 5%
-                const decimal MAX_LIMIT = 9.8m;   // slightly below 10%/12% depending on firm
-
-                if (state.DailyDrawdownPct > DAILY_LIMIT || state.OverallDrawdownPct > MAX_LIMIT)
-                {
-                    if (!state.IsPaused)
-                    {
-                        state.IsPaused = true;
-                        _logger.LogWarning("ACCOUNT PAUSED | {Account} | Daily DD {Daily:F2}% | Overall DD {Overall:F2}% | Equity {Equity:N2}",
-                            accId, state.DailyDrawdownPct, state.OverallDrawdownPct, newEquity);
-
-                        // Optional: emergency notification
-                        _ = _alerts.SendNearDdWarningAsync(accId, state.DailyDrawdownPct, state.OverallDrawdownPct);
-                    }
-                }
-
-                runtime.State = state;   // just in case — usually reference is enough
-
-                if (shouldPersist)
-                {
-                    _accountStatePersistence.Update(accId, state);
-                }
-            }
-
-            if (shouldPersist)
-            {
-                _drawdownCheckCounter = 0;   // optional - reset or keep rolling
-            }
-        }
-
         private void CheckAndResetDailyHighWaterMark()
         {
             var now = DateTime.UtcNow;
@@ -654,25 +569,6 @@ namespace KinetixFlowEngine.Core
             }
 
             _lastDailyResetUtc = today;
-        }
-
-        // Small helper — avoid code duplication
-        private decimal GetUnrealizedForAccount(string accountId)
-        {
-            var trades = _positionManager.GetAllPositions()
-                .Where(t => t.AccountId == accountId && !t.Closed)
-                .ToList();
-
-            if (trades.Count == 0) return 0m;
-
-            if (_currentMarketPrice <= 0) return 0m;
-
-            return trades.Sum(t =>
-            {
-                if (t.Direction == SignalDirection.Long) return (_currentMarketPrice - t.EntryPrice) * t.RemainingSize;
-                if (t.Direction == SignalDirection.Short) return (t.EntryPrice - _currentMarketPrice) * t.RemainingSize;
-                return 0m;
-            });
         }
     }
 }
