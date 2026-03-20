@@ -3,6 +3,7 @@ using KinetixFlowEngine.Core.Config;
 using KinetixFlowEngine.Core.Context;
 using KinetixFlowEngine.Core.Data;
 using KinetixFlowEngine.Core.Engine;
+using KinetixFlowEngine.Core.Execution;
 using KinetixFlowEngine.Core.Flow;
 using KinetixFlowEngine.Core.Persistence;
 using KinetixFlowEngine.Core.Prop;
@@ -11,6 +12,7 @@ using KinetixFlowEngine.Core.Trading;
 using KinetixFlowEngine.Core.Trend;
 using KinetixFlowEngine.Core.Utils;
 using Microsoft.Extensions.Options;
+using Serilog;
 using System.Globalization;
 
 namespace KinetixFlowEngine.Core
@@ -47,9 +49,15 @@ namespace KinetixFlowEngine.Core
         private readonly FlowMomentumRun _momentumRun;
         private readonly TradeMemoryManager _tradeMemory;
         private readonly VolumeEngine _volumeEngine;
+
         private DateTime _lastSnapshot = DateTime.MinValue;
         private DateTime _lastOiFetch = DateTime.MinValue;
+        private DateTime _lastDailyResetUtc = DateTime.MinValue;
+        private DateTime _lastSync = DateTime.MinValue;
+        private int _drawdownCheckCounter = 0;
+        private const int DRAW_DOWN_PERSIST_EVERY_N_CYCLES = 5;   // ~every 5–10 seconds
         private double _lastOiValue = 0;
+
         private readonly PositionPersistence _positionPersistence;
         private readonly PropAccountStatePersistence _accountStatePersistence;
         private readonly PropAlertService _alerts;
@@ -58,13 +66,19 @@ namespace KinetixFlowEngine.Core
         private readonly StrategyConfigLoader _strategyConfigLoader;
         private readonly FlowEngineOptions _options;
         private DateTime _lastEngineCycle = DateTime.MinValue;
+        private readonly IExecutionRouter _router;
+        private readonly IEquityEngine _equityEngine;
+        private readonly ExecutionSyncService _executionSync;
+        private readonly ITradeExecutor _executor;
+        private decimal _currentMarketPrice = 0m;
 
         public Worker(FlowTradeBuffer flowTradeBuffer, TradeStreamClient tradeStreamClient, ILogger<Worker> logger, KinetixEngineProcessor engineProcessor, ScoreNormalizer scoreNorm, EngineBootstrapService bootstrap,
                     VelocityNormalizer velNorm, ImbalanceNormalizer imbNorm, ExhaustionNormalizer exhNorm, CompressionNormalizer cmpNorm, MarketStateManager snapshotManager, PositionManager positionManager,
                     EngineWarmupManager warmup, PriceTrendEngine priceEngine, ScoreTrendEngine scoreEngine, OpenInterestClient openInterestClient, FlowMetricsRecorder recorder, StrategyEngine strategyEngine,
                     StrategyAggregator strategyAggregator, TelegramService telegram, IOptions<FlowEngineOptions> options, TradeJournalRecorder tradeJournal, ExceptionAlertAggregator exceptionAggregator,
                     ProbabilityTrendEngine probEngine, FlowAggregationWindow flowAggregationWindow, FlowMomentumRun momentumRun, TradeMemoryManager tradeMemory, VolumeEngine volumeEngine, FairPriceEngine fairPriceEngine,
-                    PropOrchestrator propOrchestrator, List<AccountRuntime> accounts, PropAlertService alerts, PropAccountStatePersistence accountStatePersistence, PositionPersistence positionPersistence, StrategyConfigLoader strategyConfigLoader)
+                    PropOrchestrator propOrchestrator, List<AccountRuntime> accounts, PropAlertService alerts, PropAccountStatePersistence accountStatePersistence, PositionPersistence positionPersistence,
+                    StrategyConfigLoader strategyConfigLoader, IExecutionRouter executionRouter, IEquityEngine equityEngine, ExecutionSyncService executionSync, ITradeExecutor executor)
         {
             _logger = logger;
             _bootstrap = bootstrap;
@@ -101,6 +115,10 @@ namespace KinetixFlowEngine.Core
             _accountStatePersistence = accountStatePersistence;
             _positionPersistence = positionPersistence;
             _strategyConfigLoader = strategyConfigLoader;
+            _router = executionRouter;
+            _equityEngine = equityEngine;
+            _executionSync = executionSync;
+            _executor = executor;
 
             _tradeStreamClient.OnTrade += trade =>
             {
@@ -197,8 +215,8 @@ namespace KinetixFlowEngine.Core
                     Target1 = trade.Target1,
                     Size = trade.InitialSize,
                     DurationSeconds = duration,
-                    PnlUsd = pnl,            
-                    GrossPnlUsd = gross,       
+                    PnlUsd = pnl,
+                    GrossPnlUsd = gross,
                     FeeUsd = fee,
                     PnlR = pnlR,
                     MFE = trade.Direction == SignalDirection.Long
@@ -228,18 +246,42 @@ namespace KinetixFlowEngine.Core
                     ExitReason = trade.ExitReason,
                     ExitTime = DateTime.UtcNow
                 });
+            };
 
-                // -------------------------------
-                // ✅ FIXED EQUITY UPDATE
-                // -------------------------------
-                var account = _accounts.FirstOrDefault(x => x.Config.AccountId == trade.AccountId);
+            _positionManager.PartialCloseRequested += async trade =>
+            {
+                if (trade.AccountId == "SIM")
+                    return;
 
-                if (account != null)
+                var acc = _accounts.First(x => x.Config.AccountId == trade.AccountId);
+
+                var reduceQty = trade.InitialSize * 0.7m;
+
+                await _executor.ReducePositionAsync(new ExecutionRequest
                 {
-                    // 🔴 CRITICAL FIX
-                    account.State.CurrentEquity += pnl;
-                    _accountStatePersistence.Update(account.Config.AccountId, account.State);
-                }
+                    AccountId = acc.Config.AccountId,
+                    ApiKey = acc.Config.ApiKey,
+                    ApiSecret = acc.Config.ApiSecret,
+                    Direction = trade.Direction
+                }, reduceQty);
+            };
+
+            _positionManager.StopLossUpdateRequested += async trade =>
+            {
+                if (trade.AccountId == "SIM")
+                    return;
+
+                var acc = _accounts.First(x => x.Config.AccountId == trade.AccountId);
+
+                await _executor.UpdateStopLossAsync(
+                    new ExecutionRequest
+                    {
+                        AccountId = acc.Config.AccountId,
+                        ApiKey = acc.Config.ApiKey,
+                        ApiSecret = acc.Config.ApiSecret,
+                        Direction = trade.Direction
+                    },
+                    trade.StopLoss);
             };
         }
 
@@ -248,7 +290,6 @@ namespace KinetixFlowEngine.Core
             await _bootstrap.InitializeAsync();
 
             await _tradeStreamClient.StartAsync(stoppingToken);
-
 
             var persisted = _positionPersistence.Load();
             if (persisted.Any())
@@ -271,6 +312,11 @@ namespace KinetixFlowEngine.Core
                 {
                     _logger.LogWarning("No persisted state found for {account}, using defaults", acc.Config.AccountId);
                 }
+            }
+            if ((DateTime.UtcNow - _lastSync).TotalSeconds > 5)
+            {
+                await _executionSync.SyncAsync();
+                _lastSync = DateTime.UtcNow;
             }
 
             var snapshot = _marketStateManager.Load();
@@ -305,6 +351,7 @@ namespace KinetixFlowEngine.Core
                     continue;
                 }
                 double price = (double)lastTrade.Price;
+                _currentMarketPrice = (decimal)price;
 
                 if ((DateTime.UtcNow - _lastOiFetch).TotalSeconds > 120)
                 {
@@ -378,51 +425,53 @@ namespace KinetixFlowEngine.Core
 
                 // ---------- ENTRY SECOND ----------
                 var signals = _strategyEngine.Evaluate(result);
-                foreach (var acc in _accounts)
+                foreach (var signal in signals)
                 {
-                    if (!acc.Config.Enabled)
+                    if (signal.Direction == SignalDirection.None)
                         continue;
 
-                    foreach (var signal in signals)
+                    bool isFairPrice = signal.Direction == SignalDirection.Long ?
+                        _fairPriceEngine.IsFairLongEntry((decimal)price, result.VWAP, result.ATR) :
+                        _fairPriceEngine.IsFairShortEntry((decimal)price, result.VWAP, result.ATR);
+
+                    bool isVolumeExpansion = _volumeEngine.IsVolumeExpansion();
+
+                    // IMPORTANT: reentry logic must NOT depend on account loop
+                    // Use "GLOBAL" or "SIM" or skip account filtering here
+
+                    if (!IsReentryAllowed(signal, result, (decimal)price, isFairPrice, isVolumeExpansion))
+                        continue;
+
+                    _router.Route(signal, (decimal)result.Price, (decimal)result.ATR15m, result);
+
+                    if (signal.NotifyThroughTelegram)
                     {
-                        if (signal.Direction == SignalDirection.None)
-                            continue;
+                        var newTrades = _positionManager.GetAllPositions()
+                            .Where(t => t.StrategyName == signal.StrategyName &&
+                                        !t.EntryAlertSent &&
+                                        !t.Closed);
 
-                        bool isFairPrice = signal.Direction == SignalDirection.Long ?
-                            _fairPriceEngine.IsFairLongEntry((decimal)price, result.VWAP, result.ATR) :
-                            _fairPriceEngine.IsFairShortEntry((decimal)price, result.VWAP, result.ATR);
-
-                        bool isVolumeExpansion = _volumeEngine.IsVolumeExpansion();
-
-                        if (!IsReentryAllowed(signal, result, (decimal)price, isFairPrice, isVolumeExpansion, acc.Config.AccountId))
-                            continue;
-
-                        _propOrchestrator.ProcessSignal(signal, (decimal)result.Price, (decimal)result.ATR15m, result);
-
-                        if (signal.NotifyThroughTelegram)
+                        foreach (var trade in newTrades)
                         {
-                            var newTrades = _positionManager.GetAllPositions()
-                                .Where(t => t.StrategyName == signal.StrategyName &&
-                                            t.AccountId == acc.Config.AccountId &&
-                                            !t.EntryAlertSent &&
-                                            !t.Closed);
+                            var acc = _accounts.FirstOrDefault(x => x.Config.AccountId == trade.AccountId);
 
-                            foreach (var trade in newTrades)
+                            if (acc != null)
                             {
                                 await _alerts.SendEntryAsync(
                                     trade,
                                     acc.State.CurrentEquity,
                                     acc.State.DailyDrawdownPct,
                                     acc.State.OverallDrawdownPct);
-
-                                trade.EntryAlertSent = true;
                             }
-                            //_logger.LogInformation("STRATEGY SIGNAL | Account {Account} Strategy {Strategy} Direction {Direction}", acc.Config.AccountId, signal.StrategyName, signal.Direction);
+
+                            trade.EntryAlertSent = true;
                         }
                     }
                 }
                 _positionManager.Update((decimal)price);
-                await _propOrchestrator.UpdateEquity((decimal)price);
+                CheckAndResetDailyHighWaterMark();
+                //UpdateLiveEquityAndDrawdown((decimal)price);
+                _equityEngine.UpdateAll((decimal)price);
 
                 _recorder.Record(result);
                 _logger.LogInformation("FLOW | P {Price:F2} Raw {RawScore:F2} Adj {AdjScore:F2} | " + "FS {Fast:F2} MS {Medium:F2} SS {Slow:F2}" +
@@ -463,11 +512,11 @@ namespace KinetixFlowEngine.Core
             }
         }
 
-        private bool IsReentryAllowed(StrategySignal signal, KinetixEngineResult r, decimal price, bool isFairPrice, bool isVolumeExpansion, string accountId)
+        private bool IsReentryAllowed(StrategySignal signal, KinetixEngineResult r, decimal price, bool isFairPrice, bool isVolumeExpansion)
         {
             //Naveen need to make it account wise
             // No previous trade → allow
-            var last = _tradeMemory.Get(signal.StrategyName, accountId);
+            var last = _tradeMemory.Get(signal.StrategyName);
             if (last == null)
                 return true;
 
@@ -494,6 +543,136 @@ namespace KinetixFlowEngine.Core
                 return true;
 
             return false;
+        }
+
+        private void UpdateLiveEquityAndDrawdown(decimal currentPrice)
+        {
+            var activeTrades = _positionManager.GetAllPositions();   // or .GetAllActiveTrades() if you rename later
+
+            var tradesByAccount = activeTrades
+                .GroupBy(t => t.AccountId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            bool shouldPersist = (++_drawdownCheckCounter % DRAW_DOWN_PERSIST_EVERY_N_CYCLES) == 0;
+
+            foreach (var runtime in _accounts.Where(a => a.Config.Enabled))
+            {
+                string accId = runtime.Config.AccountId;
+                var state = runtime.State;   // already loaded & attached
+
+                if (!tradesByAccount.TryGetValue(accId, out var trades) || trades.Count == 0)
+                {
+                    // still update HWM if equity somehow increased (very rare)
+                    if (state.CurrentEquity > state.HighWaterMarkDaily)
+                        state.HighWaterMarkDaily = state.CurrentEquity;
+
+                    if (state.CurrentEquity > state.HighWaterMarkOverall)
+                        state.HighWaterMarkOverall = state.CurrentEquity;
+
+                    continue;
+                }
+
+                decimal unrealized = trades.Sum(t =>
+                {
+                    if (t.Direction == SignalDirection.Long)
+                        return (currentPrice - t.EntryPrice) * t.RemainingSize;
+                    if (t.Direction == SignalDirection.Short)
+                        return (t.EntryPrice - currentPrice) * t.RemainingSize;
+                    return 0m;
+                });
+
+                decimal newEquity = state.CurrentEquity + unrealized;
+
+                // ------------------------------
+                // ✅ HWM MUST USE REALIZED ONLY
+                // ------------------------------
+                if (state.CurrentEquity > state.HighWaterMarkDaily)
+                    state.HighWaterMarkDaily = state.CurrentEquity;
+
+                if (state.CurrentEquity > state.HighWaterMarkOverall)
+                    state.HighWaterMarkOverall = state.CurrentEquity;
+
+                // Drawdown in percent
+                decimal dailyDD = state.HighWaterMarkDaily > 0 ? (state.HighWaterMarkDaily - newEquity) / state.HighWaterMarkDaily * 100m : 0m;
+                decimal overallDD = state.HighWaterMarkOverall > 0 ? (state.HighWaterMarkOverall - newEquity) / state.HighWaterMarkOverall * 100m : 0m;
+
+                state.DailyDrawdownPct = Math.Max(0, dailyDD);
+                state.OverallDrawdownPct = Math.Max(0, overallDD);
+
+                // ── Prop firm protection ───────────────────────────────────────
+                const decimal DAILY_LIMIT = 4.8m;   // slightly below 5%
+                const decimal MAX_LIMIT = 9.8m;   // slightly below 10%/12% depending on firm
+
+                if (state.DailyDrawdownPct > DAILY_LIMIT || state.OverallDrawdownPct > MAX_LIMIT)
+                {
+                    if (!state.IsPaused)
+                    {
+                        state.IsPaused = true;
+                        _logger.LogWarning("ACCOUNT PAUSED | {Account} | Daily DD {Daily:F2}% | Overall DD {Overall:F2}% | Equity {Equity:N2}",
+                            accId, state.DailyDrawdownPct, state.OverallDrawdownPct, newEquity);
+
+                        // Optional: emergency notification
+                        _ = _alerts.SendNearDdWarningAsync(accId, state.DailyDrawdownPct, state.OverallDrawdownPct);
+                    }
+                }
+
+                runtime.State = state;   // just in case — usually reference is enough
+
+                if (shouldPersist)
+                {
+                    _accountStatePersistence.Update(accId, state);
+                }
+            }
+
+            if (shouldPersist)
+            {
+                _drawdownCheckCounter = 0;   // optional - reset or keep rolling
+            }
+        }
+
+        private void CheckAndResetDailyHighWaterMark()
+        {
+            var now = DateTime.UtcNow;
+            var today = now.Date;
+
+            if (_lastDailyResetUtc >= today) return;
+
+            _logger.LogInformation("Performing daily HWM reset — previous reset was {Previous}", _lastDailyResetUtc);
+
+            foreach (var runtime in _accounts.Where(a => a.Config.Enabled))
+            {
+                var state = runtime.State;
+
+                // Most conservative: reset to current marked-to-market equity
+                state.HighWaterMarkDaily = state.CurrentEquity;
+                state.DailyDrawdownPct = 0m;
+                state.LastDailyResetUtc = today;
+
+                _accountStatePersistence.Update(runtime.Config.AccountId, state);
+
+                _logger.LogInformation("Daily reset | {Account} | New Daily HWM = {HWM:N2}", runtime.Config.AccountId, state.HighWaterMarkDaily);
+            }
+
+            _lastDailyResetUtc = today;
+        }
+
+        // Small helper — avoid code duplication
+        private decimal GetUnrealizedForAccount(string accountId)
+        {
+            var trades = _positionManager.GetAllPositions()
+                .Where(t => t.AccountId == accountId && !t.Closed)
+                .ToList();
+
+            if (trades.Count == 0) return 0m;
+
+            if (_currentMarketPrice <= 0) return 0m;
+
+            return trades.Sum(t =>
+            {
+                if (t.Direction == SignalDirection.Long) return (_currentMarketPrice - t.EntryPrice) * t.RemainingSize;
+                if (t.Direction == SignalDirection.Short) return (t.EntryPrice - _currentMarketPrice) * t.RemainingSize;
+                return 0m;
+            });
         }
     }
 }

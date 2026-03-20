@@ -44,5 +44,6 @@ namespace KinetixFlowEngine.Core.Trading
         public double EntryPriceTrend { get; set; }
         public double EntryScoreTrend { get; set; }
         public bool EntryAlertSent { get; set; }
+        public string OrderId { get; set; } = string.Empty;
     }
 }

@@ -18,6 +18,8 @@
         public bool StopAlertSent { get; set; }
         public DateTime LastTradeDate { get; set; } = DateTime.MinValue;
         public DateTime LastDailyResetUtc { get; set; } = DateTime.MinValue;
+        public decimal DayStartEquity { get; set; }
+
         public void Initialize(decimal startingCapital)
         {
             CurrentEquity = startingCapital;

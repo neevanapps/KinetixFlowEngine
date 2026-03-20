@@ -29,5 +29,6 @@
         public decimal TrailingStopAtr { get; set; } = 1;
 
         public bool VolumeBased { get; set; }
+        public List<string> AccountIds { get; set; } = new List<string>();
     }
 }

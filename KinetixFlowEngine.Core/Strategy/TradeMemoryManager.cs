@@ -52,23 +52,23 @@ namespace KinetixFlowEngine.Core.Strategy
         // ✅ Called on trade close
         public void Record(string accountId, TradeMemory trade)
         {
-            var key = GetKey(trade.StrategyName, accountId);
+            var key = GetKey(trade.StrategyName);
             _memory[key] = trade;
             Save();
         }
 
-        public TradeMemory? Get(string strategy, string accountId)
+        public TradeMemory? Get(string strategy)
         {
-            _memory.TryGetValue(GetKey(strategy, accountId), out var value);
+            _memory.TryGetValue(GetKey(strategy), out var value);
             return value;
         }
 
-        private static string GetKey(string strategy, string accountId) => $"{accountId}::{strategy}";
+        private static string GetKey(string strategy) => $"{strategy}";
 
         // ✅ Entry gate
-        public bool IsBlocked(string strategy, string accountId, SignalDirection direction)
+        public bool IsBlocked(string strategy, SignalDirection direction)
         {
-            var key = GetKey(strategy, accountId);
+            var key = GetKey(strategy);
 
             if (!_memory.TryGetValue(key, out var last))
                 return false;

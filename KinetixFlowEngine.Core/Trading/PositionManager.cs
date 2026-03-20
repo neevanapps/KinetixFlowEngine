@@ -1,4 +1,5 @@
 ﻿using KinetixFlowEngine.Core.Engine;
+using KinetixFlowEngine.Core.Execution;
 using KinetixFlowEngine.Core.Flow.State;
 using KinetixFlowEngine.Core.Strategy;
 using System.Diagnostics;
@@ -14,6 +15,8 @@ namespace KinetixFlowEngine.Core.Trading
         public event Action<ActiveTrade, decimal>? TradeClosed;
         private DateTime _lastSave = DateTime.MinValue;
         private readonly Dictionary<string, ActiveTrade> _activeTrades = new();
+        public event Action<ActiveTrade>? PartialCloseRequested;
+        public event Action<ActiveTrade>? StopLossUpdateRequested;
         private static string GetKey(string strategy, string accountId)
     => $"{accountId}::{strategy}";
 
@@ -39,7 +42,7 @@ namespace KinetixFlowEngine.Core.Trading
             return _activeTrades.Values;
         }
 
-        public void TryEnterTrade(StrategySignal signal, decimal price, double atr, KinetixEngineResult r, decimal size, string accountId)
+        public void TryEnterTrade(StrategySignal signal, decimal price, double atr, KinetixEngineResult r, decimal size, string accountId,    string orderId)
         {
             var key = GetKey(signal.StrategyName, accountId);
             if (_activeTrades.ContainsKey(key))
@@ -82,6 +85,7 @@ namespace KinetixFlowEngine.Core.Trading
                 Closed = false,
                 EntryPriceTrend = (double)r.PriceTrend,
                 EntryScoreTrend = (double)r.ScoreTrend,
+                OrderId = orderId
             };
 
             _activeTrades[key] = trade;
@@ -114,18 +118,25 @@ namespace KinetixFlowEngine.Core.Trading
                     if (hit)
                     {
                         trade.Target1Hit = true;
-                        trade.RemainingSize *= 0.3m;
+
+                        var reduceQty = trade.InitialSize * 0.7m;
+                        trade.RemainingSize = trade.InitialSize * 0.3m;
+
+                        // 🔥 EVENT instead of direct execution
+                        PartialCloseRequested?.Invoke(trade);
 
                         if (!trade.MovedToBreakeven)
                         {
-                            decimal buffer = trade.EntryPrice * 0.0002m; // ~0.02% buffer (optional)
+                            decimal buffer = trade.EntryPrice * 0.0002m;
 
-                            if (trade.Direction == SignalDirection.Long)
-                                trade.StopLoss = trade.EntryPrice + buffer;
-                            else
-                                trade.StopLoss = trade.EntryPrice - buffer;
+                            trade.StopLoss = trade.Direction == SignalDirection.Long
+                                ? trade.EntryPrice + buffer
+                                : trade.EntryPrice - buffer;
 
                             trade.MovedToBreakeven = true;
+
+                            // 🔥 EVENT instead of executor call
+                            StopLossUpdateRequested?.Invoke(trade);
                         }
 
                         Target1Reached?.Invoke(trade);
@@ -212,6 +223,33 @@ namespace KinetixFlowEngine.Core.Trading
                 var key = GetKey(trade.StrategyName, trade.AccountId);
                 _activeTrades[key] = trade;
             }
+        }
+
+        public void RestoreFromExchange(ExchangePosition ex)
+        {
+            var trade = new ActiveTrade
+            {
+                OrderId = ex.OrderId,
+                EntryPrice = ex.EntryPrice,
+                InitialSize = ex.Quantity,
+                RemainingSize = ex.Quantity,
+                AccountId = ex.AccountId,
+                StrategyName = "Recovered",
+                Direction = SignalDirection.Long, // temporary
+                EntryTimeMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                Closed = false,
+                MaxPrice = ex.EntryPrice,
+                MinPrice = ex.EntryPrice
+            };
+
+            var key = GetKey(trade.StrategyName + "_" + trade.OrderId, trade.AccountId);
+            _activeTrades[key] = trade;
+
+        }
+
+        public void ForceClose(ActiveTrade trade)
+        {
+            trade.Closed = true;
         }
 
         private void AddRestoredTrade(ActiveTrade trade)

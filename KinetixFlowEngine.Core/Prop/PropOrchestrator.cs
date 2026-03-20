@@ -40,9 +40,9 @@ namespace KinetixFlowEngine.Core.Prop
                 var unrealized = PropPnLCalculator.CalculateUnrealizedPnL(trades, currentPrice);
                 var equity = acc.State.CurrentEquity + unrealized;
                 // ---------- DAILY RESET ----------
-                acc.Guard.ApplyDailyReset(acc.State, equity, DateTime.UtcNow);
-                // ---------- EQUITY UPDATE ----------
-                acc.Guard.UpdateEquity(acc.State, equity);
+                //acc.Guard.ApplyDailyReset(acc.State, equity, DateTime.UtcNow);
+                //// ---------- EQUITY UPDATE ----------
+                //acc.Guard.UpdateEquity(acc.State, equity);
 
                 _statePersistence.Update(acc.Config.AccountId, acc.State);
 
@@ -119,7 +119,7 @@ namespace KinetixFlowEngine.Core.Prop
                 if (size * price > maxNotional)
                     size = maxNotional / price;
 
-                var guard = acc.Guard.EvaluateEntry(acc.Config, acc.State, price, stopLoss, size);
+                var guard = acc.Guard.EvaluateEntry(acc.Config, acc.State);
 
                 if (!guard.Allowed)
                     continue;
@@ -152,7 +152,8 @@ namespace KinetixFlowEngine.Core.Prop
                     (double)atr,
                     r,
                     result.FilledQuantity,
-                    acc.Config.AccountId);
+                    acc.Config.AccountId,
+                    result.OrderId);
             }
         }
     }

@@ -4,6 +4,7 @@ using KinetixFlowEngine.Core.Config;
 using KinetixFlowEngine.Core.Context;
 using KinetixFlowEngine.Core.Data;
 using KinetixFlowEngine.Core.Engine;
+using KinetixFlowEngine.Core.Execution;
 using KinetixFlowEngine.Core.Flow;
 using KinetixFlowEngine.Core.Flow.Probability;
 using KinetixFlowEngine.Core.Flow.State;
@@ -68,7 +69,9 @@ namespace KinetixFlowEngine.Core
                     var factory = sp.GetRequiredService<PropAccountRuntimeFactory>();
                     return factory.GetAccounts();
                 });
+                builder.Services.AddSingleton<BybitClientFactory>();
 
+                builder.Services.AddSingleton<ExecutionSyncService>();
                 builder.Services.AddSingleton<ScoreNormalizer>();
                 builder.Services.AddSingleton<VelocityNormalizer>();
                 builder.Services.AddSingleton<ImbalanceNormalizer>();
@@ -133,7 +136,13 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<PropAccountStatePersistence>();
                 builder.Services.AddHostedService<Worker>();
                 builder.Services.AddSingleton<ITradeExecutor, SimulatedExecutor>();
-                builder.Services.AddSingleton<StrategyConfigLoader>();
+                builder.Services.AddSingleton<ITradeExecutor, BybitExecutor>();
+                builder.Services.AddSingleton<IExecutionRouter, ExecutionRouter>();
+                builder.Services.AddSingleton<ISimExecutionPipeline, SimExecutionPipeline>();
+                builder.Services.AddSingleton<IAccountExecutionPipeline, AccountExecutionPipeline>();
+                builder.Services.AddSingleton<IEquityEngine, EquityEngine>();
+                builder.Services.AddSingleton<IPositionSizer, PropPositionSizer>();
+                builder.Services.AddSingleton<AccountStateEngine>();
                 // Configure Windows Service lifetime using options because 'Host' is not available on HostApplicationBuilder.
                 builder.Services.AddWindowsService(options =>
                 {

@@ -36,5 +36,6 @@ namespace KinetixFlowEngine.Core.Trading
         public bool MovedToBreakeven { get; set; } // ✅ ADD
         public decimal RemainingSize { get; set; } // ✅ ADD
         public decimal TrailingStop { get; set; }  // ✅ ADD
+        public string OrderId { get; set; } = string.Empty;
     }
 }

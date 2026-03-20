@@ -1,4 +1,5 @@
-﻿using KinetixFlowEngine.Core.Strategy;
+﻿using KinetixFlowEngine.Core.Execution;
+using KinetixFlowEngine.Core.Strategy;
 using System;
 
 namespace KinetixFlowEngine.Core.Trading
@@ -6,6 +7,8 @@ namespace KinetixFlowEngine.Core.Trading
     public interface ITradeExecutor
     {
         Task<ExecutionResult> ExecuteAsync(ExecutionRequest request);
+        Task<bool> ReducePositionAsync(ExecutionRequest executionRequest, decimal reduceQty);
+        Task UpdateStopLossAsync(ExecutionRequest executionRequest, decimal stopLoss);
     }
 
     public class SimulatedExecutor : ITradeExecutor
@@ -28,8 +31,29 @@ namespace KinetixFlowEngine.Core.Trading
             {
                 Success = true,
                 FilledPrice = filledPrice,
-                FilledQuantity = request.Quantity
+                FilledQuantity = request.Quantity,
+                OrderId = Guid.NewGuid().ToString()
             };
+        }
+        // -----------------------------
+        // PARTIAL CLOSE (SIMULATION)
+        // -----------------------------
+        public async Task<bool> ReducePositionAsync(ExecutionRequest request, decimal reduceQty)
+        {
+            await Task.Delay(_rand.Next(20, 80));
+
+            // No real exchange → just assume success
+            return true;
+        }
+
+        // -----------------------------
+        // STOP LOSS UPDATE (SIMULATION)
+        // -----------------------------
+        public async Task UpdateStopLossAsync(ExecutionRequest request, decimal stopLoss)
+        {
+            await Task.Delay(_rand.Next(20, 80));
+
+            // No-op in simulation
         }
     }
 }

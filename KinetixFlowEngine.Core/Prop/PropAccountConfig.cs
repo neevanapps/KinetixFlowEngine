@@ -6,7 +6,11 @@
         ChallengePhase2,
         Funding
     }
-
+    public enum DailyDdMode
+    {
+        FromStartOfDay = 0,
+        FromHighWatermark = 1
+    }
     public class PropAccountConfig
     {
         public string AccountId { get; set; } = default!;
@@ -23,5 +27,7 @@
         public decimal ProfitSharePercentage { get; set; } = 0m;
 
         public bool Enabled { get; set; } = true;
+
+        public DailyDdMode DailyDdMode { get; set; } = DailyDdMode.FromHighWatermark;
     }
 }

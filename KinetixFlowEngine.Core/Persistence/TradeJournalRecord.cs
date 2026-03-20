@@ -2,6 +2,7 @@
 
 public class TradeJournalRecord
 {
+    public string TradeId { get; set; }
     public DateTime Timestamp { get; set; }
     public string Strategy { get; set; } = default!;
     public SignalDirection Direction { get; set; }

@@ -30,7 +30,8 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
                     Confidence = r.ScoreZ,
                     EnterOnlyAtFairPrice = _config.EnterOnlyAtFairPrice,
                     NotifyThroughTelegram = _config.NotifyThroughTelegram,
-                    IsVolumeBased = _config.VolumeBased
+                    IsVolumeBased = _config.VolumeBased,
+                    TargetAccountIds = _config.AccountIds
                 };
             }
 
@@ -43,7 +44,8 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
                     Confidence = r.ScoreZ,
                     EnterOnlyAtFairPrice = _config.EnterOnlyAtFairPrice,
                     NotifyThroughTelegram = _config.NotifyThroughTelegram,
-                    IsVolumeBased = _config.VolumeBased
+                    IsVolumeBased = _config.VolumeBased,
+                    TargetAccountIds = _config.AccountIds
                 };
             }
 

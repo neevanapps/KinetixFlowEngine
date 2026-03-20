@@ -13,7 +13,8 @@
     "Target2SizePercent": 50,
     "StopLossAtr": 1,
     "TrailingStopAtr": 1,
-    "VolumeBased": false
+    "VolumeBased": false,
+    "AccountIds": []
   },
   {
     "StrategyName": "ProbVolume",
@@ -29,7 +30,8 @@
     "Target2SizePercent": 50,
     "StopLossAtr": 1,
     "TrailingStopAtr": 1,
-    "VolumeBased": true
+    "VolumeBased": true,
+    "AccountIds": []
   },
   {
     "StrategyName": "ProbPrice",
@@ -45,7 +47,8 @@
     "Target2SizePercent": 50,
     "StopLossAtr": 1,
     "TrailingStopAtr": 1,
-    "VolumeBased": false
+    "VolumeBased": false,
+    "AccountIds": []
   },
   {
     "StrategyName": "Score",
@@ -61,7 +64,8 @@
     "Target2SizePercent": 50,
     "StopLossAtr": 1,
     "TrailingStopAtr": 1,
-    "VolumeBased": false
+    "VolumeBased": false,
+    "AccountIds": [ "Demo10k" ]
   },
   {
     "StrategyName": "ScoreVolume",
@@ -77,7 +81,8 @@
     "Target2SizePercent": 50,
     "StopLossAtr": 1,
     "TrailingStopAtr": 1,
-    "VolumeBased": true
+    "VolumeBased": true,
+    "AccountIds": []
   },
   {
     "StrategyName": "ScorePrice",
@@ -93,6 +98,7 @@
     "Target2SizePercent": 50,
     "StopLossAtr": 1,
     "TrailingStopAtr": 1,
-    "VolumeBased": false
+    "VolumeBased": false,
+    "AccountIds": []
   }
 ]

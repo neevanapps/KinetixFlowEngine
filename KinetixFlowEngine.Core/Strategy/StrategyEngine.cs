@@ -10,11 +10,13 @@ namespace KinetixFlowEngine.Core.Strategy
         private readonly List<IKinetixStrategy> _strategies;
         private readonly FairPriceEngine _fairPriceEngine;
         private readonly VolumeEngine _volumeEngine;
-        public StrategyEngine(IEnumerable<IKinetixStrategy> strategies, FairPriceEngine fairPriceEngine, VolumeEngine volumeEngine)
+        private readonly StrategyConfigLoader _strategyConfigLoader;
+        public StrategyEngine(IEnumerable<IKinetixStrategy> strategies, FairPriceEngine fairPriceEngine, VolumeEngine volumeEngine, StrategyConfigLoader strategyConfigLoader)
         {
             _strategies = strategies.ToList();
             _fairPriceEngine = fairPriceEngine;
             _volumeEngine = volumeEngine;
+            _strategyConfigLoader = strategyConfigLoader;
         }
 
         public List<StrategySignal> Evaluate(KinetixEngineResult result)
@@ -25,29 +27,30 @@ namespace KinetixFlowEngine.Core.Strategy
             {
                 var signal = strategy.EvaluateEntry(result);
 
-                if (signal.IsVolumeBased)
-                    if (!_volumeEngine.IsVolumeExpansion())
-                        continue;
+                if (signal.Direction == SignalDirection.None)
+                    continue;
 
-                if (signal.Direction != SignalDirection.None)
+                // Volume check
+                if (signal.IsVolumeBased && !_volumeEngine.IsVolumeExpansion())
+                    continue;
+
+                // Fair price check
+                if (signal.EnterOnlyAtFairPrice)
                 {
-                    if (signal.EnterOnlyAtFairPrice)
-                    {
-                        var price = (decimal)result.Price;
+                    var price = (decimal)result.Price;
+                    bool approved = signal.Direction == SignalDirection.Long
+                        ? _fairPriceEngine.IsFairLongEntry(price, result.VWAP, result.ATR)
+                        : _fairPriceEngine.IsFairShortEntry(price, result.VWAP, result.ATR);
 
-                        bool approved =
-                            signal.Direction == SignalDirection.Long
-                                ? _fairPriceEngine.IsFairLongEntry(price, result.VWAP, result.ATR)
-                                : _fairPriceEngine.IsFairShortEntry(price, result.VWAP, result.ATR);
-
-                        signal.FairPriceApproved = approved;
-
-                        if (!approved)
-                            continue;
-                    }
-
-                    signals.Add(signal);
+                    signal.FairPriceApproved = approved;
+                    if (!approved) continue;
                 }
+
+                // NEW: Attach target accounts from config
+                var config = _strategyConfigLoader.Get(strategy.Name);
+                signal.TargetAccountIds = config.AccountIds ?? new List<string>();
+
+                signals.Add(signal);
             }
 
             return signals;

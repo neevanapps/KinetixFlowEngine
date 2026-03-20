@@ -20,5 +20,24 @@
 
         public bool ExitSignal { get; set; }
         public decimal RiskPercent { get; set; } = 0.01m; // default 1%
+        public List<string> TargetAccountIds { get; set; } = new List<string>();
+
+        public StrategySignal Clone()
+        {
+            return new StrategySignal
+            {
+                StrategyName = StrategyName,
+                Direction = Direction,
+                Confidence = Confidence,
+                EnterOnlyAtFairPrice = EnterOnlyAtFairPrice,
+                NotifyThroughTelegram = NotifyThroughTelegram,
+                SuggestedEntryPrice = SuggestedEntryPrice,
+                FairPriceApproved = FairPriceApproved,
+                IsVolumeBased = IsVolumeBased,
+                ExitSignal = ExitSignal,
+                RiskPercent = RiskPercent,
+                TargetAccountIds = new List<string>(TargetAccountIds)
+            };
+        }
     }
 }
