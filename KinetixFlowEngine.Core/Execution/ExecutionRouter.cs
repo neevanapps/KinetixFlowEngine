@@ -39,12 +39,9 @@ namespace KinetixFlowEngine.Core.Execution
                 return;
             }
 
-            // ✅ SIM mode
-            if (cfg.AccountIds == null || cfg.AccountIds.Count == 0)
-            {
-                _simPipeline.Execute(signal, price, atr, context);
-                return;
-            }
+            //Simulation should work as its whether account is mapped ot not. It can help test the strategy logic without worrying about account mapping.
+            _simPipeline.Execute(signal, price, atr, context);
+
 
             // ✅ PROP routing
             foreach (var accId in cfg.AccountIds)

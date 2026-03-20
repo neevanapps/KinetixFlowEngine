@@ -1,5 +1,6 @@
 ﻿using KinetixFlowEngine.Core.Prop;
 using KinetixFlowEngine.Core.Trading;
+using KinetixFlowEngine.Core.Utils;
 
 namespace KinetixFlowEngine.Core.Execution
 {
@@ -10,13 +11,14 @@ namespace KinetixFlowEngine.Core.Execution
         private readonly BybitClientFactory _factory;
         private readonly List<AccountRuntime> _accounts;
         private readonly Dictionary<string, List<ExchangePosition>> _lastSnapshot = new();
-
-        public ExecutionSyncService(PositionManager positions, ILogger<ExecutionSyncService> logger, BybitClientFactory factory, List<AccountRuntime> accounts)
+        private readonly TelegramService _telegramService;
+        public ExecutionSyncService(PositionManager positions, ILogger<ExecutionSyncService> logger, BybitClientFactory factory, List<AccountRuntime> accounts, TelegramService telegramService)
         {
             _positions = positions;
             _logger = logger;
             _factory = factory;
             _accounts = accounts;
+            _telegramService = telegramService;
         }
 
         public async Task SyncAsync()
@@ -81,6 +83,8 @@ namespace KinetixFlowEngine.Core.Execution
                         if (local == null)
                         {
                             _logger.LogWarning("Recovered missing trade {OrderId}", ex.OrderId);
+                            // Await the Task returned by SendMessageAsync instead of calling .Wait()
+                            await _telegramService.SendMessageAsync($"Strange: Recovered missing trade {ex.OrderId} on account {accountId}");
                             _positions.RestoreFromExchange(ex);
                         }
                     }

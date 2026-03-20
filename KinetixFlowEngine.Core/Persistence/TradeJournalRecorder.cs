@@ -21,7 +21,7 @@ namespace KinetixFlowEngine.Core.Persistence
         private void WriteHeader()
         {
             var header =
-                "timestamp,strategy,direction,entry,exit,stop,target1,size,duration_sec,pnl_usd,gross_pnl_usd,fee_usd,pnl_r,mfe,mae,score_z,velocity_z,imbalance_z,compression_z,atr,er,flow_state";
+                "timestamp,strategy,direction,entry,exit,stop,target1,target1hit,size,duration_sec,pnl_usd,gross_pnl_usd,fee_usd,pnl_r,mfe,mae,score_z,velocity_z,imbalance_z,compression_z,atr,er,flow_state";
 
             File.WriteAllText(_filePath, header + Environment.NewLine);
         }
@@ -37,7 +37,7 @@ namespace KinetixFlowEngine.Core.Persistence
                 r.ExitPrice.ToString(CultureInfo.InvariantCulture),
                 r.StopLoss.ToString(CultureInfo.InvariantCulture),
                 r.Target1.ToString(CultureInfo.InvariantCulture),
-
+                r.Target1Hit ? "1" : "0",
                 r.Size.ToString(CultureInfo.InvariantCulture),                // ✅ NEW
 
                 r.DurationSeconds.ToString(CultureInfo.InvariantCulture),

@@ -204,6 +204,9 @@ namespace KinetixFlowEngine.Core
                     ? (entry - trade.MinPrice) * trade.InitialSize
                     : (trade.MaxPrice - entry) * trade.InitialSize;
 
+                if (trade.AccountId != null && trade.AccountId.Count() > 0)
+                    return;
+
                 _tradeJournal.Record(new TradeJournalRecord
                 {
                     Timestamp = DateTime.UtcNow,
@@ -469,8 +472,6 @@ namespace KinetixFlowEngine.Core
                     }
                 }
                 _positionManager.Update((decimal)price);
-                CheckAndResetDailyHighWaterMark();
-                //UpdateLiveEquityAndDrawdown((decimal)price);
                 _equityEngine.UpdateAll((decimal)price);
 
                 _recorder.Record(result);
@@ -482,6 +483,10 @@ namespace KinetixFlowEngine.Core
 
                 if ((DateTime.UtcNow - _lastSnapshot).TotalSeconds > 60)
                 {
+                    foreach (var item in _accounts)
+                    {
+                        _accountStatePersistence.Update(item.Config.AccountId, item.State);
+                    }
                     _marketStateManager.Save(new MarketStateSnapshot
                     {
                         Timestamp = DateTime.UtcNow,
@@ -545,30 +550,5 @@ namespace KinetixFlowEngine.Core
             return false;
         }
 
-        private void CheckAndResetDailyHighWaterMark()
-        {
-            var now = DateTime.UtcNow;
-            var today = now.Date;
-
-            if (_lastDailyResetUtc >= today) return;
-
-            _logger.LogInformation("Performing daily HWM reset — previous reset was {Previous}", _lastDailyResetUtc);
-
-            foreach (var runtime in _accounts.Where(a => a.Config.Enabled))
-            {
-                var state = runtime.State;
-
-                // Most conservative: reset to current marked-to-market equity
-                state.HighWaterMarkDaily = state.CurrentEquity;
-                state.DailyDrawdownPct = 0m;
-                state.LastDailyResetUtc = today;
-
-                _accountStatePersistence.Update(runtime.Config.AccountId, state);
-
-                _logger.LogInformation("Daily reset | {Account} | New Daily HWM = {HWM:N2}", runtime.Config.AccountId, state.HighWaterMarkDaily);
-            }
-
-            _lastDailyResetUtc = today;
-        }
     }
 }

@@ -11,7 +11,7 @@ public class TradeJournalRecord
     public decimal ExitPrice { get; set; }
     public decimal StopLoss { get; set; }
     public decimal Target1 { get; set; }
-
+    public bool Target1Hit { get; set; }
     public decimal Size { get; set; }            // ✅ NEW
 
     public double DurationSeconds { get; set; }

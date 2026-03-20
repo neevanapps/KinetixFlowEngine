@@ -17,13 +17,18 @@ namespace KinetixFlowEngine.Core.Trading
         private readonly Dictionary<string, ActiveTrade> _activeTrades = new();
         public event Action<ActiveTrade>? PartialCloseRequested;
         public event Action<ActiveTrade>? StopLossUpdateRequested;
+        private readonly StrategyConfigLoader _strategyConfigLoader;
+        private readonly ILogger<PositionManager> _logger;
+
         private static string GetKey(string strategy, string accountId)
     => $"{accountId}::{strategy}";
 
-        public PositionManager(PositionPersistence persistence)
+        public PositionManager(PositionPersistence persistence, StrategyConfigLoader strategyConfigLoader, ILogger<PositionManager> logger)
         {
             _persistence = persistence;
             _activeTrades = new Dictionary<string, ActiveTrade>();
+            _strategyConfigLoader = strategyConfigLoader;
+            _logger = logger;
         }
 
         public bool HasPosition(string strategy, string accountId)
@@ -42,7 +47,7 @@ namespace KinetixFlowEngine.Core.Trading
             return _activeTrades.Values;
         }
 
-        public void TryEnterTrade(StrategySignal signal, decimal price, double atr, KinetixEngineResult r, decimal size, string accountId,    string orderId)
+        public void TryEnterTrade(StrategySignal signal, decimal price, double atr, KinetixEngineResult r, decimal size, string accountId, string orderId)
         {
             var key = GetKey(signal.StrategyName, accountId);
             if (_activeTrades.ContainsKey(key))
@@ -119,8 +124,12 @@ namespace KinetixFlowEngine.Core.Trading
                     {
                         trade.Target1Hit = true;
 
-                        var reduceQty = trade.InitialSize * 0.7m;
-                        trade.RemainingSize = trade.InitialSize * 0.3m;
+                        //var reduceQty = trade.InitialSize * 0.7m;
+                        var config = _strategyConfigLoader.Get(trade.StrategyName);
+                        trade.RemainingSize = trade.InitialSize - (trade.InitialSize * config.Target1SizePercent / 100);
+
+                        _logger.LogInformation("NaveenImp: Trade {Strategy} on account {AccountId} hit Target 1. Remaining size: {RemainingSize}",
+                            trade.StrategyName, trade.AccountId, trade.RemainingSize);
 
                         // 🔥 EVENT instead of direct execution
                         PartialCloseRequested?.Invoke(trade);
@@ -227,6 +236,7 @@ namespace KinetixFlowEngine.Core.Trading
 
         public void RestoreFromExchange(ExchangePosition ex)
         {
+            //NaveenImp - need to make wayy to have strategy name when we dont have positions in json locally, but position open in bybit
             var trade = new ActiveTrade
             {
                 OrderId = ex.OrderId,

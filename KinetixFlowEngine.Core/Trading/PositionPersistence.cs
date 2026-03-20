@@ -36,7 +36,9 @@ namespace KinetixFlowEngine.Core.Trading
                 EntryFlowState = t.EntryFlowState.ToString(),
                 EntryPriceTrend = t.EntryPriceTrend,
                 EntryScoreTrend = t.EntryScoreTrend,
-                OrderId = t.OrderId
+                OrderId = t.OrderId,
+                RemainingSize = t.RemainingSize,
+                EntryAlertSent = t.EntryAlertSent
             }).ToList();
 
             var json = JsonSerializer.Serialize(data, new JsonSerializerOptions

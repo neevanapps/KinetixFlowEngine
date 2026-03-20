@@ -6,14 +6,13 @@ namespace KinetixFlowEngine.Core.Prop
 {
     public class AccountStateEngine
     {
+        
         public void UpdateState(
         PropAccountConfig config,
         PropAccountState state,
         decimal equity,
         DateTime nowUtc)
         {
-            state.CurrentEquity = equity;
-
             // -----------------------
             // DAILY RESET
             // -----------------------
