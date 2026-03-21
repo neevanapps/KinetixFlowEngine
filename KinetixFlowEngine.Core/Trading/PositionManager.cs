@@ -19,6 +19,7 @@ namespace KinetixFlowEngine.Core.Trading
         public event Action<ActiveTrade>? StopLossUpdateRequested;
         private readonly StrategyConfigLoader _strategyConfigLoader;
         private readonly ILogger<PositionManager> _logger;
+        public event Action<ActiveTrade>? FullCloseRequested;
 
         private static string GetKey(string strategy, string accountId)
     => $"{accountId}::{strategy}";
@@ -126,7 +127,8 @@ namespace KinetixFlowEngine.Core.Trading
 
                         //var reduceQty = trade.InitialSize * 0.7m;
                         var config = _strategyConfigLoader.Get(trade.StrategyName);
-                        trade.RemainingSize = trade.InitialSize - (trade.InitialSize * config.Target1SizePercent / 100);
+                        decimal sanitizedQty = Math.Round(trade.InitialSize - (trade.InitialSize * config.Target1SizePercent / 100), 3, MidpointRounding.ToZero);
+                        trade.RemainingSize =sanitizedQty;
 
                         _logger.LogInformation("NaveenImp: Trade {Strategy} on account {AccountId} hit Target 1. Remaining size: {RemainingSize}",
                             trade.StrategyName, trade.AccountId, trade.RemainingSize);
@@ -176,9 +178,12 @@ namespace KinetixFlowEngine.Core.Trading
             if (trade.Closed)
                 return;
 
-            trade.Closed = true;
             trade.ExitReason = reason;
 
+            // 🔥 NEW: trigger execution BEFORE removal
+            FullCloseRequested?.Invoke(trade);
+
+            trade.Closed = true;
             _activeTrades.Remove(key);
 
             SaveThrottled();
@@ -257,15 +262,5 @@ namespace KinetixFlowEngine.Core.Trading
 
         }
 
-        public void ForceClose(ActiveTrade trade)
-        {
-            trade.Closed = true;
-        }
-
-        private void AddRestoredTrade(ActiveTrade trade)
-        {
-            var key = GetKey(trade.StrategyName, trade.AccountId);
-            _activeTrades[key] = trade;
-        }
     }
 }

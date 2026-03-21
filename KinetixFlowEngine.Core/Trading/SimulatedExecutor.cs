@@ -9,6 +9,7 @@ namespace KinetixFlowEngine.Core.Trading
         Task<ExecutionResult> ExecuteAsync(ExecutionRequest request);
         Task<bool> ReducePositionAsync(ExecutionRequest executionRequest, decimal reduceQty);
         Task UpdateStopLossAsync(ExecutionRequest executionRequest, decimal stopLoss);
+        Task ClosePositionAsync(ExecutionRequest request);
     }
 
     public class SimulatedExecutor : ITradeExecutor
@@ -50,6 +51,13 @@ namespace KinetixFlowEngine.Core.Trading
         // STOP LOSS UPDATE (SIMULATION)
         // -----------------------------
         public async Task UpdateStopLossAsync(ExecutionRequest request, decimal stopLoss)
+        {
+            await Task.Delay(_rand.Next(20, 80));
+
+            // No-op in simulation
+        }
+
+        public async Task ClosePositionAsync(ExecutionRequest request)
         {
             await Task.Delay(_rand.Next(20, 80));
 

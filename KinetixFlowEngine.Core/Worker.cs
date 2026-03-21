@@ -20,6 +20,7 @@ namespace KinetixFlowEngine.Core
     public class Worker : BackgroundService
     {
         private readonly TradeStreamClient _tradeStreamClient;
+        private readonly BybitDepthStreamClient _depthClient;
         private readonly FlowTradeBuffer _flowTradeBuffer;
         private readonly ILogger<Worker> _logger;
         private readonly KinetixEngineProcessor _engineProcessor;
@@ -77,7 +78,7 @@ namespace KinetixFlowEngine.Core
                     StrategyAggregator strategyAggregator, TelegramService telegram, IOptions<FlowEngineOptions> options, TradeJournalRecorder tradeJournal, ExceptionAlertAggregator exceptionAggregator,
                     ProbabilityTrendEngine probEngine, FlowAggregationWindow flowAggregationWindow, FlowMomentumRun momentumRun, TradeMemoryManager tradeMemory, VolumeEngine volumeEngine, FairPriceEngine fairPriceEngine,
                     List<AccountRuntime> accounts, PropAlertService alerts, PropAccountStatePersistence accountStatePersistence, PositionPersistence positionPersistence,
-                    StrategyConfigLoader strategyConfigLoader, IExecutionRouter executionRouter, IEquityEngine equityEngine, ExecutionSyncService executionSync, ITradeExecutor executor)
+                    StrategyConfigLoader strategyConfigLoader, IExecutionRouter executionRouter, IEquityEngine equityEngine, ExecutionSyncService executionSync, ITradeExecutor executor, BybitDepthStreamClient depthClient)
         {
             _logger = logger;
             _bootstrap = bootstrap;
@@ -117,6 +118,7 @@ namespace KinetixFlowEngine.Core
             _equityEngine = equityEngine;
             _executionSync = executionSync;
             _executor = executor;
+            _depthClient = depthClient;
 
             _tradeStreamClient.OnTrade += trade =>
             {
@@ -202,9 +204,6 @@ namespace KinetixFlowEngine.Core
                     ? (entry - trade.MinPrice) * trade.InitialSize
                     : (trade.MaxPrice - entry) * trade.InitialSize;
 
-                if (trade.AccountId != null && trade.AccountId.Count() > 0)
-                    return;
-
                 _tradeJournal.Record(new TradeJournalRecord
                 {
                     Timestamp = DateTime.UtcNow,
@@ -221,11 +220,11 @@ namespace KinetixFlowEngine.Core
                     FeeUsd = fee,
                     PnlR = pnlR,
                     MFE = trade.Direction == SignalDirection.Long
-                                    ? (trade.MaxPrice - trade.EntryPrice) * trade.InitialSize
-                                    : (trade.EntryPrice - trade.MinPrice) * trade.InitialSize,
+                     ? (trade.MaxPrice - trade.EntryPrice) * trade.InitialSize
+                     : (trade.EntryPrice - trade.MinPrice) * trade.InitialSize,
                     MAE = trade.Direction == SignalDirection.Long
-                                 ? (trade.EntryPrice - trade.MinPrice) * trade.InitialSize
-                                 : (trade.MaxPrice - trade.EntryPrice) * trade.InitialSize,
+                  ? (trade.EntryPrice - trade.MinPrice) * trade.InitialSize
+                  : (trade.MaxPrice - trade.EntryPrice) * trade.InitialSize,
                     ScoreZ = trade.EntryScoreZ,
                     VelocityZ = trade.EntryVelocityZ,
                     ImbalanceZ = trade.EntryImbalanceZ,
@@ -247,6 +246,24 @@ namespace KinetixFlowEngine.Core
                     ExitReason = trade.ExitReason,
                     ExitTime = DateTime.UtcNow
                 });
+
+                //Apply PnL to Equity
+                var account = _accounts.FirstOrDefault(x => x.Config.AccountId == trade.AccountId);
+                if (account != null)
+                {
+                    // 🔴 CRITICAL: apply once
+                    if (!trade.EquityApplied)
+                    {
+                        trade.EquityApplied = true;
+                        account.State.CurrentEquity += pnl;
+                        _accountStatePersistence.Update(account.Config.AccountId, account.State);
+                    }
+
+                    if (trade.NotifyThroughTelegram)
+                    {
+                        _alerts.SendExitAsync(trade, exitPrice, pnl, 0m, account.State.CurrentEquity, account.State.DailyDrawdownPct, account.State.OverallDrawdownPct);
+                    }
+                }
             };
 
             _positionManager.PartialCloseRequested += async trade =>
@@ -256,7 +273,7 @@ namespace KinetixFlowEngine.Core
 
                 var acc = _accounts.First(x => x.Config.AccountId == trade.AccountId);
 
-                var reduceQty = trade.InitialSize * 0.7m;
+                var reduceQty = trade.InitialSize - trade.RemainingSize;
 
                 await _executor.ReducePositionAsync(new ExecutionRequest
                 {
@@ -280,16 +297,33 @@ namespace KinetixFlowEngine.Core
                         AccountId = acc.Config.AccountId,
                         ApiKey = acc.Config.ApiKey,
                         ApiSecret = acc.Config.ApiSecret,
-                        Direction = trade.Direction
+                        Direction = trade.Direction,
+                        Quantity = trade.RemainingSize
                     },
                     trade.StopLoss);
+            };
+            _positionManager.FullCloseRequested += async trade =>
+            {
+                if (trade.AccountId == "SIM")
+                    return;
+
+                var acc = _accounts.First(x => x.Config.AccountId == trade.AccountId);
+
+                await _executor.ClosePositionAsync(new ExecutionRequest
+                {
+                    AccountId = acc.Config.AccountId,
+                    ApiKey = acc.Config.ApiKey,
+                    ApiSecret = acc.Config.ApiSecret,
+                    Direction = trade.Direction,
+                    Quantity = trade.RemainingSize
+                });
             };
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             await _bootstrap.InitializeAsync();
-
+            await _depthClient.StartAsync(stoppingToken);
             await _tradeStreamClient.StartAsync(stoppingToken);
 
             var persisted = _positionPersistence.Load();
@@ -410,14 +444,7 @@ namespace KinetixFlowEngine.Core
 
                             if (acc != null && trade.NotifyThroughTelegram)
                             {
-                                await _alerts.SendExitAsync(
-                                    trade,
-                                    exitPrice,
-                                    pnl,
-                                    0m,
-                                    acc.State.CurrentEquity,
-                                    acc.State.DailyDrawdownPct,
-                                    acc.State.OverallDrawdownPct);
+                                await _alerts.SendExitAsync(trade, exitPrice, pnl, 0m, acc.State.CurrentEquity, acc.State.DailyDrawdownPct, acc.State.OverallDrawdownPct);
                             }
                         }
                         continue;

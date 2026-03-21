@@ -11,9 +11,8 @@
 
     public class PropChallengeGuard
     {
-        private const decimal DAILY_DD_LIMIT = 0.05m;     // 5%
-        private const decimal OVERALL_DD_LIMIT = 0.10m;   // 10%
-        private const decimal PER_TRADE_RISK = 0.01m; // 0.5%
+        private const decimal DAILY_DD_LIMIT = 5m;     // 5%
+        private const decimal OVERALL_DD_LIMIT = 10m;   // 10%
 
         public GuardResult EvaluateEntry(PropAccountConfig config, PropAccountState state)
         {

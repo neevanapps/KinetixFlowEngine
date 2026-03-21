@@ -26,7 +26,7 @@ namespace KinetixFlowEngine.Core.Prop
             Size={trade.InitialSize:F4}
 
             Equity={equity:F0}
-            DailyDD={dailyDd:P2}  OverallDD={overallDd:P2}
+            DailyDD={dailyDd:F2}  OverallDD={overallDd:F2}
             """);
         }
 
@@ -40,7 +40,7 @@ namespace KinetixFlowEngine.Core.Prop
             PnL Net={pnl:F1}
 
             Equity={equity:F0}
-            DailyDD={dailyDd:P2}  OverallDD={overallDd:P2}
+            DailyDD={dailyDd:F2}  OverallDD={overallDd:F2}
             """);
         }
 

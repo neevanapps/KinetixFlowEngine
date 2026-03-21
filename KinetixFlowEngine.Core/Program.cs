@@ -37,7 +37,7 @@ namespace KinetixFlowEngine.Core
                 .WriteTo.File(Path.Combine(AppContext.BaseDirectory, "logs", "kinetixflowengine-.txt"),
                             rollingInterval: RollingInterval.Day,
                             restrictedToMinimumLevel: LogEventLevel.Information)
-                .CreateBootstrapLogger();
+                .CreateLogger();
 
             try
             {
@@ -81,6 +81,7 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<EngineBootstrapService>();
                 builder.Services.AddSingleton<EngineWarmupManager>();
                 builder.Services.AddSingleton<TradeStreamClient>();
+                builder.Services.AddSingleton<BybitDepthStreamClient>();
                 builder.Services.AddSingleton<OpenInterestClient>();
                 builder.Services.AddSingleton<TelegramService>();
                 builder.Services.AddSingleton<ExceptionAlertAggregator>();
