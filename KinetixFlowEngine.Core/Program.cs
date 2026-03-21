@@ -131,7 +131,6 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<FairPriceEngine>();
                 builder.Services.AddSingleton<TradeJournalRecorder>();
                 builder.Services.AddSingleton<TradeMemoryManager>();
-                builder.Services.AddSingleton<PropOrchestrator>();
                 builder.Services.AddSingleton<PropAlertService>();
                 builder.Services.AddSingleton<PropAccountStatePersistence>();
                 builder.Services.AddHostedService<Worker>();

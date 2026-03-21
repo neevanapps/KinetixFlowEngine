@@ -4,8 +4,15 @@ namespace KinetixFlowEngine.Core.Persistence
 {
     public class MarketStateManager
     {
-        private readonly string _filePath =
-    Path.Combine(AppContext.BaseDirectory, "market_state.json");
+
+        private readonly string _filePath;
+
+        public MarketStateManager()
+        {
+            var folder = Path.Combine(AppContext.BaseDirectory, "persist");
+            Directory.CreateDirectory(folder);
+            _filePath = Path.Combine(folder, "market_state.json");
+        }
 
         public void Save(MarketStateSnapshot snapshot)
         {

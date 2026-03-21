@@ -9,7 +9,9 @@ namespace KinetixFlowEngine.Core.Prop
 
         public PropAccountStatePersistence()
         {
-            _filePath = Path.Combine(AppContext.BaseDirectory, "prop_account_state.json");
+            var folder = Path.Combine(AppContext.BaseDirectory, "persist");
+            Directory.CreateDirectory(folder);
+            _filePath = Path.Combine(folder, "prop_account_state.json");
             _cache = LoadAll();
         }
 

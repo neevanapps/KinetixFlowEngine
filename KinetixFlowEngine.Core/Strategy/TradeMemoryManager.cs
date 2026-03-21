@@ -11,7 +11,9 @@ namespace KinetixFlowEngine.Core.Strategy
 
         public TradeMemoryManager()
         {
-            _filePath = Path.Combine(AppContext.BaseDirectory, "trade_memory.json");
+            var folder = Path.Combine(AppContext.BaseDirectory, "persist");
+            Directory.CreateDirectory(folder);
+            _filePath = Path.Combine(folder, "trade_memory.json");
             _memory = Load();
         }
 

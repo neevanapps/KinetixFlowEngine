@@ -61,7 +61,6 @@ namespace KinetixFlowEngine.Core
         private readonly PositionPersistence _positionPersistence;
         private readonly PropAccountStatePersistence _accountStatePersistence;
         private readonly PropAlertService _alerts;
-        private readonly PropOrchestrator _propOrchestrator;
         private readonly List<AccountRuntime> _accounts;
         private readonly StrategyConfigLoader _strategyConfigLoader;
         private readonly FlowEngineOptions _options;
@@ -77,7 +76,7 @@ namespace KinetixFlowEngine.Core
                     EngineWarmupManager warmup, PriceTrendEngine priceEngine, ScoreTrendEngine scoreEngine, OpenInterestClient openInterestClient, FlowMetricsRecorder recorder, StrategyEngine strategyEngine,
                     StrategyAggregator strategyAggregator, TelegramService telegram, IOptions<FlowEngineOptions> options, TradeJournalRecorder tradeJournal, ExceptionAlertAggregator exceptionAggregator,
                     ProbabilityTrendEngine probEngine, FlowAggregationWindow flowAggregationWindow, FlowMomentumRun momentumRun, TradeMemoryManager tradeMemory, VolumeEngine volumeEngine, FairPriceEngine fairPriceEngine,
-                    PropOrchestrator propOrchestrator, List<AccountRuntime> accounts, PropAlertService alerts, PropAccountStatePersistence accountStatePersistence, PositionPersistence positionPersistence,
+                    List<AccountRuntime> accounts, PropAlertService alerts, PropAccountStatePersistence accountStatePersistence, PositionPersistence positionPersistence,
                     StrategyConfigLoader strategyConfigLoader, IExecutionRouter executionRouter, IEquityEngine equityEngine, ExecutionSyncService executionSync, ITradeExecutor executor)
         {
             _logger = logger;
@@ -94,7 +93,6 @@ namespace KinetixFlowEngine.Core
             _cmpNorm = cmpNorm;
             _options = options.Value;
             _tradeMemory = tradeMemory;
-            _propOrchestrator = propOrchestrator;
             _marketStateManager = snapshotManager;
             _priceEngine = priceEngine;
             _scoreEngine = scoreEngine;

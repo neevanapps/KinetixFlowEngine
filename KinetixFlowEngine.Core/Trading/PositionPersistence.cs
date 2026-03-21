@@ -9,7 +9,9 @@ namespace KinetixFlowEngine.Core.Trading
 
         public PositionPersistence()
         {
-            _filePath = Path.Combine(AppContext.BaseDirectory, "positions.json");
+            var folder = Path.Combine(AppContext.BaseDirectory, "persist");
+            Directory.CreateDirectory(folder);
+            _filePath = Path.Combine(folder, "positions.json");
         }
 
         public void Save(IEnumerable<ActiveTrade> trades)

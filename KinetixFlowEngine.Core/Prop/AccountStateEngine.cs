@@ -68,7 +68,7 @@ namespace KinetixFlowEngine.Core.Prop
             // -----------------------
             // LIMIT FLAGS
             // -----------------------
-            if (state.DailyDrawdownPct >= 5m)
+            if (state.DailyDrawdownPct >= 3.5m)
                 state.IsPaused = true;
 
             if (state.OverallDrawdownPct >= 10m)
