@@ -36,19 +36,14 @@ namespace KinetixFlowEngine.Core.Execution
 
         public async Task ClosePositionAsync(ExecutionRequest req)
         {
-            var client = _factory.GetClient(
-                req.AccountId,
-                req.ApiKey,
-                req.ApiSecret);
+            var client = _factory.GetClient(req.AccountId, req.ApiKey, req.ApiSecret);
+            var side = req.Direction == SignalDirection.Long ? OrderSide.Sell : OrderSide.Buy;
 
-            var side = req.Direction == SignalDirection.Long
-                ? OrderSide.Sell
-                : OrderSide.Buy;
+            string orderId = null;
 
             for (int attempt = 1; attempt <= MAX_RETRIES; attempt++)
             {
                 var price = GetAdaptiveExitPrice(side, attempt);
-
                 if (price == 0)
                 {
                     _logger.LogWarning("No market data for exit");
@@ -57,7 +52,7 @@ namespace KinetixFlowEngine.Core.Execution
 
                 _logger.LogInformation("EXIT Attempt {Attempt} | Price {Price}", attempt, price);
 
-                var order = await client.Client.V5Api.Trading.PlaceOrderAsync(
+                var orderResponse = await client.Client.V5Api.Trading.PlaceOrderAsync(
                     category: Category.Linear,
                     symbol: "BTCUSDT",
                     side: side,
@@ -67,27 +62,55 @@ namespace KinetixFlowEngine.Core.Execution
                     reduceOnly: true,
                     timeInForce: TimeInForce.PostOnly);
 
-                if (order.Success)
+                if (!orderResponse.Success)
                 {
-                    _logger.LogInformation("Exit filled as MAKER");
-                    return;
+                    _logger.LogWarning("Exit place failed: {Error}", orderResponse.Error?.Message);
+                    await Task.Delay(GetBackoff(attempt));
+                    continue;
                 }
 
-                _logger.LogWarning("Exit PostOnly rejected, retrying...");
+                orderId = orderResponse.Data.OrderId;
+                _logger.LogInformation("Exit order placed: {OrderId}", orderId);
 
+                // ── WAIT & POLL FOR FILL (same helper as entry) ────────────────────────
+                bool filled = await WaitForOrderFill(client, orderId, req.Quantity, TimeSpan.FromSeconds(30));
+
+                if (filled)
+                {
+                    _logger.LogInformation("Exit filled as MAKER (order {OrderId})", orderId);
+                    return; // Success – position should now be closed or reduced
+                }
+
+                // Not filled in time → cancel to clean up
+                await client.Client.V5Api.Trading.CancelOrderAsync(
+                    category: Category.Linear,
+                    symbol: "BTCUSDT",
+                    orderId: orderId);
+
+                _logger.LogWarning("Exit order {OrderId} not filled in time → cancelled, retrying", orderId);
                 await Task.Delay(GetBackoff(attempt));
             }
 
-            // 🔴 FINAL FALLBACK (MANDATORY)
-            _logger.LogWarning("EXIT fallback → MARKET");
+            // ── FINAL FALLBACK: MARKET CLOSE (mandatory) ─────────────────────────────
+            _logger.LogWarning("All PostOnly exit retries failed → falling back to MARKET close");
 
-            await client.Client.V5Api.Trading.PlaceOrderAsync(
+            var marketClose = await client.Client.V5Api.Trading.PlaceOrderAsync(
                 category: Category.Linear,
                 symbol: "BTCUSDT",
                 side: side,
                 type: NewOrderType.Market,
                 quantity: req.Quantity,
                 reduceOnly: true);
+
+            if (marketClose.Success)
+            {
+                _logger.LogInformation("Market close executed successfully");
+            }
+            else
+            {
+                _logger.LogError("Market close FAILED: {Error}", marketClose.Error?.Message);
+                // Here you might want to alert or throw – position is stuck open!
+            }
         }
 
         public async Task<ExecutionResult> ExecuteAsync(ExecutionRequest request)
@@ -96,38 +119,27 @@ namespace KinetixFlowEngine.Core.Execution
             {
                 if (request.Quantity <= 0)
                 {
-                    return new ExecutionResult
-                    {
-                        Success = false,
-                        Error = "Invalid size"
-                    };
+                    return new ExecutionResult { Success = false, Error = "Invalid size" };
                 }
 
-                var client = _factory.GetClient(
-                    request.AccountId,
-                    request.ApiKey,
-                    request.ApiSecret);
+                var client = _factory.GetClient(request.AccountId, request.ApiKey, request.ApiSecret);
+                var side = request.Direction == SignalDirection.Long ? OrderSide.Buy : OrderSide.Sell;
 
-                var side = request.Direction == SignalDirection.Long
-                    ? OrderSide.Buy
-                    : OrderSide.Sell;
+                string orderId = null;
+                decimal? actualFillPrice = null;
+                decimal? actualFillQty = null;
 
                 for (int attempt = 1; attempt <= MAX_RETRIES; attempt++)
                 {
                     var price = GetAdaptivePrice(side, attempt);
-
                     if (price == 0)
                     {
-                        return new ExecutionResult
-                        {
-                            Success = false,
-                            Error = "No market data"
-                        };
+                        return new ExecutionResult { Success = false, Error = "No market data" };
                     }
 
                     _logger.LogInformation("Attempt {Attempt} | Price {Price}", attempt, price);
 
-                    var order = await client.Client.V5Api.Trading.PlaceOrderAsync(
+                    var orderResponse = await client.Client.V5Api.Trading.PlaceOrderAsync(
                         category: Category.Linear,
                         symbol: "BTCUSDT",
                         side: side,
@@ -137,53 +149,124 @@ namespace KinetixFlowEngine.Core.Execution
                         reduceOnly: false,
                         timeInForce: TimeInForce.PostOnly);
 
-                    if (order.Success)
+                    if (!orderResponse.Success)
                     {
-                        var orderId = order.Data.OrderId;
-
-                        await Task.Delay(300);
-
-                        var pos = await client.GetPositionAsync(request.AccountId);
-                        decimal fillPrice = pos?.EntryPrice ?? request.Price;
-                        decimal fillQty = pos?.Quantity ?? request.Quantity;
-
-                        // -----------------------------
-                        // SET SL / TP
-                        // -----------------------------
-                        await client.Client.V5Api.Trading.SetTradingStopAsync(
-                            category: Category.Linear,
-                            symbol: "BTCUSDT",
-                            stopLoss: request.StopLoss,
-                            takeProfit: request.TakeProfit,
-                            positionIdx: 0);
-                        return new ExecutionResult
-                        {
-                            Success = true,
-                            OrderId = orderId,
-                            FilledPrice = pos?.EntryPrice ?? price,
-                            FilledQuantity = pos?.Quantity ?? request.Quantity
-                        };
+                        _logger.LogWarning("PlaceOrder failed: {Error}", orderResponse.Error?.Message);
+                        await Task.Delay(GetBackoff(attempt));
+                        continue;
                     }
 
-                    _logger.LogWarning("PostOnly rejected. Retrying...");
+                    orderId = orderResponse.Data.OrderId;
+                    _logger.LogInformation("Order placed: {OrderId}", orderId);
 
-                    await Task.Delay(GetBackoff(attempt));
+                    // ── WAIT & POLL FOR FILL ────────────────────────────────────────
+                    bool filled = await WaitForOrderFill(client, orderId, request.Quantity, TimeSpan.FromSeconds(30));
+
+                    if (!filled)
+                    {
+                        // Optional: cancel unfilled order to clean up
+                        await client.Client.V5Api.Trading.CancelOrderAsync(
+                            category: Category.Linear,
+                            symbol: "BTCUSDT",
+                            orderId: orderId);
+
+                        _logger.LogWarning("Order {OrderId} not filled in time → cancelled", orderId);
+                        await Task.Delay(GetBackoff(attempt));
+                        continue;
+                    }
+
+                    // ── Order is filled → get real position data ────────────────────
+                    await Task.Delay(500); // small buffer for position update
+
+                    var pos = await client.GetPositionAsync(request.AccountId);
+                    if (pos == null || pos.Quantity <= 0)
+                    {
+                        _logger.LogError("Position not found after fill confirmation");
+                        return new ExecutionResult { Success = false, Error = "Position missing after fill" };
+                    }
+
+                    actualFillPrice = pos.EntryPrice;
+                    actualFillQty = pos.Quantity;
+
+                    // ── NOW safe to attach SL ────────────────────────────────────
+                    var slTpResult = await client.Client.V5Api.Trading.SetTradingStopAsync(
+                        category: Category.Linear,
+                        symbol: "BTCUSDT",
+                        stopLoss: request.StopLoss,
+                        positionIdx: 0);  // 0 = one-way mode; adjust if hedge mode
+
+                    if (!slTpResult.Success)
+                    {
+                        _logger.LogError("Failed to set SL/TP: {Error}", slTpResult.Error?.Message);
+                        // Decide: return failure or continue (position is open, SL/TP missing)
+                        // For safety → perhaps close position if SL/TP critical
+                    }
+                    else
+                    {
+                        _logger.LogInformation("SL/TP attached successfully");
+                    }
+
+                    return new ExecutionResult
+                    {
+                        Success = true,
+                        OrderId = orderId,
+                        FilledPrice = actualFillPrice.Value,
+                        FilledQuantity = actualFillQty.Value
+                    };
                 }
 
-                return new ExecutionResult
-                {
-                    Success = false,
-                    Error = "PostOnly retries exhausted"
-                };
+                return new ExecutionResult { Success = false, Error = "PostOnly retries exhausted" };
             }
             catch (Exception ex)
             {
-                return new ExecutionResult
-                {
-                    Success = false,
-                    Error = ex.Message
-                };
+                _logger.LogError(ex, "ExecuteAsync exception");
+                return new ExecutionResult { Success = false, Error = ex.Message };
             }
+        }
+
+        private async Task<bool> WaitForOrderFill(BybitClientWrapper client, string orderId, decimal originalQty, TimeSpan timeout)
+        {
+            var start = DateTime.UtcNow;
+
+            while (DateTime.UtcNow - start < timeout)
+            {
+                var orderStatus = await client.Client.V5Api.Trading.GetOpenSpreadOrdersAsync(
+                    symbol: "BTCUSDT",
+                    orderId: orderId);
+
+                if (orderStatus.Success && orderStatus.Data.List.Length > 0)
+                {
+                    var order = orderStatus.Data.List[0];
+                    if (order.OrderStatus == OrderStatus.Filled || order.OrderStatus == OrderStatus.PartiallyFilled)
+                    {
+                        _logger.LogInformation("Order {OrderId} filled/partially filled. CumExecQty: {Qty}", orderId, order.QuantityFilled);
+                        return true;
+                    }
+                }
+                else
+                {
+                    // If not in open orders anymore → likely filled & moved to history
+                    var history = await client.Client.V5Api.Trading.GetOrderHistoryAsync(
+                        category: Category.Linear,
+                        symbol: "BTCUSDT",
+                        orderId: orderId);
+
+                    if (history.Success && history.Data.List.Length > 0)
+                    {
+                        var histOrder = history.Data.List[0];
+                        if (histOrder.Status == OrderStatus.Filled)
+                        {
+                            _logger.LogInformation("Order {OrderId} confirmed filled from history");
+                            return true;
+                        }
+                    }
+                }
+
+                await Task.Delay(1000); // poll every 1s
+            }
+
+            _logger.LogWarning("Timeout waiting for fill on order {OrderId}", orderId);
+            return false;
         }
 
         public async Task<bool> ReducePositionAsync(ExecutionRequest request, decimal reduceQty)
@@ -204,7 +287,7 @@ namespace KinetixFlowEngine.Core.Execution
                     side: side,
                     type: NewOrderType.Limit,
                     price: price,
-                    quantity: request.Quantity,
+                    quantity: reduceQty,
                     reduceOnly: true);
 
             return result.Success;
@@ -255,7 +338,7 @@ namespace KinetixFlowEngine.Core.Execution
 
         private int GetBackoff(int attempt)
         {
-            return 150 * (int)Math.Pow(2, attempt);
+            return 750 * (int)Math.Pow(2, attempt);
         }
     }
 }

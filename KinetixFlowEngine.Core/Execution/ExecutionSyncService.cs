@@ -9,10 +9,10 @@ namespace KinetixFlowEngine.Core.Execution
         private readonly PositionManager _positions;
         private readonly ILogger<ExecutionSyncService> _logger;
         private readonly BybitClientFactory _factory;
-        private readonly List<AccountRuntime> _accounts;
+        private readonly PropAccountRuntimeManager _accounts;
         private readonly Dictionary<string, List<ExchangePosition>> _lastSnapshot = new();
         private readonly TelegramService _telegramService;
-        public ExecutionSyncService(PositionManager positions, ILogger<ExecutionSyncService> logger, BybitClientFactory factory, List<AccountRuntime> accounts, TelegramService telegramService)
+        public ExecutionSyncService(PositionManager positions, ILogger<ExecutionSyncService> logger, BybitClientFactory factory, PropAccountRuntimeManager accounts, TelegramService telegramService)
         {
             _positions = positions;
             _logger = logger;
@@ -25,7 +25,7 @@ namespace KinetixFlowEngine.Core.Execution
         {
             try
             {
-                foreach (var acc in _accounts)
+                foreach (var acc in _accounts.Accounts)
                 {
                     var accountId = acc.Config.AccountId;
 

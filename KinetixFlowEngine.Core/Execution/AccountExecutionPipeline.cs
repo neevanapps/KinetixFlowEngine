@@ -9,40 +9,54 @@ namespace KinetixFlowEngine.Core.Execution
 {
     public interface IAccountExecutionPipeline
     {
-        void Execute(string accountId, StrategySignal signal, decimal price, decimal atr, KinetixEngineResult context);
+        Task Execute(string accountId, StrategySignal signal, decimal price, decimal atr, KinetixEngineResult context);
     }
 
     public class AccountExecutionPipeline : IAccountExecutionPipeline
     {
-        private readonly List<AccountRuntime> _accounts;
+        private readonly PropAccountRuntimeManager _accounts;
         private readonly ITradeExecutor _executor;
         private readonly PositionManager _positionManager;
         private readonly IPositionSizer _positionSizer;
         private readonly ILogger<AccountExecutionPipeline> _logger;
+        private readonly ExecutionGuard _guard;
 
         public AccountExecutionPipeline(
-            List<AccountRuntime> accounts,
+            PropAccountRuntimeManager accounts,
             ITradeExecutor executor,
             PositionManager positionManager,
             IPositionSizer positionSizer,
-            ILogger<AccountExecutionPipeline> logger)
+            ILogger<AccountExecutionPipeline> logger,
+            ExecutionGuard guard)
         {
             _accounts = accounts;
             _executor = executor;
             _positionManager = positionManager;
             _positionSizer = positionSizer;
             _logger = logger;
+            _guard = guard;
         }
 
-        public void Execute(string accountId, StrategySignal signal, decimal price, decimal atr, KinetixEngineResult context)
+        public async Task Execute(string accountId, StrategySignal signal, decimal price, decimal atr, KinetixEngineResult context)
         {
-            var acc = _accounts.First(x => x.Config.AccountId == accountId);
-            if (_positionManager.HasPosition(signal.StrategyName, accountId))
+            var acc = _accounts.Accounts.First(x => x.Config.AccountId == accountId);
+            if (_positionManager.HasPosition(signal.StrategyName, accountId) || _guard.IsBusy(accountId))
             {
                 //_logger.LogInformation("Account {AccountId} already has an open position for strategy {StrategyName}. Skipping execution.",
                 //    accountId, signal.StrategyName);
                 return;
             }
+            if (_guard.IsBusy(accountId))
+            {
+                _logger.LogInformation("Skipping execution, order in-flight for {AccountId}", accountId);
+                return;
+            }
+
+            if (!_guard.TryEnter(accountId))
+            {
+                return;
+            }
+
             // -------------------------------
             // GUARD
             // -------------------------------
@@ -91,33 +105,35 @@ namespace KinetixFlowEngine.Core.Execution
                 Direction = signal.Direction,
                 Price = price,
                 Quantity = sanitizedQty,
-                StopLoss = stopLoss,
-                TakeProfit = signal.Direction == SignalDirection.Long
-                    ? price + (price - stopLoss)
-                    : price - (stopLoss - price)
+                StopLoss = stopLoss
             };
 
             // -------------------------------
             // EXECUTE ORDER (CRITICAL)
             // -------------------------------
-            var result = _executor.ExecuteAsync(request).Result;
-
-            if (!result.Success)
+            try
             {
-                _logger.LogError("Trade execution failed for account {AccountId}: {Error}", accountId, result.Error);
-                return;
+                var result = await _executor.ExecuteAsync(request);
+
+                if (!result.Success)
+                {
+                    _logger.LogError("Trade execution failed for account {AccountId}: {Error}", accountId, result.Error);
+                    return;
+                }
+
+                _positionManager.TryEnterTrade(
+                    signal,
+                    result.FilledPrice,
+                    (double)atr,
+                    context,
+                    result.FilledQuantity,
+                    accountId,
+                    result.OrderId);
             }
-            // -------------------------------
-            // USE FILLED VALUES
-            // -------------------------------
-            _positionManager.TryEnterTrade(
-                signal,
-                result.FilledPrice,
-                (double)atr,
-                context,
-                result.FilledQuantity,
-                accountId,
-                result.OrderId);
+            finally
+            {
+                _guard.Exit(accountId);
+            }
         }
     }
 }

@@ -63,13 +63,9 @@ namespace KinetixFlowEngine.Core
                     client.Timeout = TimeSpan.FromSeconds(15);
                 });
                 builder.Services.AddSingleton<PropAccountRuntimeFactory>();
-
-                builder.Services.AddSingleton<List<AccountRuntime>>(sp =>
-                {
-                    var factory = sp.GetRequiredService<PropAccountRuntimeFactory>();
-                    return factory.GetAccounts();
-                });
+                builder.Services.AddSingleton<PropAccountRuntimeManager>();
                 builder.Services.AddSingleton<BybitClientFactory>();
+                builder.Services.AddSingleton<ExecutionGuard>();
 
                 builder.Services.AddSingleton<ExecutionSyncService>();
                 builder.Services.AddSingleton<ScoreNormalizer>();

@@ -62,7 +62,7 @@ namespace KinetixFlowEngine.Core
         private readonly PositionPersistence _positionPersistence;
         private readonly PropAccountStatePersistence _accountStatePersistence;
         private readonly PropAlertService _alerts;
-        private readonly List<AccountRuntime> _accounts;
+        private readonly PropAccountRuntimeManager _accounts;
         private readonly StrategyConfigLoader _strategyConfigLoader;
         private readonly FlowEngineOptions _options;
         private DateTime _lastEngineCycle = DateTime.MinValue;
@@ -77,7 +77,7 @@ namespace KinetixFlowEngine.Core
                     EngineWarmupManager warmup, PriceTrendEngine priceEngine, ScoreTrendEngine scoreEngine, OpenInterestClient openInterestClient, FlowMetricsRecorder recorder, StrategyEngine strategyEngine,
                     StrategyAggregator strategyAggregator, TelegramService telegram, IOptions<FlowEngineOptions> options, TradeJournalRecorder tradeJournal, ExceptionAlertAggregator exceptionAggregator,
                     ProbabilityTrendEngine probEngine, FlowAggregationWindow flowAggregationWindow, FlowMomentumRun momentumRun, TradeMemoryManager tradeMemory, VolumeEngine volumeEngine, FairPriceEngine fairPriceEngine,
-                    List<AccountRuntime> accounts, PropAlertService alerts, PropAccountStatePersistence accountStatePersistence, PositionPersistence positionPersistence,
+                    PropAccountRuntimeManager accounts, PropAlertService alerts, PropAccountStatePersistence accountStatePersistence, PositionPersistence positionPersistence,
                     StrategyConfigLoader strategyConfigLoader, IExecutionRouter executionRouter, IEquityEngine equityEngine, ExecutionSyncService executionSync, ITradeExecutor executor, BybitDepthStreamClient depthClient)
         {
             _logger = logger;
@@ -248,7 +248,7 @@ namespace KinetixFlowEngine.Core
                 });
 
                 //Apply PnL to Equity
-                var account = _accounts.FirstOrDefault(x => x.Config.AccountId == trade.AccountId);
+                var account = _accounts.Accounts.FirstOrDefault(x => x.Config.AccountId == trade.AccountId);
                 if (account != null)
                 {
                     // 🔴 CRITICAL: apply once
@@ -258,11 +258,6 @@ namespace KinetixFlowEngine.Core
                         account.State.CurrentEquity += pnl;
                         _accountStatePersistence.Update(account.Config.AccountId, account.State);
                     }
-
-                    if (trade.NotifyThroughTelegram)
-                    {
-                        _alerts.SendExitAsync(trade, exitPrice, pnl, 0m, account.State.CurrentEquity, account.State.DailyDrawdownPct, account.State.OverallDrawdownPct);
-                    }
                 }
             };
 
@@ -271,10 +266,10 @@ namespace KinetixFlowEngine.Core
                 if (trade.AccountId == "SIM")
                     return;
 
-                var acc = _accounts.First(x => x.Config.AccountId == trade.AccountId);
+                var acc = _accounts.Accounts.First(x => x.Config.AccountId == trade.AccountId);
 
                 var reduceQty = trade.InitialSize - trade.RemainingSize;
-
+                _logger.LogInformation("Partial close | Qty: {Qty}", reduceQty);
                 await _executor.ReducePositionAsync(new ExecutionRequest
                 {
                     AccountId = acc.Config.AccountId,
@@ -289,8 +284,21 @@ namespace KinetixFlowEngine.Core
                 if (trade.AccountId == "SIM")
                     return;
 
-                var acc = _accounts.First(x => x.Config.AccountId == trade.AccountId);
+                var acc = _accounts.Accounts.First(x => x.Config.AccountId == trade.AccountId);
+                var newSl = trade.StopLoss;
 
+                // Prevent invalid SL (Bybit rejects silently sometimes)
+                if (trade.Direction == SignalDirection.Long && newSl >= _currentMarketPrice)
+                {
+                    _logger.LogWarning("Invalid SL for LONG, skipping update");
+                    return;
+                }
+
+                if (trade.Direction == SignalDirection.Short && newSl <= _currentMarketPrice)
+                {
+                    _logger.LogWarning("Invalid SL for SHORT, skipping update");
+                    return;
+                }
                 await _executor.UpdateStopLossAsync(
                     new ExecutionRequest
                     {
@@ -307,7 +315,7 @@ namespace KinetixFlowEngine.Core
                 if (trade.AccountId == "SIM")
                     return;
 
-                var acc = _accounts.First(x => x.Config.AccountId == trade.AccountId);
+                var acc = _accounts.Accounts.First(x => x.Config.AccountId == trade.AccountId);
 
                 await _executor.ClosePositionAsync(new ExecutionRequest
                 {
@@ -334,7 +342,7 @@ namespace KinetixFlowEngine.Core
             }
 
             // ---- RESTORE PROP ACCOUNT STATE ----
-            foreach (var acc in _accounts)
+            foreach (var acc in _accounts.Accounts)
             {
                 var state = _accountStatePersistence.Load(acc.Config.AccountId);
 
@@ -440,7 +448,7 @@ namespace KinetixFlowEngine.Core
                             var target1 = trade.Target1;
                             decimal pnl = PropPnLCalculator.Calculate(trade.EntryPrice, exitPrice, trade.InitialSize, trade.Direction, _options.FeeRate);
                             var duration = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - trade.EntryTimeMs) / 1000;
-                            var acc = _accounts.FirstOrDefault(x => x.Config.AccountId == trade.AccountId);
+                            var acc = _accounts.Accounts.FirstOrDefault(x => x.Config.AccountId == trade.AccountId);
 
                             if (acc != null && trade.NotifyThroughTelegram)
                             {
@@ -481,7 +489,7 @@ namespace KinetixFlowEngine.Core
 
                         foreach (var trade in newTrades)
                         {
-                            var acc = _accounts.FirstOrDefault(x => x.Config.AccountId == trade.AccountId);
+                            var acc = _accounts.Accounts.FirstOrDefault(x => x.Config.AccountId == trade.AccountId);
 
                             if (acc != null)
                             {
@@ -508,7 +516,7 @@ namespace KinetixFlowEngine.Core
 
                 if ((DateTime.UtcNow - _lastSnapshot).TotalSeconds > 60)
                 {
-                    foreach (var item in _accounts)
+                    foreach (var item in _accounts.Accounts)
                     {
                         _accountStatePersistence.Update(item.Config.AccountId, item.State);
                     }

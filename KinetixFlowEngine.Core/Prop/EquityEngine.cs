@@ -11,7 +11,7 @@ namespace KinetixFlowEngine.Core.Prop
 
     public class EquityEngine : IEquityEngine
     {
-        private readonly List<AccountRuntime> _accounts;
+        private readonly PropAccountRuntimeManager _accounts;
         private readonly PositionManager _positions;
         private readonly AccountStateEngine _stateEngine;
         private readonly ILogger<EquityEngine> _logger;
@@ -19,7 +19,7 @@ namespace KinetixFlowEngine.Core.Prop
         private readonly PropAccountStatePersistence _accountStatePersistence;
 
         public EquityEngine(
-            List<AccountRuntime> accounts,
+            PropAccountRuntimeManager accounts,
             PositionManager positions,
             AccountStateEngine stateEngine,
             TradeJournalRecorder tradeJournal,
@@ -37,7 +37,7 @@ namespace KinetixFlowEngine.Core.Prop
         {
             var now = DateTime.UtcNow;
 
-            foreach (var acc in _accounts)
+            foreach (var acc in _accounts.Accounts)
             {
                 var trades = _positions
                     .GetAllPositions()
