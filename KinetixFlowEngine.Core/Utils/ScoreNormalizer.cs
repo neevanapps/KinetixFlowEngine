@@ -6,6 +6,12 @@
         {
         }
     }
+    public class AdjustedScoreNormalizer : UniversalNormalizer
+    {
+        public AdjustedScoreNormalizer() : base(8640) // 12 hours @ 1 sec
+        {
+        }
+    }
 
     public class VelocityNormalizer : UniversalNormalizer
     {

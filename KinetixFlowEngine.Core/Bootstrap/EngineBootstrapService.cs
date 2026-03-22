@@ -103,12 +103,12 @@ namespace KinetixFlowEngine.Core.Bootstrap
             {
                 double vol = (double)c.Volume;
 
-                // distribute 1m volume into 12 ticks (5s engine)
-                double perTick = vol / 12.0;
+                int tradesPerMinute = 60; // approximate
+                double perTrade = vol / tradesPerMinute;
 
-                for (int i = 0; i < 12; i++)
+                for (int i = 0; i < tradesPerMinute; i++)
                 {
-                    _volumeEngine.Update(perTick);
+                    _volumeEngine.Update(perTrade);
                 }
             }
 

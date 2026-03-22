@@ -23,9 +23,11 @@ namespace KinetixFlowEngine.Core.Persistence
         public double MomentumRun { get; set; }
 
         public NormalizerState ScoreNormalizer { get; set; } = new();
+        public NormalizerState AdjustedScoreNormalizer { get; set; } = new();
         public NormalizerState VelocityNormalizer { get; set; } = new();
         public NormalizerState ImbalanceNormalizer { get; set; } = new();
         public NormalizerState ExhaustionNormalizer { get; set; } = new();
         public NormalizerState CompressionNormalizer { get; set; } = new();
+
     }
 }

@@ -4,39 +4,57 @@ namespace KinetixFlowEngine.Core.Utils
 {
     public class UniversalNormalizer
     {
-        private readonly Queue<double> _window = new();
-        private readonly int _maxSamples;
+        private double _mean = 0;
+        private double _variance = 1;
+        private bool _initialized = false;
 
-        private double _mean;
-        private double _m2;
-        private int _count;
+        private int _warmupCount = 0;
+        private const int WARMUP = 100;
 
-        public bool IsReady => _count >= 100;
+        public bool IsReady => _warmupCount >= WARMUP;
+
+        // fallback alpha (if not provided)
+        private const double DEFAULT_ALPHA = 0.05;
 
         public UniversalNormalizer(int maxSamples)
         {
-            _maxSamples = maxSamples;
+            // maxSamples ignored now (kept for compatibility)
         }
 
         public double Update(double value)
         {
-            _window.Enqueue(value);
-            if(_window.Count > _maxSamples)
-                _window.Dequeue();
+            return Update(value, DEFAULT_ALPHA);
+        }
 
-            _count++;
+        public double Update(double value, double alpha)
+        {
+            // clamp alpha for safety
+            alpha = Math.Clamp(alpha, 0.01, 0.3);
 
-            double delta = value - _mean;
-            _mean += delta / _count;
-            _m2 += delta * (value - _mean);
+            if (!_initialized)
+            {
+                _mean = value;
+                _variance = 1;
+                _initialized = true;
+                return 0;
+            }
 
-            if (_count < 100)
+            _warmupCount++;
+
+            // --- EMA mean ---
+            double prevMean = _mean;
+            _mean = alpha * value + (1 - alpha) * _mean;
+
+            // --- EMA variance ---
+            double diff = value - prevMean;
+            _variance = alpha * (diff * diff) + (1 - alpha) * _variance;
+
+            if (_warmupCount < WARMUP)
                 return 0;
 
-            double variance = _m2 / (_count - 1);
-            double std = Math.Sqrt(variance);
+            double std = Math.Sqrt(_variance);
 
-            if (std == 0)
+            if (std < 1e-8)
                 return 0;
 
             return (value - _mean) / std;
@@ -46,34 +64,44 @@ namespace KinetixFlowEngine.Core.Utils
         {
             return new NormalizerState
             {
-                Values = _window.ToList(),
                 Mean = _mean,
-                M2 = _m2,
-                Count = _count
+                Variance = _variance,
+                WarmupCount = _warmupCount
             };
         }
 
         public void Restore(NormalizerState state)
         {
-            _window.Clear();
-
-            foreach (var v in state.Values)
-                _window.Enqueue(v);
-
             _mean = state.Mean;
-            _m2 = state.M2;
-            _count = state.Count;
+            _variance = state.Variance;
+            _warmupCount = state.WarmupCount;
+            _initialized = true;
         }
     }
 
     public class NormalizerState
     {
-        public List<double> Values { get; set; } = new();
-
         public double Mean { get; set; }
+        public double Variance { get; set; }
+        public int WarmupCount { get; set; }
+    }
 
-        public double M2 { get; set; }
+    public static class AdaptiveAlpha
+    {
+        public static double Compute(double atr, double er)
+        {
+            double atrNorm = Math.Clamp(atr / 100.0, 0.5, 2.0);
 
-        public int Count { get; set; }
+            double regime = (atrNorm * 0.7) + (er * 0.3);
+
+            double minWindow = 20;
+            double maxWindow = 100;
+
+            double window = maxWindow - (regime * (maxWindow - minWindow));
+
+            double alpha = 2.0 / (window + 1.0);
+
+            return Math.Clamp(alpha, 0.02, 0.3);
+        }
     }
 }

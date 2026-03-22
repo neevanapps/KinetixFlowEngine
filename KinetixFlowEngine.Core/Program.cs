@@ -73,6 +73,7 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<ImbalanceNormalizer>();
                 builder.Services.AddSingleton<ExhaustionNormalizer>();
                 builder.Services.AddSingleton<CompressionNormalizer>();
+                builder.Services.AddSingleton<AdjustedScoreNormalizer>();
                 builder.Services.AddSingleton<MarketStateManager>();
                 builder.Services.AddSingleton<EngineBootstrapService>();
                 builder.Services.AddSingleton<EngineWarmupManager>();

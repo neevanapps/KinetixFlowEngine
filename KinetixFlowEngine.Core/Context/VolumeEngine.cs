@@ -32,7 +32,7 @@ namespace KinetixFlowEngine.Core.Context
             if (Count < _windowSize / 2) // require at least half window filled
                 return false;
 
-            return Sum > Average * multiplier * Count;  // equivalent to CumulativeSum > Avg × multiplier × window
+            return Sum > 25;  // equivalent to CumulativeSum > Avg × multiplier × window
         }
 
         public void BootstrapFromCandles(List<double> volumes)

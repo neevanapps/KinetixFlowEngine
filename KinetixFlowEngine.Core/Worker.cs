@@ -38,6 +38,7 @@ namespace KinetixFlowEngine.Core
         private readonly ImbalanceNormalizer _imbNorm;
         private readonly ExhaustionNormalizer _exhNorm;
         private readonly CompressionNormalizer _cmpNorm;
+        private readonly AdjustedScoreNormalizer _adjustmentNorm;
         private readonly FairPriceEngine _fairPriceEngine;
         private readonly MarketStateManager _marketStateManager;
         private readonly FlowMetricsRecorder _recorder;
@@ -79,7 +80,7 @@ namespace KinetixFlowEngine.Core
                     StrategyAggregator strategyAggregator, TelegramService telegram, IOptions<FlowEngineOptions> options, TradeJournalRecorder tradeJournal, ExceptionAlertAggregator exceptionAggregator,
                     ProbabilityTrendEngine probEngine, FlowAggregationWindow flowAggregationWindow, FlowMomentumRun momentumRun, TradeMemoryManager tradeMemory, VolumeEngine volumeEngine, FairPriceEngine fairPriceEngine,
                     PropAccountRuntimeManager accounts, PropAlertService alerts, PropAccountStatePersistence accountStatePersistence, PositionPersistence positionPersistence, BybitClientFactory factory,
-                    StrategyConfigLoader strategyConfigLoader, IExecutionRouter executionRouter, IEquityEngine equityEngine, ExecutionSyncService executionSync, ITradeExecutor executor, BybitDepthStreamClient depthClient)
+                    StrategyConfigLoader strategyConfigLoader, IExecutionRouter executionRouter, IEquityEngine equityEngine, ExecutionSyncService executionSync, ITradeExecutor executor, BybitDepthStreamClient depthClient, AdjustedScoreNormalizer adjustmentNorm)
         {
             _logger = logger;
             _bootstrap = bootstrap;
@@ -121,7 +122,7 @@ namespace KinetixFlowEngine.Core
             _executor = executor;
             _depthClient = depthClient;
             _factory = factory;
-
+            _adjustmentNorm = adjustmentNorm;
             _tradeStreamClient.OnTrade += trade =>
             {
                 _flowTradeBuffer.AddTrade(trade);
@@ -358,6 +359,7 @@ namespace KinetixFlowEngine.Core
                     Quantity = trade.RemainingSize
                 });
             };
+            
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -402,6 +404,7 @@ namespace KinetixFlowEngine.Core
                 _imbNorm.Restore(snapshot.ImbalanceNormalizer);
                 _exhNorm.Restore(snapshot.ExhaustionNormalizer);
                 _cmpNorm.Restore(snapshot.CompressionNormalizer);
+                _adjustmentNorm.Restore(snapshot.AdjustedScoreNormalizer);
 
                 if (snapshot.MomentumRun == 0)
                 {
@@ -588,7 +591,8 @@ namespace KinetixFlowEngine.Core
                         VelocityNormalizer = _velNorm.GetState(),
                         ImbalanceNormalizer = _imbNorm.GetState(),
                         ExhaustionNormalizer = _exhNorm.GetState(),
-                        CompressionNormalizer = _cmpNorm.GetState()
+                        CompressionNormalizer = _cmpNorm.GetState(),
+                        AdjustedScoreNormalizer = _adjustmentNorm.GetState(),
                     });
 
                     _lastSnapshot = DateTime.UtcNow;
@@ -606,7 +610,7 @@ namespace KinetixFlowEngine.Core
                 return true;
 
             // Only restrict SAME direction after SL / TSL
-            if (last.Direction != signal.Direction)
+            if (last.Direction != signal.Direction && last.ExitTime.AddMinutes(2) < DateTime.UtcNow)
                 return true;
 
             if (last.ExitReason != "SL" && last.ExitReason != "TSL")
@@ -638,7 +642,7 @@ namespace KinetixFlowEngine.Core
             // Option A: simple fixed delay after start
             if (minutesSinceStart < _options.StabilizationMinutesBeforeTrading)
             {
-                _logger.LogInformation("Engine in stabilization phase ({Minutes}/{Required} min elapsed)",
+                _logger.LogInformation("Engine in stabilization phase ({Minutes:F2}/{Required} min elapsed)",
                     minutesSinceStart, _options.StabilizationMinutesBeforeTrading);
                 return false;
             }

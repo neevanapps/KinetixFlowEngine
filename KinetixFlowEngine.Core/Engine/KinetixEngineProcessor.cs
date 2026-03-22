@@ -47,6 +47,8 @@ namespace KinetixFlowEngine.Core.Engine
         private readonly ImbalanceNormalizer _imbNorm;
         private readonly ExhaustionNormalizer _exhNorm;
         private readonly CompressionNormalizer _cmpNorm;
+        private readonly AdjustedScoreNormalizer _adjScoreNorm;
+
         private readonly FlowMomentumRun _momentumRun;
 
         private readonly OneMinuteCandleBuilder _candleBuilder = new();
@@ -78,7 +80,7 @@ namespace KinetixFlowEngine.Core.Engine
             LiquidityPressureEngine pressureEngine,
             VwapAbsorptionEngine vwapAbsorptionEngine,
             WhaleClusterEngine whaleClusterEngine, FlowImpactEngine flowImpactEngine,
-            FlowPersistenceEngine flowPersistenceEngine, ProbabilityTrendEngine probEngine, FlowTradeBuffer tradeBuffer, FifteenMinuteCandleBuilder candle15m, VolumeEngine volumeEngine)
+            FlowPersistenceEngine flowPersistenceEngine, ProbabilityTrendEngine probEngine, FlowTradeBuffer tradeBuffer, FifteenMinuteCandleBuilder candle15m, VolumeEngine volumeEngine, FlowMomentumRun momentumRun, AdjustedScoreNormalizer adjScoreNorm)
         {
             _flowAggregationWindow = flowAggregationWindow;
             _flowFeatureEngine = flowFeatureEngine;
@@ -115,7 +117,8 @@ namespace KinetixFlowEngine.Core.Engine
             _tradeBuffer = tradeBuffer;
             _candle15m = candle15m;
             _volumeEngine = volumeEngine;
-            _momentumRun = new FlowMomentumRun(_volumeEngine);
+            _momentumRun = momentumRun;
+            _adjScoreNorm = adjScoreNorm;
         }
 
         public KinetixEngineResult Process(double price, decimal quantity, long timeStamp, double openInterest)
@@ -163,8 +166,15 @@ namespace KinetixFlowEngine.Core.Engine
             var pressure = _pressureEngine.Calculate(window, price, atr, (double)vwap);
 
             var baseAdjustedScore = _contextScoreEngine.AdjustScoreBase(score, vwapDev, er30, oiChange);
-            var baseScoreZ = _scoreNorm.Update(baseAdjustedScore);
-            var velZ = _velNorm.Update(features.DeltaVelocity);
+
+            var baseAlpha = AdaptiveAlpha.Compute(atr, er5);
+            var factor = (double)_momentumRun.LastFactor;
+            var alpha = baseAlpha * (0.9 + 0.2 * factor);
+            alpha = Math.Clamp(alpha, 0.02, 0.3);
+
+            var baseScoreZ = _scoreNorm.Update(baseAdjustedScore, alpha);
+            var velZ = _velNorm.Update(features.DeltaVelocity, alpha);
+            velZ = Math.Clamp(velZ, -3, 3);
             var initialScoreTrend = _scoreEngine.Update((decimal)baseAdjustedScore, velZ);
             var divergence = _divergenceEngine.Detect(priceTrend, initialScoreTrend, baseScoreZ, vwapDev);
 
@@ -174,10 +184,10 @@ namespace KinetixFlowEngine.Core.Engine
             bool bullishTrap = divergence.BullishAbsorption || vwapAbsorption.BullishAbsorption;
 
             var adjustedScore = _contextScoreEngine.ApplyPenalty(baseAdjustedScore, priceTrend, impact, bearishTrap, bullishTrap);
-            var scoreZ = _scoreNorm.Update(adjustedScore);
-            var imbZ = _imbNorm.Update(features.Imbalance);
-            var exhZ = _exhNorm.Update(features.Exhaustion);
-            var cmpZ = _cmpNorm.Update(features.Compression);
+            var scoreZ = _adjScoreNorm.Update(adjustedScore, alpha);
+            var imbZ = _imbNorm.Update(features.Imbalance, alpha);
+            var exhZ = _exhNorm.Update(features.Exhaustion, alpha);
+            var cmpZ = _cmpNorm.Update(features.Compression, alpha);
 
             var scoreTrend = _scoreEngine.Update((decimal)adjustedScore, velZ);
             var flowState = _flowStateEngine.Detect(scoreZ, velZ, imbZ, cmpZ, exhZ, features.Persistence, scoreTrend);
@@ -257,7 +267,7 @@ namespace KinetixFlowEngine.Core.Engine
                 ProbFastEma = (double)_probEngine.Fast,
                 ProbSlowEma = (double)_probEngine.Slow,
                 ProbMediumEma = (double)_probEngine.Medium,
-                TrendFactor = (double)_momentumRun.LastFactor,
+                TrendFactor =factor,
             };
         }
     }
