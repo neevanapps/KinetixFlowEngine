@@ -2,24 +2,28 @@
 using CryptoExchange.Net.Requests;
 using KinetixFlowEngine.Core.Data;
 using KinetixFlowEngine.Core.Execution;
+using KinetixFlowEngine.Core.Prop;
 using KinetixFlowEngine.Core.Strategy;
 using KinetixFlowEngine.Core.Trading;
+using KinetixFlowEngine.Core.Utils;
 using System.Drawing;
 
 namespace KinetixFlowEngine.Core.Execution
 {
     public class BybitExecutor : ITradeExecutor
     {
+        private readonly TelegramService _telegram;
         private readonly BybitClientFactory _factory;
         private readonly BybitDepthStreamClient _depth;
         private readonly ILogger<BybitExecutor> _logger;
         private const decimal TICK = 0.5m;
         private const int MAX_RETRIES = 5;
-        public BybitExecutor(BybitClientFactory factory, BybitDepthStreamClient client, ILogger<BybitExecutor> logger)
+        public BybitExecutor(BybitClientFactory factory, BybitDepthStreamClient client, ILogger<BybitExecutor> logger, TelegramService telegram)
         {
             _factory = factory;
             _depth = client;
             _logger = logger;
+            _telegram = telegram;
         }
 
         public decimal GetMakerPrice(OrderSide orderSide)
@@ -37,28 +41,43 @@ namespace KinetixFlowEngine.Core.Execution
         public async Task ClosePositionAsync(ExecutionRequest req)
         {
             var client = _factory.GetClient(req.AccountId, req.ApiKey, req.ApiSecret);
-            var side = req.Direction == SignalDirection.Long ? OrderSide.Sell : OrderSide.Buy;
+
+            // Step 1: Get current position to determine real direction & size
+            var pos = await client.GetPositionAsync(req.AccountId);
+            if (pos == null || pos.Quantity <= 0)
+            {
+                _logger.LogInformation("ClosePositionAsync: No open position to close for {Account}", req.AccountId);
+                return; // Nothing to do
+            }
+
+            // Real position direction &     size
+            var realDirection = pos.Quantity > 0 ? SignalDirection.Long : SignalDirection.Short;
+            var closeSide = pos.PositionSide == PositionSide.Buy ? OrderSide.Sell : OrderSide.Buy;
+            var closeQty = pos.Quantity; // use actual position size (handles partials)
+
+            _logger.LogInformation("Closing position: {Direction} | Size: {Qty} | Side: {CloseSide}",
+                realDirection, closeQty, closeSide);
 
             string orderId = null;
 
             for (int attempt = 1; attempt <= MAX_RETRIES; attempt++)
             {
-                var price = GetAdaptiveExitPrice(side, attempt);
+                var price = GetAdaptiveExitPrice(closeSide, attempt);
                 if (price == 0)
                 {
                     _logger.LogWarning("No market data for exit");
                     break;
                 }
 
-                _logger.LogInformation("EXIT Attempt {Attempt} | Price {Price}", attempt, price);
+                _logger.LogInformation("EXIT Attempt {Attempt} | Price {Price} | Side {Side}", attempt, price, closeSide);
 
                 var orderResponse = await client.Client.V5Api.Trading.PlaceOrderAsync(
                     category: Category.Linear,
                     symbol: "BTCUSDT",
-                    side: side,
+                    side: closeSide,
                     type: NewOrderType.Limit,
                     price: price,
-                    quantity: req.Quantity,
+                    quantity: closeQty,
                     reduceOnly: true,
                     timeInForce: TimeInForce.PostOnly);
 
@@ -72,34 +91,34 @@ namespace KinetixFlowEngine.Core.Execution
                 orderId = orderResponse.Data.OrderId;
                 _logger.LogInformation("Exit order placed: {OrderId}", orderId);
 
-                // ── WAIT & POLL FOR FILL (same helper as entry) ────────────────────────
-                bool filled = await WaitForOrderFill(client, orderId, req.Quantity, TimeSpan.FromSeconds(30));
+                // Wait for fill
+                bool filled = await WaitForOrderFill(client, orderId, closeQty, TimeSpan.FromSeconds(30));
 
                 if (filled)
                 {
                     _logger.LogInformation("Exit filled as MAKER (order {OrderId})", orderId);
-                    return; // Success – position should now be closed or reduced
+                    return; // Success
                 }
 
-                // Not filled in time → cancel to clean up
+                // Cancel and retry
                 await client.Client.V5Api.Trading.CancelOrderAsync(
                     category: Category.Linear,
                     symbol: "BTCUSDT",
                     orderId: orderId);
 
-                _logger.LogWarning("Exit order {OrderId} not filled in time → cancelled, retrying", orderId);
+                _logger.LogWarning("Exit order {OrderId} not filled → cancelled, retrying", orderId);
                 await Task.Delay(GetBackoff(attempt));
             }
 
-            // ── FINAL FALLBACK: MARKET CLOSE (mandatory) ─────────────────────────────
+            // Final fallback: market close
             _logger.LogWarning("All PostOnly exit retries failed → falling back to MARKET close");
 
             var marketClose = await client.Client.V5Api.Trading.PlaceOrderAsync(
                 category: Category.Linear,
                 symbol: "BTCUSDT",
-                side: side,
+                side: closeSide,
                 type: NewOrderType.Market,
-                quantity: req.Quantity,
+                quantity: closeQty,
                 reduceOnly: true);
 
             if (marketClose.Success)
@@ -109,7 +128,7 @@ namespace KinetixFlowEngine.Core.Execution
             else
             {
                 _logger.LogError("Market close FAILED: {Error}", marketClose.Error?.Message);
-                // Here you might want to alert or throw – position is stuck open!
+                await _telegram.SendMessageAsync($"CRITICAL: Market close FAILED for {req.AccountId}: {marketClose.Error?.Message}");
             }
         }
 

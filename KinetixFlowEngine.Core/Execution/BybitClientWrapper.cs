@@ -2,6 +2,7 @@
 using Bybit.Net.Clients;
 using Bybit.Net.Enums;
 using CryptoExchange.Net.Authentication;
+using KinetixFlowEngine.Core.Prop;
 
 namespace KinetixFlowEngine.Core.Execution
 {
@@ -16,12 +17,69 @@ namespace KinetixFlowEngine.Core.Execution
                 options.ApiCredentials = new ApiCredentials(apiKey, secret);
 
                 options.Environment = BybitEnvironment.DemoTrading;
-                
+
                 options.RequestTimeout = TimeSpan.FromSeconds(15);
             });
         }
 
         public BybitRestClient Client => _client; // ✅ ADD THIS
+
+        /// <summary>
+        /// Returns actual USDT available balance from Bybit demo account
+        /// </summary>
+        public async Task<decimal> GetUsdtWalletBalanceAsync()
+        {
+            var result = await _client.V5Api.Account.GetBalancesAsync(
+                accountType: AccountType.Unified,
+                asset: "USDT");
+
+            if (!result.Success || result.Data == null || !result.Data.List.Any())
+            {
+                return 0;
+            }
+
+            var account = result.Data.List.FirstOrDefault();
+            var usdtAsset = account?.Assets.FirstOrDefault(a => a.Asset == "USDT");
+
+            return usdtAsset?.WalletBalance ?? 0m;
+        }
+
+        public async Task<decimal> GetUsdtEquityBalanceAsync()
+        {
+            var result = await _client.V5Api.Account.GetBalancesAsync(
+                accountType: AccountType.Unified,
+                asset: "USDT");
+
+            if (!result.Success || result.Data == null || !result.Data.List.Any())
+            {
+                return 0;
+            }
+
+            var account = result.Data.List.FirstOrDefault();
+            var usdtAsset = account?.Assets.FirstOrDefault(a => a.Asset == "USDT");
+
+            return usdtAsset?.Equity ?? 0m;
+        }
+
+        /// <summary>
+        /// Returns current maker/taker fee rate for BTCUSDT Linear (as decimal, e.g. 0.0001 = 0.01%)
+        /// </summary>
+        public async Task<(decimal MakerFee, decimal TakerFee)> GetFeeRatesAsync()
+        {
+            var result = await _client.V5Api.Account.GetFeeRateAsync(
+                category: Category.Linear,
+                symbol: "BTCUSDT");
+
+            if (!result.Success || result.Data == null || !result.Data.List.Any())
+            {
+                // Fallback to standard Bybit rates
+                return (0.0001m, 0.00055m);
+            }
+
+            var fee = result.Data.List[0];
+            return (fee.MakerFeeRate, fee.TakerFeeRate);
+        }
+
         public async Task<List<ExchangePosition>> GetOpenPositionsAsync(string accountId)
         {
             var result = await _client.V5Api.Trading.GetPositionsAsync(
@@ -43,7 +101,8 @@ namespace KinetixFlowEngine.Core.Execution
                     OrderId = $"{accountId}_{p.PositionIdx}", // better fallback
                     EntryPrice = p.AveragePrice ?? 0,
                     Quantity = p.Quantity,
-                    AccountId = accountId // ✅ FIXED
+                    AccountId = accountId,
+                    PositionSide=p.Side
                 });
             }
 
@@ -68,7 +127,8 @@ namespace KinetixFlowEngine.Core.Execution
             {
                 AccountId = accountId,
                 EntryPrice = pos.AveragePrice ?? 0,
-                Quantity = pos.Quantity
+                Quantity = pos.Quantity,
+                PositionSide = pos.Side
             };
         }
     }

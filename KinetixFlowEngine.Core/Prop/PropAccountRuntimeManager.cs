@@ -11,17 +11,18 @@ namespace KinetixFlowEngine.Core.Prop
     {
         private readonly PropAccountRuntimeFactory _factory;
         private readonly object _lock = new();
-
+        private readonly ILogger<PropAccountRuntimeManager> _logger;
         private List<AccountRuntime> _accounts = new();
 
         public IReadOnlyList<AccountRuntime> Accounts => _accounts;
 
         public PropAccountRuntimeManager(
             IOptionsMonitor<PropAccountsOptions> monitor,
-            PropAccountRuntimeFactory factory)
+            PropAccountRuntimeFactory factory,
+            ILogger<PropAccountRuntimeManager> logger)
         {
             _factory = factory;
-
+            _logger = logger;
             // Initial load
             _accounts = _factory.Create(monitor.CurrentValue);
 
@@ -38,6 +39,7 @@ namespace KinetixFlowEngine.Core.Prop
                 {
                     MergeState(_accounts, newAccounts);
                     _accounts = newAccounts;
+                    _logger.LogInformation("Config reload successfully.");
                 }
             }
             catch (Exception ex)

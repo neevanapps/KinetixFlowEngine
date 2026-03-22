@@ -1,4 +1,5 @@
-﻿using KinetixFlowEngine.Core.Prop;
+﻿using Bybit.Net.Enums;
+using KinetixFlowEngine.Core.Prop;
 using KinetixFlowEngine.Core.Trading;
 using KinetixFlowEngine.Core.Utils;
 
@@ -12,13 +13,15 @@ namespace KinetixFlowEngine.Core.Execution
         private readonly PropAccountRuntimeManager _accounts;
         private readonly Dictionary<string, List<ExchangePosition>> _lastSnapshot = new();
         private readonly TelegramService _telegramService;
-        public ExecutionSyncService(PositionManager positions, ILogger<ExecutionSyncService> logger, BybitClientFactory factory, PropAccountRuntimeManager accounts, TelegramService telegramService)
+        private readonly PropAccountStatePersistence _accountStatePersistence;
+        public ExecutionSyncService(PositionManager positions, ILogger<ExecutionSyncService> logger, BybitClientFactory factory, PropAccountRuntimeManager accounts, TelegramService telegramService, PropAccountStatePersistence accountStatePersistence)
         {
             _positions = positions;
             _logger = logger;
             _factory = factory;
             _accounts = accounts;
             _telegramService = telegramService;
+            _accountStatePersistence = accountStatePersistence;
         }
 
         public async Task SyncAsync()
@@ -33,6 +36,23 @@ namespace KinetixFlowEngine.Core.Execution
                         accountId,
                         acc.Config.ApiKey,
                         acc.Config.ApiSecret);
+
+                    // ==================== NEW: BALANCE SYNC ====================
+                    decimal realBalance = await client.GetUsdtWalletBalanceAsync();
+
+                    if (realBalance > 0)
+                    {
+                        // Reconcile with internal equity (take higher value to be safe)
+                        if (realBalance > acc.State.CurrentEquity || realBalance <= acc.State.CurrentEquity)
+                        {
+                            decimal difference = realBalance - acc.State.CurrentEquity;
+                            _logger.LogInformation("Balance sync | Account {Id} | Real={Real} | Internal={Internal} | Diff={Diff}",
+                                accountId, realBalance, acc.State.CurrentEquity, difference);
+
+                            acc.State.CurrentEquity = realBalance;
+                            _accountStatePersistence.Update(accountId, acc.State);
+                        }
+                    }
 
                     var positions = await client.GetOpenPositionsAsync(accountId);
 
@@ -114,5 +134,6 @@ namespace KinetixFlowEngine.Core.Execution
         public decimal EntryPrice { get; set; }
         public decimal Quantity { get; set; }
         public string AccountId { get; set; } = string.Empty;
+        public PositionSide? PositionSide { get; set; }
     }
 }

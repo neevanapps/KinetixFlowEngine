@@ -1,4 +1,5 @@
-﻿using System;
+﻿using KinetixFlowEngine.Core.Utils;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
@@ -6,7 +7,13 @@ namespace KinetixFlowEngine.Core.Prop
 {
     public class AccountStateEngine
     {
-        
+        private readonly TelegramService _telegram;
+
+        public AccountStateEngine(TelegramService telegram)
+        {
+            _telegram = telegram;
+        }
+
         public void UpdateState(
         PropAccountConfig config,
         PropAccountState state,
@@ -16,14 +23,15 @@ namespace KinetixFlowEngine.Core.Prop
             // -----------------------
             // DAILY RESET
             // -----------------------
-            if (state.LastDailyResetUtc.Date != nowUtc.Date)
+            if (state.LastDailyResetUtc.Date != nowUtc.Date && nowUtc.TimeOfDay > new TimeSpan(0, 5, 0))
             {
                 state.LastDailyResetUtc = nowUtc;
-
-                state.DayStartEquity = equity;      // ✅ CRITICAL
+                state.LastDailyResetUtc=nowUtc;
+                state.DayStartEquity = equity;
                 state.HighWaterMarkDaily = equity;
-
                 state.IsPaused = false;
+
+                _telegram.SendMessageAsync($"Daily reset for account {config.AccountId}. New daily base: {equity:C}");
             }
 
             // -----------------------
