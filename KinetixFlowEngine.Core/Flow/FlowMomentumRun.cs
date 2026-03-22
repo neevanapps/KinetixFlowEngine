@@ -1,4 +1,5 @@
-﻿using System;
+﻿using KinetixFlowEngine.Core.Context;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
@@ -7,46 +8,64 @@ namespace KinetixFlowEngine.Core.Flow
     public class FlowMomentumRun
     {
         private double _run = 0;
-
-        private const double DECAY = 0.65;
-        private const double MAX_RUN = 12;
+        private const double MAX_RUN = 12.0;
+        private const double BUILD_MULTIPLIER = 1.10;   // SAME for long and short → NEUTRAL
+        private const double DECAY = 0.62;              // slightly softer decay
+        private const double VOLUME_BOOST = 1.30;       // when volume expands
+        private const double VOLUME_DAMP = 0.78;        // when volume contracts
 
         public decimal LastFactor { get; private set; }
-
         public double Run => _run;
+
+        private readonly VolumeEngine _volumeEngine;
+
+        public FlowMomentumRun(VolumeEngine volumeEngine)
+        {
+            _volumeEngine = volumeEngine;
+        }
 
         public void Restore(double run)
         {
             _run = Math.Clamp(run, -MAX_RUN, MAX_RUN);
         }
 
-        public decimal GetFactor(double score, double velocityZ)
+        public decimal GetFactor(double normalizedInput, double velocityZ)
         {
-            double absScore = Math.Abs(score);
-            double strength = Math.Min(absScore / 2.2, 1.0);   // was /2.5 → slightly faster build
+            double absInput = Math.Abs(normalizedInput);
+            double strength = Math.Min(absInput / 2.0, 1.0);   // balanced divisor
 
-            if (score > 0.35)                                  // lowered from 0.4
-                _run = Math.Min(MAX_RUN, _run + strength * 1.05);   // slight bullish bias if you want
-            else if (score < -0.35)                            // lowered from -0.4
-                _run = Math.Max(-MAX_RUN, _run - strength * 1.15); // faster bearish build (important!)
+            // === VOLUME AWARENESS (your idea) ===
+            double volumeFactor = 1.0;
+            if (_volumeEngine != null)
+            {
+                bool isExpanding = _volumeEngine.IsVolumeExpansion(1.25); // 25% above average
+                volumeFactor = isExpanding ? VOLUME_BOOST : VOLUME_DAMP;
+            }
+
+            // === NEUTRAL MOMENTUM BUILD ===
+            if (normalizedInput > 0.32)
+                _run = Math.Min(MAX_RUN, _run + strength * BUILD_MULTIPLIER * volumeFactor);
+            else if (normalizedInput < -0.32)
+                _run = Math.Max(-MAX_RUN, _run - strength * BUILD_MULTIPLIER * volumeFactor);
             else
-                _run *= 0.58;                                  // was 0.65 → faster normal decay
+                _run *= DECAY;
 
-            // Stronger momentum-based decay
-            if (Math.Abs(velocityZ) < 0.4)                     // was 0.3
-                _run *= 0.58;                                  // was 0.75
+            // Extra decay on low velocity (neutral)
+            if (Math.Abs(velocityZ) < 0.45)
+                _run *= 0.65;
 
+            // Final factor calculation
             double absRun = Math.Abs(_run);
             double normalized = absRun / MAX_RUN;
-            double factor = 0.18 + (0.26 * normalized);        // was 0.30 → softer max
+            double factor = 0.20 + (0.28 * normalized);   // clean neutral range
 
-            LastFactor = (decimal)Math.Clamp(factor, 0.18, 0.46);  // hard cap lowered to 0.46
+            LastFactor = (decimal)Math.Clamp(factor, 0.20, 0.48);
             return LastFactor;
         }
 
-        public void Bootstrap(double scoreZ)
+        public void Bootstrap(double input)
         {
-            _run = Math.Clamp(scoreZ * 2.0, -6, 6);
+            _run = Math.Clamp(input * 2.0, -6, 6);
         }
 
         public void Reset() => _run = 0;

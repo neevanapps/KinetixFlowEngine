@@ -23,7 +23,8 @@ namespace KinetixFlowEngine.Core.Trend
 
         public FlowTrend Update(decimal prob, double velocityZ)
         {
-            decimal factor = _momentumRun.GetFactor((double)prob, velocityZ);
+            double normalizedProb = (double)prob;   // already 0-1
+            decimal factor = _momentumRun.GetFactor(normalizedProb, velocityZ);
 
             var fast = _fast.UpdateWithFactor(prob, factor, 6 * minTick, 20 * minTick);
             var medium = _medium.UpdateWithFactor(prob, factor, 20 * minTick, 60 * minTick);

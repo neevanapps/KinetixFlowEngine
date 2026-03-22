@@ -78,7 +78,7 @@ namespace KinetixFlowEngine.Core.Engine
             LiquidityPressureEngine pressureEngine,
             VwapAbsorptionEngine vwapAbsorptionEngine,
             WhaleClusterEngine whaleClusterEngine, FlowImpactEngine flowImpactEngine,
-            FlowPersistenceEngine flowPersistenceEngine, ProbabilityTrendEngine probEngine, FlowTradeBuffer tradeBuffer, FifteenMinuteCandleBuilder candle15m, VolumeEngine volumeEngine, FlowMomentumRun momentumRun)
+            FlowPersistenceEngine flowPersistenceEngine, ProbabilityTrendEngine probEngine, FlowTradeBuffer tradeBuffer, FifteenMinuteCandleBuilder candle15m, VolumeEngine volumeEngine)
         {
             _flowAggregationWindow = flowAggregationWindow;
             _flowFeatureEngine = flowFeatureEngine;
@@ -115,7 +115,7 @@ namespace KinetixFlowEngine.Core.Engine
             _tradeBuffer = tradeBuffer;
             _candle15m = candle15m;
             _volumeEngine = volumeEngine;
-            _momentumRun = momentumRun;
+            _momentumRun = new FlowMomentumRun(_volumeEngine);
         }
 
         public KinetixEngineResult Process(double price, decimal quantity, long timeStamp, double openInterest)
@@ -203,8 +203,8 @@ namespace KinetixFlowEngine.Core.Engine
                 ImbalanceZ = imbZ,
                 ExhaustionZ = exhZ,
                 CompressionZ = cmpZ,
-                Volume15 = _volumeEngine.Average,
-                Volume1 = _volumeEngine.CumulativeSum,
+                Volume15 = _volumeEngine.Sum,
+                Volume1 = _volumeEngine.Average,
                 VWAP = (double)vwap,
                 ER = er5,
                 ER5 = er5,
