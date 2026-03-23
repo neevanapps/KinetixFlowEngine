@@ -14,7 +14,9 @@ namespace KinetixFlowEngine.Core.Execution
         private readonly Dictionary<string, List<ExchangePosition>> _lastSnapshot = new();
         private readonly TelegramService _telegramService;
         private readonly PropAccountStatePersistence _accountStatePersistence;
-        public ExecutionSyncService(PositionManager positions, ILogger<ExecutionSyncService> logger, BybitClientFactory factory, PropAccountRuntimeManager accounts, TelegramService telegramService, PropAccountStatePersistence accountStatePersistence)
+
+        public ExecutionSyncService(PositionManager positions, ILogger<ExecutionSyncService> logger, BybitClientFactory factory,
+            PropAccountRuntimeManager accounts, TelegramService telegramService, PropAccountStatePersistence accountStatePersistence)
         {
             _positions = positions;
             _logger = logger;
@@ -31,38 +33,51 @@ namespace KinetixFlowEngine.Core.Execution
                 foreach (var acc in _accounts.Accounts)
                 {
                     var accountId = acc.Config.AccountId;
+                    var client = _factory.GetClient(accountId, acc.Config.ApiKey, acc.Config.ApiSecret);
 
-                    var client = _factory.GetClient(
-                        accountId,
-                        acc.Config.ApiKey,
-                        acc.Config.ApiSecret);
-
-                    // ==================== NEW: BALANCE SYNC ====================
+                    // ==================== BALANCE SYNC (fixed) ====================
                     decimal realBalance = await client.GetUsdtWalletBalanceAsync();
-
-                    if (realBalance > 0)
+                    if (realBalance > 0 && Math.Abs(realBalance - acc.State.CurrentEquity) > 0.01m)
                     {
-                        // Reconcile with internal equity (take higher value to be safe)
-                        if (realBalance > acc.State.CurrentEquity || realBalance <= acc.State.CurrentEquity)
-                        {
-                            decimal difference = realBalance - acc.State.CurrentEquity;
-                            _logger.LogInformation("Balance sync | Account {Id} | Real={Real} | Internal={Internal} | Diff={Diff}",
-                                accountId, realBalance, acc.State.CurrentEquity, difference);
+                        decimal difference = realBalance - acc.State.CurrentEquity;
+                        _logger.LogInformation("Balance sync | Account {Id} | Real={Real} → Internal={Internal} | Diff={Diff}",
+                            accountId, realBalance, acc.State.CurrentEquity, difference);
 
-                            acc.State.CurrentEquity = realBalance;
-                            _accountStatePersistence.Update(accountId, acc.State);
-                        }
+                        acc.State.CurrentEquity = realBalance;
+                        _accountStatePersistence.Update(accountId, acc.State);
                     }
 
                     var positions = await client.GetOpenPositionsAsync(accountId);
 
+                    // ==================== TINY REMNANT AUTO-CLEANUP (fixed) ====================
+                    foreach (var ex in positions)
+                    {
+                        if (ex.Quantity > 0 && ex.Quantity < 0.002m)
+                        {
+                            _logger.LogWarning("TINY REMNANT DETECTED {Acc} | Qty {Qty} → forcing market close",
+                                accountId, ex.Quantity);
+
+                            var side = ex.PositionSide == PositionSide.Buy ? OrderSide.Sell : OrderSide.Buy;
+
+                            // Fire-and-forget market close (no waiting)
+                            await client.Client.V5Api.Trading.PlaceOrderAsync(
+                                category: Category.Linear,
+                                symbol: "BTCUSDT",
+                                side: side,
+                                type: NewOrderType.Market,
+                                quantity: ex.Quantity,
+                                reduceOnly: true);
+
+                            // Clean internal state using tolerant lookup (safer than OrderId)
+                            _positions.ForceRemoveRemnantByPrice(accountId, ex.EntryPrice, ex.Quantity);
+                        }
+                    }
+
+                    // Rest of your original logic (unchanged)
                     var prevPositions = _lastSnapshot.ContainsKey(accountId)
                         ? _lastSnapshot[accountId]
                         : new List<ExchangePosition>();
 
-                    // -------------------------
-                    // 1. DETECT CLOSED POSITIONS
-                    // -------------------------
                     foreach (var prev in prevPositions)
                     {
                         var stillExists = positions.Any(x =>
@@ -71,7 +86,6 @@ namespace KinetixFlowEngine.Core.Execution
 
                         if (!stillExists)
                         {
-                            // CLOSED ON EXCHANGE
                             var local = _positions.GetAllPositions().FirstOrDefault(x =>
                                 x.AccountId == accountId &&
                                 Math.Abs(x.EntryPrice - prev.EntryPrice) < 2 &&
@@ -80,19 +94,11 @@ namespace KinetixFlowEngine.Core.Execution
                             if (local != null && !local.Closed)
                             {
                                 _logger.LogWarning("EXIT SYNC: Closing trade from exchange {OrderId}", local.OrderId);
-
-                                _positions.CloseTrade(
-                                    local.StrategyName,
-                                    local.AccountId,
-                                    prev.EntryPrice, // fallback exit price
-                                    "ExchangeExit");
+                                _positions.CloseTrade(local.StrategyName, local.AccountId, prev.EntryPrice, "ExchangeExit");
                             }
                         }
                     }
 
-                    // -------------------------
-                    // 2. ADD MISSING TRADES (existing logic)
-                    // -------------------------
                     foreach (var ex in positions)
                     {
                         var local = _positions.GetAllPositions().FirstOrDefault(x =>
@@ -103,22 +109,16 @@ namespace KinetixFlowEngine.Core.Execution
                         if (local == null)
                         {
                             _logger.LogWarning("Recovered missing trade {OrderId}", ex.OrderId);
-                            // Await the Task returned by SendMessageAsync instead of calling .Wait()
                             await _telegramService.SendMessageAsync($"Strange: Recovered missing trade {ex.OrderId} on account {accountId}");
                             _positions.RestoreFromExchange(ex);
                         }
                     }
 
-                    // -------------------------
-                    // 3. UPDATE SNAPSHOT
-                    // -------------------------
                     _lastSnapshot[accountId] = positions;
 
                     _logger.LogInformation(
                         "Sync: Account={acc} Exchange={count} Local={localCount}",
-                        accountId,
-                        positions.Count,
-                        _positions.GetAllPositions().Count(x => x.AccountId == accountId));
+                        accountId, positions.Count, _positions.GetAllPositions().Count(x => x.AccountId == accountId));
                 }
             }
             catch (Exception ex)

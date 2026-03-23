@@ -42,93 +42,62 @@ namespace KinetixFlowEngine.Core.Execution
         {
             var client = _factory.GetClient(req.AccountId, req.ApiKey, req.ApiSecret);
 
-            // Step 1: Get current position to determine real direction & size
             var pos = await client.GetPositionAsync(req.AccountId);
             if (pos == null || pos.Quantity <= 0)
             {
-                _logger.LogInformation("ClosePositionAsync: No open position to close for {Account}", req.AccountId);
-                return; // Nothing to do
+                _logger.LogInformation("ClosePositionAsync: No position to close");
+                return;
             }
 
-            // Real position direction &     size
-            var realDirection = pos.Quantity > 0 ? SignalDirection.Long : SignalDirection.Short;
             var closeSide = pos.PositionSide == PositionSide.Buy ? OrderSide.Sell : OrderSide.Buy;
-            var closeQty = pos.Quantity; // use actual position size (handles partials)
+            var closeQty = pos.Quantity;   // real exchange qty
 
-            _logger.LogInformation("Closing position: {Direction} | Size: {Qty} | Side: {CloseSide}",
-                realDirection, closeQty, closeSide);
+            _logger.LogInformation("FIRE-AND-FORGET CLOSE | {Direction} | Qty {Qty} | Account {Acc}",
+                pos.PositionSide, closeQty, req.AccountId);
 
-            string orderId = null;
-
-            for (int attempt = 1; attempt <= MAX_RETRIES; attempt++)
-            {
-                var price = GetAdaptiveExitPrice(closeSide, attempt);
-                if (price == 0)
-                {
-                    _logger.LogWarning("No market data for exit");
-                    break;
-                }
-
-                _logger.LogInformation("EXIT Attempt {Attempt} | Price {Price} | Side {Side}", attempt, price, closeSide);
-
-                var orderResponse = await client.Client.V5Api.Trading.PlaceOrderAsync(
-                    category: Category.Linear,
-                    symbol: "BTCUSDT",
-                    side: closeSide,
-                    type: NewOrderType.Limit,
-                    price: price,
-                    quantity: closeQty,
-                    reduceOnly: true,
-                    timeInForce: TimeInForce.PostOnly);
-
-                if (!orderResponse.Success)
-                {
-                    _logger.LogWarning("Exit place failed: {Error}", orderResponse.Error?.Message);
-                    await Task.Delay(GetBackoff(attempt));
-                    continue;
-                }
-
-                orderId = orderResponse.Data.OrderId;
-                _logger.LogInformation("Exit order placed: {OrderId}", orderId);
-
-                // Wait for fill
-                bool filled = await WaitForOrderFill(client, orderId, closeQty, TimeSpan.FromSeconds(30));
-
-                if (filled)
-                {
-                    _logger.LogInformation("Exit filled as MAKER (order {OrderId})", orderId);
-                    return; // Success
-                }
-
-                // Cancel and retry
-                await client.Client.V5Api.Trading.CancelOrderAsync(
-                    category: Category.Linear,
-                    symbol: "BTCUSDT",
-                    orderId: orderId);
-
-                _logger.LogWarning("Exit order {OrderId} not filled → cancelled, retrying", orderId);
-                await Task.Delay(GetBackoff(attempt));
-            }
-
-            // Final fallback: market close
-            _logger.LogWarning("All PostOnly exit retries failed → falling back to MARKET close");
-
-            var marketClose = await client.Client.V5Api.Trading.PlaceOrderAsync(
+            // Place order and forget immediately
+            var price = GetAdaptiveExitPrice(closeSide, 1);
+            var orderResponse = await client.Client.V5Api.Trading.PlaceOrderAsync(
                 category: Category.Linear,
                 symbol: "BTCUSDT",
                 side: closeSide,
-                type: NewOrderType.Market,
+                type: NewOrderType.Limit,
+                price: price,
                 quantity: closeQty,
-                reduceOnly: true);
+                reduceOnly: true,
+                timeInForce: TimeInForce.PostOnly);
 
-            if (marketClose.Success)
+            if (!orderResponse.Success)
             {
-                _logger.LogInformation("Market close executed successfully");
+                _logger.LogWarning("Close order failed immediately: {Error}", orderResponse.Error?.Message);
+                // fallback to market in background only
+                _ = Task.Run(() => MarketCloseFallback(client, closeSide, closeQty, req.AccountId));
+                return;
             }
-            else
+
+            _logger.LogInformation("Close order placed (fire-and-forget) OrderId={Id}", orderResponse.Data.OrderId);
+
+            // Optional: still try one quick market fallback after 15s if needed
+            _ = Task.Delay(15000).ContinueWith(_ => MarketCloseFallback(client, closeSide, closeQty, req.AccountId));
+        }
+
+        private async Task MarketCloseFallback(BybitClientWrapper client, OrderSide side, decimal qty, string accountId)
+        {
+            try
             {
-                _logger.LogError("Market close FAILED: {Error}", marketClose.Error?.Message);
-                await _telegram.SendMessageAsync($"CRITICAL: Market close FAILED for {req.AccountId}: {marketClose.Error?.Message}");
+                await client.Client.V5Api.Trading.PlaceOrderAsync(
+                    category: Category.Linear,
+                    symbol: "BTCUSDT",
+                    side: side,
+                    type: NewOrderType.Market,
+                    quantity: qty,
+                    reduceOnly: true);
+                _logger.LogInformation("Market fallback executed for remnant cleanup");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Market fallback failed");
+                await _telegram.SendMessageAsync($"CRITICAL remnant close failed {accountId}");
             }
         }
 
@@ -310,6 +279,29 @@ namespace KinetixFlowEngine.Core.Execution
                     reduceOnly: true);
 
             return result.Success;
+        }
+
+        private async Task<bool> WaitForFullClose(BybitClientWrapper client, string accountId, TimeSpan timeout)
+        {
+            var start = DateTime.UtcNow;
+
+            while (DateTime.UtcNow - start < timeout)
+            {
+                var pos = await client.GetPositionAsync(accountId);
+
+                if (pos == null || Math.Abs(pos.Quantity) < 0.00001m)
+                {
+                    _logger.LogInformation("Position fully closed");
+                    return true;
+                }
+
+                _logger.LogInformation("Waiting for full close. Remaining qty: {Qty}", pos.Quantity);
+
+                await Task.Delay(1000);
+            }
+
+            _logger.LogWarning("Timeout waiting for full close");
+            return false;
         }
 
         public async Task UpdateStopLossAsync(ExecutionRequest request, decimal newStopLoss)

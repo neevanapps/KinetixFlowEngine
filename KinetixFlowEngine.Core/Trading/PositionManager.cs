@@ -2,6 +2,7 @@
 using KinetixFlowEngine.Core.Execution;
 using KinetixFlowEngine.Core.Flow.State;
 using KinetixFlowEngine.Core.Strategy;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Drawing;
 
@@ -20,6 +21,7 @@ namespace KinetixFlowEngine.Core.Trading
         private readonly StrategyConfigLoader _strategyConfigLoader;
         private readonly ILogger<PositionManager> _logger;
         public event Action<ActiveTrade>? FullCloseRequested;
+        private readonly ConcurrentDictionary<string, bool> _closingInProgress = new();
 
         private static string GetKey(string strategy, string accountId)
     => $"{accountId}::{strategy}";
@@ -178,13 +180,12 @@ namespace KinetixFlowEngine.Core.Trading
             if (trade.Closed)
                 return;
 
-            trade.ExitReason = reason;
-
-            // 🔥 NEW: trigger execution BEFORE removal
+            _closingInProgress.TryAdd(key, true);
             FullCloseRequested?.Invoke(trade);
 
+            trade.ExitReason = reason;
             trade.Closed = true;
-            _activeTrades.Remove(key);
+            //_activeTrades.Remove(key);
 
             SaveThrottled();
             TradeClosed?.Invoke(trade, exitPrice);
@@ -260,6 +261,22 @@ namespace KinetixFlowEngine.Core.Trading
             var key = GetKey(trade.StrategyName + "_" + trade.OrderId, trade.AccountId);
             _activeTrades[key] = trade;
 
+        }
+
+        public void ForceRemoveRemnantByPrice(string accountId, decimal entryPrice, decimal tinyQty)
+        {
+            var trade = _activeTrades.Values.FirstOrDefault(t =>
+                t.AccountId == accountId &&
+                Math.Abs(t.EntryPrice - entryPrice) < 2 &&
+                Math.Abs(t.RemainingSize - tinyQty) < 0.002m);
+
+            if (trade != null)
+            {
+                _activeTrades.Remove(GetKey(trade.StrategyName, accountId));
+                TradeClosed?.Invoke(trade, trade.EntryPrice); // trigger PnL journal etc.
+                _logger.LogInformation("Force-removed remnant {Strategy} on {Account} (qty {Qty})",
+                    trade.StrategyName, accountId, tinyQty);
+            }
         }
 
     }

@@ -18,7 +18,6 @@ namespace KinetixFlowEngine.Core.Engine
         private readonly FlowRegimeEngine _flowRegimeEngine;
         private readonly FlowTradeBuffer _tradeBuffer;
 
-        private readonly Ema _probabilitySmoother = new(5);
         private readonly VwapEngine _vwapEngine;
         private readonly EfficiencyRatioEngine _erEngine;
         private readonly EfficiencyRatio30mEngine _er30m;
@@ -170,7 +169,7 @@ namespace KinetixFlowEngine.Core.Engine
             var baseAlpha = AdaptiveAlpha.Compute(atr, er5);
             var factor = (double)_momentumRun.LastFactor;
             var alpha = baseAlpha * (0.9 + 0.2 * factor);
-            alpha = Math.Clamp(alpha, 0.02, 0.3);
+            alpha = Math.Clamp(alpha, 0.04, 0.35);
 
             var baseScoreZ = _scoreNorm.Update(baseAdjustedScore, alpha);
             var velZ = _velNorm.Update(features.DeltaVelocity, alpha);
@@ -195,8 +194,8 @@ namespace KinetixFlowEngine.Core.Engine
             var probability = _flowProbabilityEngine.Calculate(scoreZ, velZ, imbZ, cmpZ, exhZ, flowState, scoreTrend, divergence.BullishAbsorption,
                 divergence.BearishDistribution, vwapAbsorption.BullishAbsorption, vwapAbsorption.BearishAbsorption, impact.BullishControl, impact.BearishControl);
 
-            double smoothedLongProb = _probabilitySmoother.Update(probability.LongProbability);
-            var ProbTrend = _probEngine.Update((decimal)smoothedLongProb, velZ);
+            var probAlpha = Math.Clamp(alpha * 1.2, 0.05, 0.4);
+            var ProbTrend = _probEngine.Update((decimal)probability.LongProbability, velZ, probAlpha);
 
             bool longSignal = probability.LongProbability > 0.65 && scoreTrend == FlowTrend.Bullish;
             bool shortSignal = probability.ShortProbability > 0.65 && scoreTrend == FlowTrend.Bearish;
@@ -230,8 +229,8 @@ namespace KinetixFlowEngine.Core.Engine
                 ScoreMediumEma = (double)_scoreEngine.Medium,
                 FlowState = flowState,
 
-                LongProbability = smoothedLongProb,
-                ShortProbability = 1 - smoothedLongProb,
+                LongProbability = probability.LongProbability,
+                ShortProbability = 1 - probability.LongProbability,
 
                 LongStable = stability.LongStable,
                 ShortStable = stability.ShortStable,

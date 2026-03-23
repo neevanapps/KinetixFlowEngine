@@ -14,7 +14,7 @@
     "StopLossAtr": 1,
     "TrailingStopAtr": 1,
     "VolumeBased": false,
-    "AccountIds": []
+    "AccountIds": [ "Demo10k" ]
   },
   {
     "StrategyName": "ProbVolume",
@@ -65,7 +65,7 @@
     "StopLossAtr": 1,
     "TrailingStopAtr": 1,
     "VolumeBased": false,
-    "AccountIds": [ "Demo10k" ]
+    "AccountIds": []
   },
   {
     "StrategyName": "ScoreVolume",

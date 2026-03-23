@@ -28,39 +28,34 @@ namespace KinetixFlowEngine.Core.Context
         // ----------------------------------
         // STRUCTURAL PENALTY (IMPORTANT)
         // ----------------------------------
-        public double ApplyPenalty(
-            double score,
-            FlowTrend priceTrend,
-            FlowImpactSnapshot impact,
-            bool bearishTrap,
-            bool bullishTrap)
+        public double ApplyPenalty(double score, FlowTrend priceTrend, FlowImpactSnapshot impact, bool bearishTrap, bool bullishTrap)
         {
             double penalty = 1.0;
 
-            // Price contradiction
+            // Price contradiction (soft)
             if (priceTrend == FlowTrend.Bearish && score > 0)
-                penalty *= 0.65;
+                penalty *= 0.80;
 
             if (priceTrend == FlowTrend.Bullish && score < 0)
+                penalty *= 0.80;
+
+            // Impact control (moderate, not crushing)
+            if (impact.BearishControl && score > 0)
                 penalty *= 0.65;
 
-            // Impact control (strong)
-            if (impact.BearishControl && score > 0)
-                penalty *= 0.35;
-
             if (impact.BullishControl && score < 0)
-                penalty *= 0.35;
+                penalty *= 0.65;
 
-            // Absorption / divergence traps
+            // Traps (light penalty)
             if (bearishTrap && score > 0)
-                penalty *= 0.5;
+                penalty *= 0.75;
 
             if (bullishTrap && score < 0)
-                penalty *= 0.5;
+                penalty *= 0.75;
 
-            // Efficiency
+            // Efficiency (very light)
             if (Math.Abs(impact.Efficiency) < 0.2)
-                penalty *= 0.7;
+                penalty *= 0.85;
 
             score *= penalty;
 

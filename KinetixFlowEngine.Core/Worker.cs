@@ -609,8 +609,11 @@ namespace KinetixFlowEngine.Core
             if (last == null)
                 return true;
 
+            if ((DateTime.UtcNow - last.ExitTime).TotalMinutes < 2)
+                return false;
+
             // Only restrict SAME direction after SL / TSL
-            if (last.Direction != signal.Direction && last.ExitTime.AddMinutes(2) < DateTime.UtcNow)
+            if (last.Direction != signal.Direction)
                 return true;
 
             if (last.ExitReason != "SL" && last.ExitReason != "TSL")
