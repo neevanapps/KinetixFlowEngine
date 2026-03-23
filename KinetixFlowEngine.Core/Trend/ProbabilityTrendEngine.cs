@@ -38,7 +38,7 @@ namespace KinetixFlowEngine.Core.Trend
             var medium = _medium.UpdateWithFactor(prob, adjustedFactor, 20 * minTick, 60 * minTick);
             var slow = _slow.UpdateWithFactor(prob, adjustedFactor, 60 * minTick, 180 * minTick);
 
-            const decimal hysteresis = 0.015m; // slightly tighter than before
+            const decimal hysteresis = 0.012m; // slightly tighter than before
 
             if (fast > medium && medium > slow && (fast - slow) > hysteresis)
                 return FlowTrend.Bullish;

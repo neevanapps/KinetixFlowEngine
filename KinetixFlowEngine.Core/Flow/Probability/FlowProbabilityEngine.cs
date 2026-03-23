@@ -6,179 +6,92 @@ namespace KinetixFlowEngine.Core.Flow.Probability
     public class FlowProbabilityEngine
     {
         public FlowProbabilitySnapshot Calculate(
-            double scoreZ,
-            double velocityZ,
-            double imbalanceZ,
-            double compression,
-            double exhaustion,
-            FlowStateSnapshot state,
-            FlowTrend scoreTrend,
-            bool bullishAbsorption,
-            bool bearishDistribution,
-            bool vwapBullishAbsorption,
-            bool vwapBearishAbsorption,
-            bool bullishControl,
-            bool bearishControl)
+    double scoreZ,
+    double velocityZ,
+    double imbalanceZ,
+    double compression,
+    double exhaustion,
+    FlowStateSnapshot state,
+    FlowTrend scoreTrend,
+    bool bullishAbsorption,
+    bool bearishDistribution,
+    bool vwapBullishAbsorption,
+    bool vwapBearishAbsorption,
+    bool bullishControl,
+    bool bearishControl)
         {
-            double longScore = 0;
-            double shortScore = 0;
-
             //------------------------------------------------
-            // Clamp Z-scores
+            // Clamp inputs
             //------------------------------------------------
-
             double s = Math.Clamp(scoreZ, -2.5, 2.5);
             double v = Math.Clamp(velocityZ, -2.5, 2.5);
             double i = Math.Clamp(imbalanceZ, -2.5, 2.5);
 
             //------------------------------------------------
-            // Core flow signals (dominant)
+            // 1. DIRECTIONAL CORE (single signal, NOT split)
             //------------------------------------------------
-
-            longScore += Math.Max(s, 0) * 1.6;
-            shortScore += Math.Max(-s, 0) * 1.6;
-
-            longScore += Math.Max(i, 0) * 1.3;
-            shortScore += Math.Max(-i, 0) * 1.3;
-
-            longScore += Math.Max(v, 0) * 1.1;
-            shortScore += Math.Max(-v, 0) * 1.1;
+            double directional =
+                  s * 0.55
+                + v * 0.25
+                + i * 0.20;
 
             //------------------------------------------------
-            // Compression breakout setup
+            // 2. CONTEXT (light influence only)
             //------------------------------------------------
+            double context = 0;
 
+            // compression breakout
             if (compression > 0.8)
-            {
-                if (Math.Abs(velocityZ) > 1.0)
-                {
-                    if (velocityZ > 0)
-                        longScore += 0.35;
+                context += Math.Sign(v) * 0.20;
 
-                    if (velocityZ < 0)
-                        shortScore += 0.35;
-                }
-            }
+            // exhaustion (reduced impact)
+            double exhaustionPenalty = Math.Min(exhaustion / 12.0, 0.4);
+            directional *= (1 - exhaustionPenalty);
+
+            // flow state
+            if (state.State == FlowState.Ignition || state.State == FlowState.TrendContinuation)
+                context += Math.Sign(directional) * 0.15;
+
+            if (state.State == FlowState.Exhaustion)
+                directional *= 0.75;
 
             //------------------------------------------------
-            // Directional exhaustion penalty
+            // 3. SIGNALS (additive only, no multiplication)
             //------------------------------------------------
+            if (bullishAbsorption) context += 0.15;
+            if (bearishDistribution) context -= 0.15;
 
-            double exhaustionPenalty = Math.Min(exhaustion / 12.0, 0.55);
+            if (vwapBullishAbsorption) context += 0.10;
+            if (vwapBearishAbsorption) context -= 0.10;
 
+            if (bullishControl) context += 0.08;
+            if (bearishControl) context -= 0.08;
+
+            //------------------------------------------------
+            // 4. TREND ALIGNMENT (critical)
+            //------------------------------------------------
             if (scoreTrend == FlowTrend.Bullish)
-            {
-                longScore *= (1 - exhaustionPenalty * 1.4);
-                shortScore *= (1 - exhaustionPenalty * 0.6);
-            }
-            else if (scoreTrend == FlowTrend.Bearish)
-            {
-                shortScore *= (1 - exhaustionPenalty * 1.4);
-                longScore *= (1 - exhaustionPenalty * 0.6);
-            }
-            else
-            {
-                longScore *= (1 - exhaustionPenalty);
-                shortScore *= (1 - exhaustionPenalty);
-            }
+                context += 0.20;
+
+            if (scoreTrend == FlowTrend.Bearish)
+                context -= 0.20;
 
             //------------------------------------------------
-            // Directional flow state boost
+            // 5. FINAL SCORE
             //------------------------------------------------
-
-            switch (state.State)
-            {
-                case FlowState.Ignition:
-                case FlowState.TrendContinuation:
-
-                    if (scoreTrend == FlowTrend.Bullish || state.Bullish)
-                        longScore += 0.40;
-                    else if (scoreTrend == FlowTrend.Bearish || state.Bearish)
-                        shortScore += 0.40;
-
-                    break;
-
-                case FlowState.Exhaustion:
-                    longScore *= 0.7;
-                    shortScore *= 0.7;
-                    break;
-            }
+            double finalScore = directional + context;
 
             //------------------------------------------------
-            // Trend alignment boost
+            // 6. LOGISTIC (NOT softmax)
             //------------------------------------------------
+            double prob = 1.0 / (1.0 + Math.Exp(-finalScore));
 
-            if (state.Bullish && scoreTrend == FlowTrend.Bullish)
-                longScore += 0.35;
-
-            if (state.Bearish && scoreTrend == FlowTrend.Bearish)
-                shortScore += 0.35;
-
-            //------------------------------------------------
-            // Absorption signals
-            //------------------------------------------------
-
-            if (bullishAbsorption)
-            {
-                longScore += 0.40;
-                shortScore -= 0.2;
-            }
-
-            if (bearishDistribution)
-            {
-                shortScore += 0.40;
-                longScore -= 0.2;
-            }
-
-            //------------------------------------------------
-            // Multiplicative VWAP absorption
-            //------------------------------------------------
-
-            if (vwapBullishAbsorption)
-                longScore *= 1.35;
-
-            if (vwapBearishAbsorption)
-                shortScore *= 1.35;
-
-            //------------------------------------------------
-            // Price control
-            //------------------------------------------------
-
-            if (bullishControl)
-                longScore *= 1.20;
-
-            if (bearishControl)
-                shortScore *= 1.20;
-
-            //------------------------------------------------
-            // Prevent negatives
-            //------------------------------------------------
-
-            if (longScore < 0) longScore = 0;
-            if (shortScore < 0) shortScore = 0;
-
-            //------------------------------------------------
-            // Softmax probability normalization
-            //------------------------------------------------
-
-            double expLong = Math.Exp(longScore);
-            double expShort = Math.Exp(shortScore);
-
-            double sum = expLong + expShort;
-
-            if (sum <= 0)
-            {
-                return new FlowProbabilitySnapshot
-                {
-                    LongProbability = 0.5,
-                    ShortProbability = 0.5
-                };
-            }
+            prob = Math.Clamp(prob, 0.05, 0.95);
 
             return new FlowProbabilitySnapshot
             {
-                LongProbability = expLong / sum,
-                ShortProbability = expShort / sum
+                LongProbability = prob,
+                ShortProbability = 1 - prob
             };
         }
     }

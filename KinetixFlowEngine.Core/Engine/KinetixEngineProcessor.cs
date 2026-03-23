@@ -40,7 +40,7 @@ namespace KinetixFlowEngine.Core.Engine
         private readonly FlowImpactEngine _flowImpactEngine;
         private double _previousPrice;
         private readonly VolumeEngine _volumeEngine;
-
+        private readonly Ema __scoreTrendInputEma = new Ema(3);
         private readonly ScoreNormalizer _scoreNorm;
         private readonly VelocityNormalizer _velNorm;
         private readonly ImbalanceNormalizer _imbNorm;
@@ -188,10 +188,12 @@ namespace KinetixFlowEngine.Core.Engine
             var exhZ = _exhNorm.Update(features.Exhaustion, alpha);
             var cmpZ = _cmpNorm.Update(features.Compression, alpha);
 
-            var scoreTrend = _scoreEngine.Update((decimal)adjustedScore, velZ);
+            var smoothedScoreZ = __scoreTrendInputEma.Update(scoreZ);
+            var scoreTrend = _scoreEngine.Update((decimal)smoothedScoreZ, velZ);
             var flowState = _flowStateEngine.Detect(scoreZ, velZ, imbZ, cmpZ, exhZ, features.Persistence, scoreTrend);
 
-            var probability = _flowProbabilityEngine.Calculate(scoreZ, velZ, imbZ, cmpZ, exhZ, flowState, scoreTrend, divergence.BullishAbsorption,
+            var baseScoreZForProb = baseScoreZ;
+            var probability = _flowProbabilityEngine.Calculate(baseScoreZForProb, velZ, imbZ, cmpZ, exhZ, flowState, scoreTrend, divergence.BullishAbsorption,
                 divergence.BearishDistribution, vwapAbsorption.BullishAbsorption, vwapAbsorption.BearishAbsorption, impact.BullishControl, impact.BearishControl);
 
             var probAlpha = Math.Clamp(alpha * 1.2, 0.05, 0.4);

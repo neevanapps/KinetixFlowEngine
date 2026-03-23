@@ -185,7 +185,7 @@ namespace KinetixFlowEngine.Core.Trading
 
             trade.ExitReason = reason;
             trade.Closed = true;
-            //_activeTrades.Remove(key);
+            _activeTrades.Remove(key);
 
             SaveThrottled();
             TradeClosed?.Invoke(trade, exitPrice);
