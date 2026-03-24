@@ -9,7 +9,7 @@ namespace KinetixFlowEngine.Core.Trend
         private readonly AdaptiveEma _medium = new();
         private readonly AdaptiveEma _slow = new();
 
-        private const int minTick = 6;
+        private const int minTick = 12;
 
         public decimal Fast => _fast.Value ?? 0;
         public decimal Slow => _slow.Value ?? 0;
@@ -26,11 +26,11 @@ namespace KinetixFlowEngine.Core.Trend
             double normalizedScore = (double)(score / 100m + 0.5m);
             decimal factor = _momentumRun.GetFactor(normalizedScore, velocityZ);
 
-            var fast = _fast.UpdateWithFactor(score, factor, 6 * minTick, 20 * minTick);
-            var medium = _medium.UpdateWithFactor(score, factor, 20 * minTick, 60 * minTick);
-            var slow = _slow.UpdateWithFactor(score, factor, 60 * minTick, 180 * minTick);
+            var fast = _fast.UpdateWithFactor(score, factor, 5 * minTick, 15 * minTick);
+            var medium = _medium.UpdateWithFactor(score, factor, 15 * minTick, 45 * minTick);
+            var slow = _slow.UpdateWithFactor(score, factor, 45 * minTick, 135 * minTick);
 
-            const decimal hysteresis = 0.25m;
+            const decimal hysteresis = 0.5m;
 
             if (fast > slow && (fast - slow) > hysteresis)
                 return FlowTrend.Bullish;

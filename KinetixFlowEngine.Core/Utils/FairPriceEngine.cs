@@ -4,26 +4,29 @@
     {
         public bool IsFairLongEntry(decimal price, double vwap, double atr)
         {
-            if (atr <= 0)
-                return true;
+            //if (atr <= 0)
+            //    return true;
 
-            var deviation = price - (decimal)vwap;
+            //var deviation = price - (decimal)vwap;
 
-            var deviationAtr = deviation / (decimal)atr;
+            //var deviationAtr = deviation / (decimal)atr;
 
-            return deviationAtr <= -0.3m;
+            //return deviationAtr <= -0.3m;
+
+            return price <= (decimal)vwap;
         }
 
         public bool IsFairShortEntry(decimal price, double vwap, double atr)
         {
-            if (atr <= 0)
-                return true;
+            //if (atr <= 0)
+            //    return true;
 
-            var deviation = price - (decimal)vwap;
+            //var deviation = price - (decimal)vwap;
 
-            var deviationAtr = deviation / (decimal)atr;
+            //var deviationAtr = deviation / (decimal)atr;
 
-            return deviationAtr >= 0.3m;
+            //return deviationAtr >= 0.3m;
+            return price >= (decimal)vwap;
         }
 
         public decimal GetDeviationAtr(decimal price, double vwap, double atr)
