@@ -1,6 +1,7 @@
 ﻿using KinetixFlowEngine.Core.Flow;
 using KinetixFlowEngine.Core.Utils;
 
+
 namespace KinetixFlowEngine.Core.Trend
 {
     public class ScoreTrendEngine
@@ -12,10 +13,11 @@ namespace KinetixFlowEngine.Core.Trend
         private const int minTick = 12;
 
         public decimal Fast => _fast.Value ?? 0;
-        public decimal Slow => _slow.Value ?? 0;
         public decimal Medium => _medium.Value ?? 0;
+        public decimal Slow => _slow.Value ?? 0;
 
         private readonly FlowMomentumRun _momentumRun;
+
         public ScoreTrendEngine(FlowMomentumRun momentumRun)
         {
             _momentumRun = momentumRun;
@@ -23,8 +25,8 @@ namespace KinetixFlowEngine.Core.Trend
 
         public FlowTrend Update(decimal score, double velocityZ)
         {
-            double normalizedScore = (double)(score / 100m + 0.5m);
-            decimal factor = _momentumRun.GetFactor(normalizedScore, velocityZ);
+            // ←←← NO normalization anymore (raw score now, same as Probability)
+            decimal factor = _momentumRun.GetFactor((double)score, velocityZ);
 
             var fast = _fast.UpdateWithFactor(score, factor, 5 * minTick, 15 * minTick);
             var medium = _medium.UpdateWithFactor(score, factor, 15 * minTick, 45 * minTick);
@@ -47,5 +49,6 @@ namespace KinetixFlowEngine.Core.Trend
             _slow.Restore(slow);
             _medium.Restore(medium);
         }
+
     }
 }
