@@ -10,62 +10,32 @@ namespace KinetixFlowEngine.Core.Flow
 
         public FlowCompositeSnapshot Calculate(FlowFeatureSnapshot f)
         {
-            //------------------------------------------------
-            // Normalize persistence
-            //------------------------------------------------
+            double persistenceNormalized = Math.Clamp(f.Persistence / MaxPersistence, -1.0, 1.0);
 
-            double persistenceNormalized =
-                Math.Clamp(f.Persistence / MaxPersistence, -1.0, 1.0);
+            // Increased weights on the most whale-relevant signals
+            double imbalanceComponent = 0.40 * f.Imbalance;     // was 0.35
+            double persistenceComponent = 0.30 * persistenceNormalized; // was 0.25
+            double momentumComponent = 0.18 * f.Momentum;      // was 0.15
 
-            //------------------------------------------------
-            // Core flow structure
-            //------------------------------------------------
+            // Secondary (still important but not dominant)
+            double accelerationComponent = 0.10 * f.Acceleration;  // was 0.08
+            double velocityComponent = 0.12 * f.DeltaVelocity; // was 0.10
 
-            double imbalanceComponent = 0.35 * f.Imbalance;
-            double persistenceComponent = 0.25 * persistenceNormalized;
-
-            //------------------------------------------------
-            // Secondary flow structure
-            //------------------------------------------------
-
-            double momentumComponent = 0.15 * f.Momentum;
-
-            //------------------------------------------------
-            // Noise-prone signals (reduced influence)
-            //------------------------------------------------
-
-            double accelerationComponent = 0.08 * f.Acceleration;
-            double velocityComponent = 0.10 * f.DeltaVelocity;
-
-            //------------------------------------------------
-            // Institutional signals
-            //------------------------------------------------
-
-            double sizeBiasComponent = 0.05 * f.SizeBias;
-            double absorptionComponent = 0.07 * f.Absorption;
-
-            //------------------------------------------------
-            // Composite calculation
-            //------------------------------------------------
+            // Institutional / whale signals — boosted
+            double sizeBiasComponent = 0.08 * f.SizeBias;      // was 0.05
+            double absorptionComponent = 0.10 * f.Absorption;    // was 0.07
 
             double composite =
-                imbalanceComponent +
-                persistenceComponent +
-                momentumComponent +
-                accelerationComponent +
-                velocityComponent +
-                sizeBiasComponent +
-                absorptionComponent;
+                            0.30 * f.Imbalance +
+                            0.22 * persistenceNormalized +
+                            0.15 * f.Momentum +
+                            0.10 * f.Acceleration +
+                            0.10 * f.DeltaVelocity +
+                            0.06 * f.SizeBias +
+                            0.07 * f.Absorption;
 
-            //------------------------------------------------
-            // Anti-spike clamp
-            //------------------------------------------------
-
-            composite = Math.Clamp(composite, -1.5, 1.5);
-
-            //------------------------------------------------
-            // EMA smoothing
-            //------------------------------------------------
+            // Wider clamp so scoreZ can actually reach ±2.5+ when whales are active
+            composite = Math.Clamp(composite, -2.5, 2.5);
 
             var smoothed = _ema.Update(composite);
 

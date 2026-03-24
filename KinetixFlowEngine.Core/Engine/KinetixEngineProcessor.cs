@@ -173,9 +173,15 @@ namespace KinetixFlowEngine.Core.Engine
 
             var baseScoreZ = _scoreNorm.Update(baseAdjustedScore, alpha);
             var velZ = _velNorm.Update(features.DeltaVelocity, alpha);
-            velZ = Math.Clamp(velZ, -3, 3);
-            var initialScoreTrend = _scoreEngine.Update((decimal)baseAdjustedScore, velZ);
-            var divergence = _divergenceEngine.Detect(priceTrend, initialScoreTrend, baseScoreZ, vwapDev);
+            velZ = Math.Clamp(velZ, -2, 2);
+            //var initialScoreTrend = _scoreEngine.Update((decimal)baseAdjustedScore, velZ);
+            //var divergence = _divergenceEngine.Detect(priceTrend, initialScoreTrend, baseScoreZ, vwapDev);
+            // temporary trend proxy (no EMA update)
+            var tempTrend = baseScoreZ > 0 ? FlowTrend.Bullish :
+                            baseScoreZ < 0 ? FlowTrend.Bearish :
+                            FlowTrend.Neutral;
+
+            var divergence = _divergenceEngine.Detect(priceTrend, tempTrend, baseScoreZ, vwapDev);
 
             var vwapAbsorption = _vwapAbsorptionEngine.Detect(price, (double)vwap, baseAdjustedScore, priceTrend);
 
