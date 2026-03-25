@@ -45,7 +45,6 @@ namespace KinetixFlowEngine.Core.Engine
         private readonly ImbalanceNormalizer _imbNorm;
         private readonly ExhaustionNormalizer _exhNorm;
         private readonly CompressionNormalizer _cmpNorm;
-        private readonly AdjustedScoreNormalizer _adjScoreNorm;
 
         private readonly FlowMomentumRun _momentumRun;
 
@@ -78,7 +77,7 @@ namespace KinetixFlowEngine.Core.Engine
             LiquidityPressureEngine pressureEngine,
             VwapAbsorptionEngine vwapAbsorptionEngine,
             WhaleClusterEngine whaleClusterEngine, FlowImpactEngine flowImpactEngine,
-            FlowPersistenceEngine flowPersistenceEngine, ProbabilityTrendEngine probEngine, FlowTradeBuffer tradeBuffer, FifteenMinuteCandleBuilder candle15m, VolumeEngine volumeEngine, FlowMomentumRun momentumRun, AdjustedScoreNormalizer adjScoreNorm)
+            FlowPersistenceEngine flowPersistenceEngine, ProbabilityTrendEngine probEngine, FlowTradeBuffer tradeBuffer, FifteenMinuteCandleBuilder candle15m, VolumeEngine volumeEngine, FlowMomentumRun momentumRun)
         {
             _flowAggregationWindow = flowAggregationWindow;
             _flowFeatureEngine = flowFeatureEngine;
@@ -116,7 +115,6 @@ namespace KinetixFlowEngine.Core.Engine
             _candle15m = candle15m;
             _volumeEngine = volumeEngine;
             _momentumRun = momentumRun;
-            _adjScoreNorm = adjScoreNorm;
         }
 
         public KinetixEngineResult Process(double price, decimal quantity, long timeStamp, double openInterest)
@@ -170,31 +168,29 @@ namespace KinetixFlowEngine.Core.Engine
             var alpha = baseAlpha * (0.9 + 0.2 * factor);
             alpha = Math.Clamp(alpha, 0.04, 0.35);
 
-            var baseScoreZ = _scoreNorm.Update(baseAdjustedScore, alpha);
             var velZ = _velNorm.Update(features.DeltaVelocity, alpha);
             velZ = Math.Clamp(velZ, -2, 2);
 
             // temporary trend proxy (no EMA update)
-            var tempTrend = baseScoreZ > 0 ? FlowTrend.Bullish :
-                            baseScoreZ < 0 ? FlowTrend.Bearish :
-                            FlowTrend.Neutral;
+            var tempTrend = baseAdjustedScore > 0 ? FlowTrend.Bullish :
+                baseAdjustedScore < 0 ? FlowTrend.Bearish :
+                FlowTrend.Neutral;
 
-            var divergence = _divergenceEngine.Detect(priceTrend, tempTrend, baseScoreZ, vwapDev);
+            var divergence = _divergenceEngine.Detect(priceTrend, tempTrend, baseAdjustedScore, vwapDev);
 
             var vwapAbsorption = _vwapAbsorptionEngine.Detect(price, (double)vwap, baseAdjustedScore, priceTrend);
 
             bool bearishTrap = divergence.BearishDistribution || vwapAbsorption.BearishAbsorption;
             bool bullishTrap = divergence.BullishAbsorption || vwapAbsorption.BullishAbsorption;
 
-            var adjustedScore = _contextScoreEngine.ApplyPenalty(baseAdjustedScore, priceTrend, impact, bearishTrap, bullishTrap);
-            
-            var scoreZ = _adjScoreNorm.Update(adjustedScore, alpha);
             var imbZ = _imbNorm.Update(features.Imbalance, alpha);
             var exhZ = _exhNorm.Update(features.Exhaustion, alpha);
             var cmpZ = _cmpNorm.Update(features.Compression, alpha);
 
             bool highPersistence = features.Persistence > 4.0;
             bool volumeExpansion = _volumeEngine.IsVolumeExpansion();
+            var adjustedScore = _contextScoreEngine.ApplyPenalty(baseAdjustedScore, priceTrend, impact, bearishTrap, bullishTrap, highPersistence, volumeExpansion);
+            var scoreZ = _scoreNorm.Update(adjustedScore, alpha);
             var scoreTrend = _scoreEngine.Update((decimal)scoreZ, velZ, highPersistence, volumeExpansion);
             var flowState = _flowStateEngine.Detect(scoreZ, velZ, imbZ, cmpZ, exhZ, features.Persistence, scoreTrend);
 

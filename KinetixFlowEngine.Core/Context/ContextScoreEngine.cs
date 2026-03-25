@@ -14,7 +14,8 @@ namespace KinetixFlowEngine.Core.Context
             double er,
             double oiChange)
         {
-            double erMultiplier = 0.5 + er;
+            // Slightly less punitive ER multiplier (was too aggressive)
+            double erMultiplier = 0.75 + (er * 0.4);   // minimum ~0.75 even when ER5 is low
 
             double oiMultiplier = oiChange > 0 ? 1.1 : 1.0;
 
@@ -26,36 +27,41 @@ namespace KinetixFlowEngine.Core.Context
         }
 
         // ----------------------------------
-        // STRUCTURAL PENALTY (IMPORTANT)
+        // STRUCTURAL PENALTY (CONVICTION-AWARE)
         // ----------------------------------
-        public double ApplyPenalty(double score, FlowTrend priceTrend, FlowImpactSnapshot impact, bool bearishTrap, bool bullishTrap)
+        public double ApplyPenalty(double score, FlowTrend priceTrend, FlowImpactSnapshot impact, bool bearishTrap, bool bullishTrap,
+                                   bool highPersistence, bool volumeExpansion)
         {
             double penalty = 1.0;
 
-            // Price contradiction (soft)
+            // Very soft price contradiction
             if (priceTrend == FlowTrend.Bearish && score > 0)
-                penalty *= 0.80;
+                penalty *= 0.94;
 
             if (priceTrend == FlowTrend.Bullish && score < 0)
-                penalty *= 0.80;
+                penalty *= 0.94;
 
-            // Impact control (moderate, not crushing)
+            // Soft impact control
             if (impact.BearishControl && score > 0)
-                penalty *= 0.65;
+                penalty *= 0.85;
 
             if (impact.BullishControl && score < 0)
-                penalty *= 0.65;
+                penalty *= 0.85;
 
-            // Traps (light penalty)
+            // Very light traps
             if (bearishTrap && score > 0)
-                penalty *= 0.75;
+                penalty *= 0.92;
 
             if (bullishTrap && score < 0)
-                penalty *= 0.75;
+                penalty *= 0.92;
 
-            // Efficiency (very light)
+            // Light efficiency
             if (Math.Abs(impact.Efficiency) < 0.2)
-                penalty *= 0.85;
+                penalty *= 0.95;
+
+            // CONVICTION-AWARE SAFETY FLOOR (the real fix)
+            if (highPersistence && volumeExpansion && score > 8)
+                penalty = Math.Max(penalty, 0.88);   // strong flow gets protected
 
             score *= penalty;
 
