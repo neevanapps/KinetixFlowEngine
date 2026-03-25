@@ -5,6 +5,7 @@ namespace KinetixFlowEngine.Core.Trend
 {
     public class ScoreTrendEngine
     {
+        private const int _minTicks = 12;   // 1 minute
         private readonly AdaptiveEma _fast = new();
         private readonly AdaptiveEma _medium = new();
         private readonly AdaptiveEma _slow = new();
@@ -30,11 +31,11 @@ namespace KinetixFlowEngine.Core.Trend
             // Gentle Slow-only boost ONLY on strong confluence
             decimal slowFactor = factor;
             if (highPersistence && volumeExpansion)
-                slowFactor = Math.Clamp(factor * SlowBoostWhenStrong, 0.8m, 2.5m);
+                slowFactor = Math.Clamp(factor * SlowBoostWhenStrong, 0.85m, 2.0m);
 
-            var fast = _fast.UpdateWithFactor(score, factor, 12, 36);     // unchanged
-            var medium = _medium.UpdateWithFactor(score, factor, 36, 108);  // unchanged
-            var slow = _slow.UpdateWithFactor(score, slowFactor, 120, 360);
+            var fast = _fast.UpdateWithFactor(score, factor, 8 * _minTicks, 15 * _minTicks);
+            var medium = _medium.UpdateWithFactor(score, factor, 15 * _minTicks, 45 * _minTicks);
+            var slow = _slow.UpdateWithFactor(score, slowFactor, 45 * _minTicks, 120 * _minTicks);
 
             if (fast > slow && (fast - slow) > Hysteresis) return FlowTrend.Bullish;
             if (fast < slow && (slow - fast) > Hysteresis) return FlowTrend.Bearish;

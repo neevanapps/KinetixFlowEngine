@@ -5,6 +5,8 @@ namespace KinetixFlowEngine.Core.Trend
 {
     public class ProbabilityTrendEngine
     {
+        private const int _minTicks = 12;   // 1 minute
+
         private readonly AdaptiveEma _fast = new();
         private readonly AdaptiveEma _medium = new();
         private readonly AdaptiveEma _slow = new();
@@ -31,9 +33,9 @@ namespace KinetixFlowEngine.Core.Trend
             if (highPersistence && volumeExpansion)
                 slowFactor = Math.Clamp(factor * SlowBoostWhenStrong, 0.8m, 2.5m);
 
-            var fast = _fast.UpdateWithFactor(prob, factor, 12, 36);
-            var medium = _medium.UpdateWithFactor(prob, factor, 36, 108);
-            var slow = _slow.UpdateWithFactor(prob, slowFactor, 120, 360);
+            var fast = _fast.UpdateWithFactor(prob, factor, 8 * _minTicks, 15 * _minTicks);
+            var medium = _medium.UpdateWithFactor(prob, factor, 15 * _minTicks, 45 * _minTicks);
+            var slow = _slow.UpdateWithFactor(prob, slowFactor, 45 * _minTicks, 120 * _minTicks);
 
             if (fast > slow && (fast - slow) > Hysteresis) return FlowTrend.Bullish;
             if (fast < slow && (slow - fast) > Hysteresis) return FlowTrend.Bearish;
