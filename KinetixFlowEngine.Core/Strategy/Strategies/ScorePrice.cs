@@ -10,7 +10,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
     {
         public string Name => "ScorePrice";
         private readonly StrategyConfig _config;
-        double threshold = 2;
+        double threshold = 1;
         public ScorePrice(StrategyConfigLoader loader)
         {
             _config = loader.Get(Name);
