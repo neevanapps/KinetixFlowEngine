@@ -193,12 +193,10 @@ namespace KinetixFlowEngine.Core.Engine
             var exhZ = _exhNorm.Update(features.Exhaustion, alpha);
             var cmpZ = _cmpNorm.Update(features.Compression, alpha);
 
-            //var smoothedScoreZ = __scoreTrendInputEma.Update(adjustedScore);
             bool highPersistence = features.Persistence > 4.0;
             bool volumeExpansion = _volumeEngine.IsVolumeExpansion();
             var scoreTrend = _scoreEngine.Update((decimal)scoreZ, velZ, highPersistence, volumeExpansion);
             var flowState = _flowStateEngine.Detect(scoreZ, velZ, imbZ, cmpZ, exhZ, features.Persistence, scoreTrend);
-
 
             var probability = _flowProbabilityEngine.Calculate(scoreZ, velZ, imbZ, cmpZ, exhZ, flowState, scoreTrend, divergence.BullishAbsorption,
                 divergence.BearishDistribution, vwapAbsorption.BullishAbsorption, vwapAbsorption.BearishAbsorption, impact.BullishControl, impact.BearishControl);
