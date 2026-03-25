@@ -190,18 +190,24 @@ namespace KinetixFlowEngine.Core.Engine
             bool highPersistence = features.Persistence > 4.0;
             bool volumeExpansion = _volumeEngine.IsVolumeExpansion();
             var adjustedScore = _contextScoreEngine.ApplyPenalty(baseAdjustedScore, priceTrend, impact, bearishTrap, bullishTrap, highPersistence, volumeExpansion);
+            // ===== SCALE INSTEAD OF NORMALIZE =====
+            double scale = ComputeDynamicScale(atr);
+            double scaledScore = adjustedScore * scale;
+            // optional: keep scoreZ ONLY for logging / diagnostics
             var scoreZ = _scoreNorm.Update(adjustedScore, alpha);
-            var scoreTrend = _scoreEngine.Update((decimal)scoreZ, velZ, highPersistence, volumeExpansion);
-            var flowState = _flowStateEngine.Detect(scoreZ, velZ, imbZ, cmpZ, exhZ, features.Persistence, scoreTrend);
 
-            var probability = _flowProbabilityEngine.Calculate(scoreZ, velZ, imbZ, cmpZ, exhZ, flowState, scoreTrend, divergence.BullishAbsorption,
+            var scoreTrend = _scoreEngine.Update((decimal)scaledScore, velZ, highPersistence, volumeExpansion);
+            var flowState = _flowStateEngine.Detect(scaledScore, velZ, imbZ, cmpZ, exhZ, features.Persistence, scoreTrend);
+
+            var probability = _flowProbabilityEngine.Calculate(scaledScore, velZ, imbZ, cmpZ, exhZ, flowState, scoreTrend, divergence.BullishAbsorption,
                 divergence.BearishDistribution, vwapAbsorption.BullishAbsorption, vwapAbsorption.BearishAbsorption, impact.BullishControl, impact.BearishControl);
 
             var probAlpha = Math.Clamp(alpha * 1.2, 0.05, 0.4);
             var ProbTrend = _probEngine.Update((decimal)probability.LongProbability, velZ, highPersistence, volumeExpansion);
 
-            bool longSignal = probability.LongProbability > 0.65 && scoreTrend == FlowTrend.Bullish;
-            bool shortSignal = probability.ShortProbability > 0.65 && scoreTrend == FlowTrend.Bearish;
+            bool strongTrend = Math.Abs(_scoreEngine.Medium) > 0.8m && Math.Abs(_scoreEngine.Fast - _scoreEngine.Slow) > 0.5m;
+            bool longSignal = probability.LongProbability > 0.65 && scoreTrend == FlowTrend.Bullish && strongTrend;
+            bool shortSignal = probability.ShortProbability > 0.65 && scoreTrend == FlowTrend.Bearish && strongTrend;
 
             var stability = _signalStabilityEngine.Update(longSignal, shortSignal);
 
@@ -269,8 +275,25 @@ namespace KinetixFlowEngine.Core.Engine
                 ProbFastEma = (double)_probEngine.Fast,
                 ProbSlowEma = (double)_probEngine.Slow,
                 ProbMediumEma = (double)_probEngine.Medium,
-                TrendFactor =factor,
+                TrendFactor = factor,
             };
+        }
+
+        private double ComputeDynamicScale(double atr)
+        {
+            const double baseScale = 0.10;
+            const double minScale = 0.06;
+            const double maxScale = 0.18;
+
+            const double atrLow = 50.0;
+            const double atrHigh = 300.0;
+
+            double t = (atr - atrLow) / (atrHigh - atrLow);
+            t = Math.Clamp(t, 0.0, 1.0);
+
+            double scale = baseScale * (0.8 + 0.7 * t);
+
+            return Math.Clamp(scale, minScale, maxScale);
         }
     }
 }
