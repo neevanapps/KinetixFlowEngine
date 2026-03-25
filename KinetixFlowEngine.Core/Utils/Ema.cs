@@ -23,5 +23,7 @@
             _value = (_alpha * input) + (1 - _alpha) * _value;
             return _value;
         }
+
+        public double Value => _value;
     }
 }

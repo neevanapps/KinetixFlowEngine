@@ -416,7 +416,11 @@ namespace KinetixFlowEngine.Core
                 _priceEngine.Restore(snapshot.PriceFastEma, snapshot.PriceSlowEma);
                 _scoreEngine.Restore(snapshot.ScoreFastEma, snapshot.ScoreSlowEma, snapshot.ScoreMediumEma);
                 _probEngine.Restore(snapshot.ProbFastEma, snapshot.ProbSlowEma, snapshot.ProbMediumEma);
-
+                if (snapshot.VolumeEngineState != null)
+                {
+                    _volumeEngine.Restore(snapshot.VolumeEngineState);
+                    _logger.LogInformation("VolumeEngine state restored successfully.");
+                }
                 _logger.LogInformation("Snapshot restored successfully.");
             }
 
@@ -593,6 +597,7 @@ namespace KinetixFlowEngine.Core
                         ExhaustionNormalizer = _exhNorm.GetState(),
                         CompressionNormalizer = _cmpNorm.GetState(),
                         AdjustedScoreNormalizer = _adjustmentNorm.GetState(),
+                        VolumeEngineState = _volumeEngine.GetState(),
                     });
 
                     _lastSnapshot = DateTime.UtcNow;

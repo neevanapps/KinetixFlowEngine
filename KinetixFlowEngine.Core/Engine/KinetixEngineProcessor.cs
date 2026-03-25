@@ -174,8 +174,7 @@ namespace KinetixFlowEngine.Core.Engine
             var baseScoreZ = _scoreNorm.Update(baseAdjustedScore, alpha);
             var velZ = _velNorm.Update(features.DeltaVelocity, alpha);
             velZ = Math.Clamp(velZ, -2, 2);
-            //var initialScoreTrend = _scoreEngine.Update((decimal)baseAdjustedScore, velZ);
-            //var divergence = _divergenceEngine.Detect(priceTrend, initialScoreTrend, baseScoreZ, vwapDev);
+
             // temporary trend proxy (no EMA update)
             var tempTrend = baseScoreZ > 0 ? FlowTrend.Bullish :
                             baseScoreZ < 0 ? FlowTrend.Bearish :
@@ -189,13 +188,16 @@ namespace KinetixFlowEngine.Core.Engine
             bool bullishTrap = divergence.BullishAbsorption || vwapAbsorption.BullishAbsorption;
 
             var adjustedScore = _contextScoreEngine.ApplyPenalty(baseAdjustedScore, priceTrend, impact, bearishTrap, bullishTrap);
+            
             var scoreZ = _adjScoreNorm.Update(adjustedScore, alpha);
             var imbZ = _imbNorm.Update(features.Imbalance, alpha);
             var exhZ = _exhNorm.Update(features.Exhaustion, alpha);
             var cmpZ = _cmpNorm.Update(features.Compression, alpha);
 
-            var smoothedScoreZ = __scoreTrendInputEma.Update(scoreZ);
-            var scoreTrend = _scoreEngine.Update((decimal)smoothedScoreZ, velZ);
+            //var smoothedScoreZ = __scoreTrendInputEma.Update(adjustedScore);
+            bool highPersistence = features.Persistence > 4.0;
+            bool volumeExpansion = _volumeEngine.IsVolumeExpansion();
+            var scoreTrend = _scoreEngine.Update((decimal)scoreZ, velZ, highPersistence, volumeExpansion);
             var flowState = _flowStateEngine.Detect(scoreZ, velZ, imbZ, cmpZ, exhZ, features.Persistence, scoreTrend);
 
             var baseScoreZForProb = baseScoreZ;
@@ -203,7 +205,7 @@ namespace KinetixFlowEngine.Core.Engine
                 divergence.BearishDistribution, vwapAbsorption.BullishAbsorption, vwapAbsorption.BearishAbsorption, impact.BullishControl, impact.BearishControl);
 
             var probAlpha = Math.Clamp(alpha * 1.2, 0.05, 0.4);
-            var ProbTrend = _probEngine.Update((decimal)probability.LongProbability, velZ, probAlpha);
+            var ProbTrend = _probEngine.Update((decimal)probability.LongProbability, velZ, highPersistence, volumeExpansion);
 
             bool longSignal = probability.LongProbability > 0.65 && scoreTrend == FlowTrend.Bullish;
             bool shortSignal = probability.ShortProbability > 0.65 && scoreTrend == FlowTrend.Bearish;

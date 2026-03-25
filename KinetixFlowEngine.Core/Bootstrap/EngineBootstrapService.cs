@@ -96,23 +96,25 @@ namespace KinetixFlowEngine.Core.Bootstrap
                     c.Volume);
             }
 
-            // ---------- Volume bootstrap (last 15 minutes) ----------
-            var volumeCandles = candles.TakeLast(15);
+            // ---------- Volume bootstrap (last 60 minutes for proper context) ----------
+            var volumeCandles = candles.TakeLast(60).ToList();
 
             foreach (var c in volumeCandles)
             {
-                double vol = (double)c.Volume;
+                double candleVol = (double)c.Volume;
+                if (candleVol <= 0) continue;
 
-                int tradesPerMinute = 60; // approximate
-                double perTrade = vol / tradesPerMinute;
+                // Realistic trade count estimate for BTCUSDT (30–120 trades per minute)
+                int estimatedTrades = Math.Max(30, (int)(candleVol / 0.8));
+                double perTrade = candleVol / estimatedTrades;
 
-                for (int i = 0; i < tradesPerMinute; i++)
+                // Spread naturally (cap loop for performance)
+                for (int i = 0; i < estimatedTrades && i < 120; i++)
                 {
                     _volumeEngine.Update(perTrade);
                 }
             }
-
-            _logger.LogInformation("BOOTSTRAP | Volume initialized from candle data");
+            _logger.LogInformation("BOOTSTRAP | VolumeEngine initialized with realistic 60-minute candle history");
             _logger.LogInformation(
                 "BOOTSTRAP COMPLETE | ATR1m {ATR1:F2} ATR15m {ATR15:F2}",
                 _atr1m.Value,

@@ -1,4 +1,5 @@
-﻿using KinetixFlowEngine.Core.Utils;
+﻿using KinetixFlowEngine.Core.Context;
+using KinetixFlowEngine.Core.Utils;
 
 namespace KinetixFlowEngine.Core.Persistence
 {
@@ -28,6 +29,8 @@ namespace KinetixFlowEngine.Core.Persistence
         public NormalizerState ImbalanceNormalizer { get; set; } = new();
         public NormalizerState ExhaustionNormalizer { get; set; } = new();
         public NormalizerState CompressionNormalizer { get; set; } = new();
+
+        public VolumeState VolumeEngineState { get; set; } = new VolumeState();
 
     }
 }
