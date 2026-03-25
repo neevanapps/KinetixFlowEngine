@@ -14,7 +14,7 @@ namespace KinetixFlowEngine.Core.Trend
         public decimal Medium => _medium.Value ?? 0;
 
         private readonly FlowMomentumRun _momentumRun;
-        private const decimal Hysteresis = 0.6m;
+        private const decimal Hysteresis = 0.8m;
 
         private const double HighPersistenceThreshold = 4.0;
         private const decimal SlowBoostWhenStrong = 1.35m;   // extremely conservative

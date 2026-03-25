@@ -15,7 +15,7 @@ namespace KinetixFlowEngine.Core.Trend
         public decimal Medium => _medium.Value ?? 0;
 
         private readonly FlowMomentumRun _momentumRun;
-        private const decimal Hysteresis = 0.25m;   // probability scale is smaller
+        private const decimal Hysteresis = 0.2m;   // probability scale is smaller
 
         private const double HighPersistenceThreshold = 4.0;
         private const decimal SlowBoostWhenStrong = 1.35m;
@@ -27,8 +27,7 @@ namespace KinetixFlowEngine.Core.Trend
 
         public FlowTrend Update(decimal prob, double velocityZ, bool highPersistence, bool volumeExpansion)
         {
-            decimal factor = _momentumRun.GetFactor((double)prob, velocityZ);
-
+            decimal factor = 1.0m;
             decimal slowFactor = factor;
             if (highPersistence && volumeExpansion)
                 slowFactor = Math.Clamp(factor * SlowBoostWhenStrong, 0.8m, 2.5m);
