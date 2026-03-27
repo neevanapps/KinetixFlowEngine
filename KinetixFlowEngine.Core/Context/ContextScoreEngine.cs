@@ -6,66 +6,91 @@ namespace KinetixFlowEngine.Core.Context
     public class ContextScoreEngine
     {
         // ----------------------------------
-        // BASE SCORE (no structural logic)
+        // CONTEXT ADJUSTMENT (DIRECTIONAL, PROPORTIONAL)
         // ----------------------------------
-        public double AdjustScoreBase(
-            double score,
+        public double AdjustScore(
+            double rawScore,
             double vwapDev,
             double er,
-            double oiChange)
+            double oiChange,
+            FlowTrend priceTrend)
         {
-            // Slightly less punitive ER multiplier (was too aggressive)
-            double erMultiplier = 0.75 + (er * 0.4);   // minimum ~0.75 even when ER5 is low
+            double score = rawScore;
 
-            double oiMultiplier = oiChange > 0 ? 1.1 : 1.0;
+            // ==============================
+            // 1. TREND ALIGNMENT (ER + PRICE TREND)
+            // ==============================
+            if (priceTrend == FlowTrend.Bullish && score > 0)
+                score *= (1.0 + er * 0.3);
 
-            double vwapMultiplier = Math.Abs(vwapDev) < 0.002 ? 1.1 : 1.0;
+            else if (priceTrend == FlowTrend.Bearish && score < 0)
+                score *= (1.0 + er * 0.3);
 
-            var adjusted = score * erMultiplier * oiMultiplier * vwapMultiplier;
+            else if (priceTrend != FlowTrend.Neutral)
+                score *= 0.7; // conflict
 
-            return Math.Clamp(adjusted, -100, 100);
+            // ==============================
+            // 2. VWAP POSITIONING (DIRECTIONAL)
+            // ==============================
+            double vwapImpact = Math.Clamp(Math.Abs(vwapDev) * 20, 0, 3);
+
+            if (score > 0 && vwapDev > 0)
+                score += vwapImpact;
+
+            else if (score < 0 && vwapDev < 0)
+                score -= vwapImpact;
+
+            else
+                score *= 0.85; // wrong side of VWAP
+
+            // ==============================
+            // 3. OI CONFIRMATION (WEAK, NOT DOMINANT)
+            // ==============================
+            double oiImpact = Math.Clamp(oiChange * 0.5, -2, 2);
+
+            if (Math.Sign(score) == Math.Sign(oiImpact))
+                score += oiImpact;
+            else
+                score *= 0.9;
+
+            // ==============================
+            // FINAL CLAMP
+            // ==============================
+            return Math.Clamp(score, -20, 20);
         }
 
         // ----------------------------------
-        // STRUCTURAL PENALTY (CONVICTION-AWARE)
+        // STRUCTURAL FILTER (SIMPLIFIED)
         // ----------------------------------
-        public double ApplyPenalty(double score, FlowTrend priceTrend, FlowImpactSnapshot impact, bool bearishTrap, bool bullishTrap,
-                                   bool highPersistence, bool volumeExpansion)
+        public double ApplyStructureFilter(
+            double score,
+            FlowImpactSnapshot impact,
+            bool bearishTrap,
+            bool bullishTrap,
+            bool highPersistence,
+            bool volumeExpansion)
         {
-            double penalty = 1.0;
+            double result = score;
 
-            // Very soft price contradiction
-            if (priceTrend == FlowTrend.Bearish && score > 0)
-                penalty *= 0.94;
+            // Impact conflict
+            if ((impact.BearishControl && result > 0) ||
+                (impact.BullishControl && result < 0))
+                result *= 0.75;
 
-            if (priceTrend == FlowTrend.Bullish && score < 0)
-                penalty *= 0.94;
+            // Trap detection
+            if ((bearishTrap && result > 0) ||
+                (bullishTrap && result < 0))
+                result *= 0.7;
 
-            // Soft impact control
-            if (impact.BearishControl && score > 0)
-                penalty *= 0.85;
-
-            if (impact.BullishControl && score < 0)
-                penalty *= 0.85;
-
-            // Very light traps
-            if (bearishTrap && score > 0)
-                penalty *= 0.92;
-
-            if (bullishTrap && score < 0)
-                penalty *= 0.92;
-
-            // Light efficiency
+            // Low efficiency = weak move
             if (Math.Abs(impact.Efficiency) < 0.2)
-                penalty *= 0.95;
+                result *= 0.85;
 
-            // CONVICTION-AWARE SAFETY FLOOR (the real fix)
-            if (highPersistence && volumeExpansion && score > 8)
-                penalty = Math.Max(penalty, 0.88);   // strong flow gets protected
+            // Strong conviction override
+            if (highPersistence && volumeExpansion)
+                result *= 1.1;
 
-            score *= penalty;
-
-            return Math.Clamp(score, -100, 100);
+            return Math.Clamp(result, -20, 20);
         }
     }
 }

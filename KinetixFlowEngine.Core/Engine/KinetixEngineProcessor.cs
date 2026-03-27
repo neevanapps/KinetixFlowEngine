@@ -45,7 +45,8 @@ namespace KinetixFlowEngine.Core.Engine
         private readonly ImbalanceNormalizer _imbNorm;
         private readonly ExhaustionNormalizer _exhNorm;
         private readonly CompressionNormalizer _cmpNorm;
-
+        private readonly Ema _velocityEma = new(30);
+        public double VelocityEma;
         private readonly FlowMomentumRun _momentumRun;
 
         private readonly OneMinuteCandleBuilder _candleBuilder = new();
@@ -161,7 +162,7 @@ namespace KinetixFlowEngine.Core.Engine
             var priceTrend = _priceEngine.Update(priceDec, erDec);
             var pressure = _pressureEngine.Calculate(window, price, atr, (double)vwap);
 
-            var baseAdjustedScore = _contextScoreEngine.AdjustScoreBase(score, vwapDev, er30, oiChange);
+            var contextScore = _contextScoreEngine.AdjustScore(score, vwapDev, er30, oiChange, priceTrend);
 
             var baseAlpha = AdaptiveAlpha.Compute(atr, er5);
             var factor = (double)_momentumRun.LastFactor;
@@ -170,15 +171,12 @@ namespace KinetixFlowEngine.Core.Engine
 
             var velZ = _velNorm.Update(features.DeltaVelocity, alpha);
             velZ = Math.Clamp(velZ, -2, 2);
+            VelocityEma = _velocityEma.Update(velZ);
 
             // temporary trend proxy (no EMA update)
-            var tempTrend = baseAdjustedScore > 0 ? FlowTrend.Bullish :
-                baseAdjustedScore < 0 ? FlowTrend.Bearish :
-                FlowTrend.Neutral;
-
-            var divergence = _divergenceEngine.Detect(priceTrend, tempTrend, baseAdjustedScore, vwapDev);
-
-            var vwapAbsorption = _vwapAbsorptionEngine.Detect(price, (double)vwap, baseAdjustedScore, priceTrend);
+            var tempTrend = contextScore > 0 ? FlowTrend.Bullish : contextScore < 0 ? FlowTrend.Bearish : FlowTrend.Neutral;
+            var divergence = _divergenceEngine.Detect(priceTrend, tempTrend, contextScore, vwapDev);
+            var vwapAbsorption = _vwapAbsorptionEngine.Detect(price, (double)vwap, contextScore, priceTrend);
 
             bool bearishTrap = divergence.BearishDistribution || vwapAbsorption.BearishAbsorption;
             bool bullishTrap = divergence.BullishAbsorption || vwapAbsorption.BullishAbsorption;
@@ -189,28 +187,38 @@ namespace KinetixFlowEngine.Core.Engine
 
             bool highPersistence = features.Persistence > 4.0;
             bool volumeExpansion = _volumeEngine.IsVolumeExpansion();
-            var adjustedScore = _contextScoreEngine.ApplyPenalty(baseAdjustedScore, priceTrend, impact, bearishTrap, bullishTrap, highPersistence, volumeExpansion);
-            // ===== SCALE INSTEAD OF NORMALIZE =====
-            double scale = ComputeDynamicScale(atr);
-            double scaledScore = adjustedScore * scale;
-            // optional: keep scoreZ ONLY for logging / diagnostics
-            var scoreZ = _scoreNorm.Update(adjustedScore, alpha);
+            var adjustedScore = _contextScoreEngine.ApplyStructureFilter(contextScore, impact, bearishTrap, bullishTrap, highPersistence, volumeExpansion);
 
-            var scoreTrend = _scoreEngine.Update((decimal)scaledScore, velZ, highPersistence, volumeExpansion);
-            var flowState = _flowStateEngine.Detect(scaledScore, velZ, imbZ, cmpZ, exhZ, features.Persistence, scoreTrend);
+            double atrNorm = Math.Max(atr, 1); // avoid divide by zero
+            double finalScore = adjustedScore / (atrNorm / 100.0);
+            finalScore = Math.Clamp(finalScore, -20, 20);
 
-            var probability = _flowProbabilityEngine.Calculate(scaledScore, velZ, imbZ, cmpZ, exhZ, flowState, scoreTrend, divergence.BullishAbsorption,
-                divergence.BearishDistribution, vwapAbsorption.BullishAbsorption, vwapAbsorption.BearishAbsorption, impact.BullishControl, impact.BearishControl);
+            // OPTIONAL: keep scoreZ only for logging (DO NOT USE IN LOGIC)
+            var scoreZ = _scoreNorm.Update(finalScore, alpha);
+
+            var scoreTrend = _scoreEngine.Update((decimal)finalScore, velZ, highPersistence, volumeExpansion);
+            var flowState = _flowStateEngine.Detect(finalScore, velZ, imbZ, cmpZ, exhZ, features.Persistence, scoreTrend);
+
+            var probability = _flowProbabilityEngine.Calculate(finalScore, velZ, features.Persistence, _scoreEngine.Fast, _scoreEngine.Medium, _scoreEngine.Slow, 
+                                        volumeExpansion, exhZ, impact.BullishControl, impact.BearishControl);
 
             var probAlpha = Math.Clamp(alpha * 1.2, 0.05, 0.4);
             var ProbTrend = _probEngine.Update((decimal)probability.LongProbability, velZ, highPersistence, volumeExpansion);
 
-            bool strongTrend = Math.Abs(_scoreEngine.Medium) > 0.8m && Math.Abs(_scoreEngine.Fast - _scoreEngine.Slow) > 0.5m;
-            bool longSignal = probability.LongProbability > 0.65 && scoreTrend == FlowTrend.Bullish && strongTrend;
-            bool shortSignal = probability.ShortProbability > 0.65 && scoreTrend == FlowTrend.Bearish && strongTrend;
+            // ===== Momentum Gate (NEW) =====
+            bool momentumExpansion = Math.Abs((decimal)_velocityEma.Value) > 0.8m;
+            bool directionAligned = (_scoreEngine.Medium > 0 && _velocityEma.Value > 0) || (_scoreEngine.Medium < 0 && _velocityEma.Value < 0);
+            bool tradeGate = momentumExpansion && directionAligned;
 
+            // ===== Existing Trend Filter =====
+            bool strongTrend = Math.Abs(_scoreEngine.Medium) > 1.0m && Math.Abs(_scoreEngine.Fast - _scoreEngine.Slow) > 1.2m;
+            // ===== Final Signals =====
+            bool longSignal = probability.LongProbability > 0.65 && scoreTrend == FlowTrend.Bullish && strongTrend && tradeGate;
+            bool shortSignal = probability.ShortProbability > 0.65 && scoreTrend == FlowTrend.Bearish && strongTrend && tradeGate;
             var stability = _signalStabilityEngine.Update(longSignal, shortSignal);
 
+            // ===== Momentum Decay Detection (NEW) =====
+            bool momentumDying = Math.Abs((decimal)_velocityEma.Value) < 0.3m;
             return new KinetixEngineResult
             {
                 Price = price,
@@ -276,24 +284,10 @@ namespace KinetixFlowEngine.Core.Engine
                 ProbSlowEma = (double)_probEngine.Slow,
                 ProbMediumEma = (double)_probEngine.Medium,
                 TrendFactor = factor,
+                VelocityEma = _velocityEma.Value,
+                MomentumDying = momentumDying,
+                TradeGate = tradeGate,
             };
-        }
-
-        private double ComputeDynamicScale(double atr)
-        {
-            const double baseScale = 0.10;
-            const double minScale = 0.06;
-            const double maxScale = 0.18;
-
-            const double atrLow = 50.0;
-            const double atrHigh = 300.0;
-
-            double t = (atr - atrLow) / (atrHigh - atrLow);
-            t = Math.Clamp(t, 0.0, 1.0);
-
-            double scale = baseScale * (0.8 + 0.7 * t);
-
-            return Math.Clamp(scale, minScale, maxScale);
         }
     }
 }

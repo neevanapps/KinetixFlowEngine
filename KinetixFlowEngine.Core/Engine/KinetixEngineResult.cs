@@ -89,5 +89,8 @@ namespace KinetixFlowEngine.Core.Engine
         public double Volume1 { get; set; }
 
         public double TrendFactor { get; set; }
+        public double VelocityEma { get; set; }
+        public bool MomentumDying { get; set; }
+        public bool TradeGate { get; set; }
     }
 }

@@ -15,10 +15,6 @@ namespace KinetixFlowEngine.Core.Trend
         public decimal Medium => _medium.Value ?? 0;
 
         private readonly FlowMomentumRun _momentumRun;
-        private const decimal Hysteresis = 0.2m;   // probability scale is smaller
-
-        private const double HighPersistenceThreshold = 4.0;
-        private const decimal SlowBoostWhenStrong = 1.35m;
 
         public ProbabilityTrendEngine(FlowMomentumRun momentumRun)
         {
@@ -27,17 +23,23 @@ namespace KinetixFlowEngine.Core.Trend
 
         public FlowTrend Update(decimal prob, double velocityZ, bool highPersistence, bool volumeExpansion)
         {
-            decimal factor = 1.0m;
-            decimal slowFactor = factor;
-            if (highPersistence && volumeExpansion)
-                slowFactor = Math.Clamp(factor * SlowBoostWhenStrong, 0.8m, 2.5m);
+            decimal factor = _momentumRun.GetFactor((double)prob, velocityZ);
 
-            var fast = _fast.UpdateWithFactor(prob, factor, 8 * _minTicks, 15 * _minTicks);
-            var medium = _medium.UpdateWithFactor(prob, factor, 15 * _minTicks, 45 * _minTicks);
+            decimal slowFactor = factor;
+
+            if (highPersistence && volumeExpansion)
+                slowFactor = Math.Clamp(factor * 0.85m, 0.6m, 1.2m);
+
+            var fast = _fast.UpdateWithFactor(prob, factor, 5 * _minTicks, 12 * _minTicks);
+            var medium = _medium.UpdateWithFactor(prob, factor, 15 * _minTicks, 60 * _minTicks);
             var slow = _slow.UpdateWithFactor(prob, slowFactor, 45 * _minTicks, 120 * _minTicks);
 
-            if (fast > slow && (fast - slow) > Hysteresis) return FlowTrend.Bullish;
-            if (fast < slow && (slow - fast) > Hysteresis) return FlowTrend.Bearish;
+            if (fast > medium && medium > slow && (fast - slow) > 0.08m)
+                return FlowTrend.Bullish;
+
+            if (fast < medium && medium < slow && (slow - fast) > 0.08m)
+                return FlowTrend.Bearish;
+
             return FlowTrend.Neutral;
         }
 
