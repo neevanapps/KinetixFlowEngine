@@ -33,12 +33,20 @@ namespace KinetixFlowEngine.Core
         private readonly ExceptionAlertAggregator _exceptionAggregator;
         private readonly FlowAggregationWindow _flowAggregationWindow;
 
+        private readonly RollingWindowBuffer _scoreFastBuffer = new(2880);
+        private readonly RollingWindowBuffer _scoreMediumBuffer = new(2880);
+        private readonly RollingWindowBuffer _scoreSlowBuffer = new(2880);
+        private readonly RollingWindowBuffer _probFastBuffer = new(2880);
+        private readonly RollingWindowBuffer _probMediumBuffer = new(2880);
+        private readonly RollingWindowBuffer _probSlowBuffer = new(2880);
+
         private readonly ScoreNormalizer _scoreNorm;
         private readonly VelocityNormalizer _velNorm;
         private readonly ImbalanceNormalizer _imbNorm;
         private readonly ExhaustionNormalizer _exhNorm;
         private readonly CompressionNormalizer _cmpNorm;
         private readonly AdjustedScoreNormalizer _adjustmentNorm;
+
         private readonly FairPriceEngine _fairPriceEngine;
         private readonly MarketStateManager _marketStateManager;
         private readonly FlowMetricsRecorder _recorder;
@@ -421,6 +429,23 @@ namespace KinetixFlowEngine.Core
                     _volumeEngine.Restore(snapshot.VolumeEngineState);
                     _logger.LogInformation("VolumeEngine state restored successfully.");
                 }
+                if (snapshot.ScoreFastEmaBuffer != null)
+                    _scoreFastBuffer.Restore(snapshot.ScoreFastEmaBuffer);
+
+                if (snapshot.ScoreMediumEmaBuffer != null)
+                    _scoreMediumBuffer.Restore(snapshot.ScoreMediumEmaBuffer);
+
+                if (snapshot.ScoreSlowEmaBuffer != null)
+                    _scoreSlowBuffer.Restore(snapshot.ScoreSlowEmaBuffer);
+
+                if (snapshot.ProbabilityFastEmaBuffer != null)
+                    _probFastBuffer.Restore(snapshot.ProbabilityFastEmaBuffer);
+
+                if (snapshot.ProbabilityMediumEmaBuffer != null)
+                    _probMediumBuffer.Restore(snapshot.ProbabilityMediumEmaBuffer);
+
+                if (snapshot.ProbabilitySlowEmaBuffer != null)
+                    _probSlowBuffer.Restore(snapshot.ProbabilitySlowEmaBuffer);
                 _logger.LogInformation("Snapshot restored successfully.");
             }
 
@@ -451,7 +476,8 @@ namespace KinetixFlowEngine.Core
 
                 try
                 {
-                    result = _engineProcessor.Process(price, lastTrade.Quantity, lastTrade.Timestamp, _lastOiValue);
+                    result = _engineProcessor.Process(price, lastTrade.Quantity, lastTrade.Timestamp, _lastOiValue, _scoreFastBuffer, _scoreMediumBuffer, _scoreSlowBuffer,
+                        _probFastBuffer, _probMediumBuffer, _probSlowBuffer);
                 }
                 catch (Exception ex)
                 {
@@ -550,11 +576,30 @@ namespace KinetixFlowEngine.Core
                 }
 
                 _recorder.Record(result);
-                _logger.LogInformation("FLOW | P {Price:F2} Raw {RawScore:F2} Adj {AdjScore:F2} scaled {Sz:F2} Vz {Vema:F2} ProbL:{pro:F2} | " + "FS {Fast:F2} MS {Medium:F2} SS {Slow:F2}" +
-                            " | VWAP {VWAP:F2} ER5 {ER:F2} ER30 {ER30:F2} ATR {ATR:F2} " + "| B {BuyP:F2} S {SellP:F2} Net {NetP:F2} | FP {BFast:F4} MP {BMedium:F4} SP {BSlow:F4} | v15 {v15:F2} v1 {v1:F2} F {Factor:F3}",
-                            result.Price, result.RawScore, result.AdjustedScore, result.ScoreZ, result.VelocityEma, result.LongProbability, result.ScoreFastEma, result.ScoreMediumEma, result.ScoreSlowEma, result.VWAP, result.ER, result.ER30, result.ATR15m,
-                            result.BuyPressure, result.SellPressure, result.NetPressure,
-                            (result.ProbFastEma), (result.ProbMediumEma), (result.ProbSlowEma), result.Volume15, result.Volume1, result.TrendFactor);
+                _logger.LogInformation("FLOW | P {Price:F2} Raw {RawScore:F2} Adj {AdjScore:F2} Sz {Sz:F2} VzEma {Vema:F2} ProbL:{pro:F2} | " + "FS {Fast:F2} MS {Medium:F2} SS {Slow:F2}" +
+                            " | VWAP {VWAP:F2} ER5 {ER:F2} ER30 {ER30:F2} ATR {ATR:F2} " + "| B {BuyP:F2} S {SellP:F2} Net {NetP:F2} | FP {BFast:F4} MP {BMedium:F4} SP {BSlow:F4} | v15 {v15:F2} v1 {v1:F2} F {Factor:F3} | " +
+                            "SF[{SFL1:F2},{SFL2:F2},{SFL3:F2}] {SFTrend} | " + "SM[{SML1:F2},{SML2:F2},{SML3:F2}] {SMTrend} | " + "SS[{SSL1:F2},{SSL2:F2},{SSL3:F2}] {SSTrend} | " +
+                            "PF[{PFL1:F2},{PFL2:F2},{PFL3:F2}] {PFTrend} | " + "PM[{PML1:F2},{PML2:F2},{PML3:F2}] {PMTrend} | " + "PS[{PSL1:F2},{PSL2:F2},{PSL3:F2}] {PSTrend}",
+
+                            result.Price, result.RawScore, result.AdjustedScore, result.ScoreZ, result.VelocityEma, result.LongProbability, result.ScoreFastEma, result.ScoreMediumEma,
+                            result.ScoreSlowEma, result.VWAP, result.ER, result.ER30, result.ATR15m, result.BuyPressure, result.SellPressure, result.NetPressure,
+                            (result.ProbFastEma), (result.ProbMediumEma), (result.ProbSlowEma), result.Volume15, result.Volume1, result.TrendFactor,
+                            result.EmaStability.ScoreFastEmaLevel1, result.EmaStability.ScoreFastEmaLevel2, result.EmaStability.ScoreFastEmaLevel3, result.EmaStability.FastScoreTrend,
+                            result.EmaStability.ScoreMediumEmaLevel1, result.EmaStability.ScoreMediumEmaLevel2, result.EmaStability.ScoreMediumEmaLevel3, result.EmaStability.MediumScoreTrend,
+                            result.EmaStability.ScoreSlowEmaLevel1, result.EmaStability.ScoreSlowEmaLevel2, result.EmaStability.ScoreSlowEmaLevel3, result.EmaStability.SlowScoreTrend,
+
+                            result.EmaStability.ProbFastEmaLevel1, result.EmaStability.ProbFastEmaLevel2, result.EmaStability.ProbFastEmaLevel3, result.EmaStability.FastProbTrend,
+                            result.EmaStability.ProbMediumEmaLevel1, result.EmaStability.ProbMediumEmaLevel2, result.EmaStability.ProbMediumEmaLevel3, result.EmaStability.MediumProbTrend,
+                            result.EmaStability.ProbSlowEmaLevel1, result.EmaStability.ProbSlowEmaLevel2, result.EmaStability.ProbSlowEmaLevel3, result.EmaStability        .SlowProbTrend);
+
+                #region EMA's Snapshot for debugging
+                _scoreFastBuffer.Add(result.ScoreFastEma);
+                _scoreMediumBuffer.Add(result.ScoreMediumEma);
+                _scoreSlowBuffer.Add(result.ScoreSlowEma);
+                _probFastBuffer.Add(result.ProbFastEma);
+                _probMediumBuffer.Add(result.ProbMediumEma);
+                _probSlowBuffer.Add(result.ProbSlowEma);
+                #endregion
 
                 if ((DateTime.UtcNow - _lastSnapshot).TotalSeconds > 60)
                 {
@@ -598,6 +643,14 @@ namespace KinetixFlowEngine.Core
                         CompressionNormalizer = _cmpNorm.GetState(),
                         AdjustedScoreNormalizer = _adjustmentNorm.GetState(),
                         VolumeEngineState = _volumeEngine.GetState(),
+
+                        ScoreFastEmaBuffer = _scoreFastBuffer.GetState(),
+                        ScoreMediumEmaBuffer = _scoreMediumBuffer.GetState(),
+                        ScoreSlowEmaBuffer = _scoreSlowBuffer.GetState(),
+
+                        ProbabilityFastEmaBuffer = _probFastBuffer.GetState(),
+                        ProbabilityMediumEmaBuffer = _probMediumBuffer.GetState(),
+                        ProbabilitySlowEmaBuffer = _probSlowBuffer.GetState(),
                     });
 
                     _lastSnapshot = DateTime.UtcNow;

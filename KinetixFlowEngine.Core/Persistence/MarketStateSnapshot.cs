@@ -32,5 +32,12 @@ namespace KinetixFlowEngine.Core.Persistence
 
         public VolumeState VolumeEngineState { get; set; } = new VolumeState();
 
+        public RollingWindowState ScoreFastEmaBuffer { get; set; }
+        public RollingWindowState ScoreMediumEmaBuffer { get; set; }
+        public RollingWindowState ScoreSlowEmaBuffer { get; set; }
+        public RollingWindowState ProbabilityFastEmaBuffer { get; set; }
+        public RollingWindowState ProbabilityMediumEmaBuffer { get; set; }
+        public RollingWindowState ProbabilitySlowEmaBuffer { get; set; }
+
     }
 }

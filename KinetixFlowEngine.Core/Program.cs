@@ -83,6 +83,7 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<TelegramService>();
                 builder.Services.AddSingleton<ExceptionAlertAggregator>();
                 builder.Services.AddSingleton<VolumeEngine>();
+                builder.Services.AddSingleton<EmaStability>();
 
                 builder.Services.AddSingleton<FlowTradeBuffer>();
                 builder.Services.AddSingleton<FlowAggregationWindow>();

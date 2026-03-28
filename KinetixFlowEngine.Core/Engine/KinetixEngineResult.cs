@@ -1,5 +1,6 @@
 ﻿using KinetixFlowEngine.Core.Flow.State;
 using KinetixFlowEngine.Core.Trend;
+using KinetixFlowEngine.Core.Utils;
 
 namespace KinetixFlowEngine.Core.Engine
 {
@@ -92,5 +93,7 @@ namespace KinetixFlowEngine.Core.Engine
         public double VelocityEma { get; set; }
         public bool MomentumDying { get; set; }
         public bool TradeGate { get; set; }
+
+        public EmaStabilityState EmaStability { get; set; } = new();
     }
 }

@@ -48,7 +48,7 @@ namespace KinetixFlowEngine.Core.Engine
         private readonly Ema _velocityEma = new(30);
         public double VelocityEma;
         private readonly FlowMomentumRun _momentumRun;
-
+        private readonly EmaStability _emaStability;
         private readonly OneMinuteCandleBuilder _candleBuilder = new();
 
         public KinetixEngineProcessor(
@@ -78,7 +78,7 @@ namespace KinetixFlowEngine.Core.Engine
             LiquidityPressureEngine pressureEngine,
             VwapAbsorptionEngine vwapAbsorptionEngine,
             WhaleClusterEngine whaleClusterEngine, FlowImpactEngine flowImpactEngine,
-            FlowPersistenceEngine flowPersistenceEngine, ProbabilityTrendEngine probEngine, FlowTradeBuffer tradeBuffer, FifteenMinuteCandleBuilder candle15m, VolumeEngine volumeEngine, FlowMomentumRun momentumRun)
+            FlowPersistenceEngine flowPersistenceEngine, ProbabilityTrendEngine probEngine, FlowTradeBuffer tradeBuffer, FifteenMinuteCandleBuilder candle15m, VolumeEngine volumeEngine, FlowMomentumRun momentumRun, EmaStability emaStability)
         {
             _flowAggregationWindow = flowAggregationWindow;
             _flowFeatureEngine = flowFeatureEngine;
@@ -116,9 +116,11 @@ namespace KinetixFlowEngine.Core.Engine
             _candle15m = candle15m;
             _volumeEngine = volumeEngine;
             _momentumRun = momentumRun;
+            _emaStability = emaStability;
         }
 
-        public KinetixEngineResult Process(double price, decimal quantity, long timeStamp, double openInterest)
+        public KinetixEngineResult Process(double price, decimal quantity, long timeStamp, double openInterest, RollingWindowBuffer _scoreFast, RollingWindowBuffer _scoreMedium,
+                            RollingWindowBuffer _scoreSlow, RollingWindowBuffer _probFast, RollingWindowBuffer _probMedium, RollingWindowBuffer _probSlow)
         {
             var allTrades = _tradeBuffer.GetSnapshot();
             long cutoff = DateTimeOffset.UtcNow.AddSeconds(-60).ToUnixTimeMilliseconds();
@@ -199,7 +201,7 @@ namespace KinetixFlowEngine.Core.Engine
             var scoreTrend = _scoreEngine.Update((decimal)finalScore, velZ, highPersistence, volumeExpansion);
             var flowState = _flowStateEngine.Detect(finalScore, velZ, imbZ, cmpZ, exhZ, features.Persistence, scoreTrend);
 
-            var probability = _flowProbabilityEngine.Calculate(finalScore, velZ, features.Persistence, _scoreEngine.Fast, _scoreEngine.Medium, _scoreEngine.Slow, 
+            var probability = _flowProbabilityEngine.Calculate(finalScore, velZ, features.Persistence, _scoreEngine.Fast, _scoreEngine.Medium, _scoreEngine.Slow,
                                         volumeExpansion, exhZ, impact.BullishControl, impact.BearishControl);
 
             var probAlpha = Math.Clamp(alpha * 1.2, 0.05, 0.4);
@@ -217,6 +219,7 @@ namespace KinetixFlowEngine.Core.Engine
             bool shortSignal = probability.ShortProbability > 0.65 && scoreTrend == FlowTrend.Bearish && strongTrend && tradeGate;
             var stability = _signalStabilityEngine.Update(longSignal, shortSignal);
 
+            var emaStabilityState = _emaStability.Compute(_scoreFast, _scoreMedium, _scoreSlow, _probFast, _probMedium, _probSlow);
             // ===== Momentum Decay Detection (NEW) =====
             bool momentumDying = Math.Abs((decimal)_velocityEma.Value) < 0.3m;
             return new KinetixEngineResult
@@ -287,6 +290,7 @@ namespace KinetixFlowEngine.Core.Engine
                 VelocityEma = _velocityEma.Value,
                 MomentumDying = momentumDying,
                 TradeGate = tradeGate,
+                EmaStability = emaStabilityState
             };
         }
     }
