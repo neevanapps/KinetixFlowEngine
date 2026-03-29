@@ -104,8 +104,8 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<FifteenMinuteCandleBuilder>();
                 builder.Services.AddSingleton<EfficiencyRatioEngine>(sp => new EfficiencyRatioEngine(60));
                 builder.Services.AddSingleton<EfficiencyRatio30mEngine>();
-                builder.Services.AddSingleton<AtrEngine>();  // 1m ATR
-                builder.Services.AddSingleton<Atr15mEngine>();   // 15m ATR
+                builder.Services.AddSingleton<AtrEngine>();
+                builder.Services.AddSingleton<Atr15mEngine>();
                 builder.Services.AddSingleton<OpenInterestEngine>();
                 builder.Services.AddSingleton<ContextScoreEngine>();
                 builder.Services.AddSingleton<FlowMetricsRecorder>();
@@ -115,9 +115,12 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<FlowStateEngine>();
                 builder.Services.AddSingleton<KinetixEngineProcessor>();
                 builder.Services.AddSingleton<ProbabilityTrendEngine>();
-                builder.Services.AddSingleton<IKinetixStrategy, ExpansionBreakoutStrategy>();
-                builder.Services.AddSingleton<IKinetixStrategy, PullbackContinuationStrategy>();
-                builder.Services.AddSingleton<IKinetixStrategy, TrendCoreStrategy>();
+                builder.Services.AddSingleton<IKinetixStrategy, FastScoreStrategy>();
+                builder.Services.AddSingleton<IKinetixStrategy, MediumScoreStrategy>();
+                builder.Services.AddSingleton<IKinetixStrategy, SlowScoreStrategy>();
+                builder.Services.AddSingleton<IKinetixStrategy, FastProbStrategy>();
+                builder.Services.AddSingleton<IKinetixStrategy, MediumProbStrategy>();
+                builder.Services.AddSingleton<IKinetixStrategy, SlowProbStrategy>();
                 builder.Services.AddSingleton<StrategyEngine>();
                 builder.Services.AddSingleton<StrategyAggregator>();
                 builder.Services.AddSingleton<TradePersistence>();
@@ -138,6 +141,7 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<IEquityEngine, EquityEngine>();
                 builder.Services.AddSingleton<IPositionSizer, PropPositionSizer>();
                 builder.Services.AddSingleton<AccountStateEngine>();
+
                 // Configure Windows Service lifetime using options because 'Host' is not available on HostApplicationBuilder.
                 builder.Services.AddWindowsService(options =>
                 {
