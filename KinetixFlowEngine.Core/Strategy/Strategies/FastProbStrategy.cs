@@ -22,24 +22,11 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
             decimal l2 = r.EmaStability.ProbFastEmaLevel2;
             decimal l3 = r.EmaStability.ProbFastEmaLevel3;
 
-            // =========================
-            // 1. DIRECTION (RELAXED)
-            // =========================
-            bool bullishStructure = slow > l1 && l1 > l3;
-            bool bearishStructure = slow < l1 && l1 < l3;
+            decimal divergence = l2 - l3;
+            bool bullish = l2 > 0.52m && l2 > l3 && divergence > 0.01m;
+            bool bearish = l2 < 0.48m && l2 < l3 && divergence < -0.01m;
 
-            // =========================
-            // 2. STRENGTH FILTER
-            // =========================
-            bool strongBull = l1 > 0.52m;
-            bool strongBear = l1 < 0.48m;
-
-            // =========================
-            // 3. TREND SPREAD (IMPORTANT)
-            // =========================
-            bool spreadValid = Math.Abs(l1 - l3) > 0.015m;
-
-            if (bullishStructure && strongBull && spreadValid)
+            if (bullish)
             {
                 return new StrategySignal
                 {
@@ -53,7 +40,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
                 };
             }
 
-            if (bearishStructure && strongBear && spreadValid)
+            if (bearish)
             {
                 return new StrategySignal
                 {
@@ -77,26 +64,13 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
             decimal l2 = r.EmaStability.ProbFastEmaLevel2;
             decimal l3 = r.EmaStability.ProbFastEmaLevel3;
 
-            // =========================
-            // 1. DIRECTION (RELAXED)
-            // =========================
-            bool bullishStructure = slow > l1 && l1 > l3;
-            bool bearishStructure = slow < l1 && l1 < l3;
-
-            // =========================
-            // 2. STRENGTH FILTER
-            // =========================
-            bool strongBull = l1 > 0.52m;
-            bool strongBear = l1 < 0.48m;
-
-            // =========================
-            // 3. TREND SPREAD (IMPORTANT)
-            // =========================
-            bool spreadValid = Math.Abs(l1 - l3) > 0.015m;
+            decimal divergence = l2 - l3;
+            bool bullish = l2 > 0.52m && l2 > l3 && divergence > 0.01m;
+            bool bearish = l2 < 0.48m && l2 < l3 && divergence < -0.01m;
 
             if (trade.Direction == SignalDirection.Long)
             {
-                if (bearishStructure && strongBear && spreadValid)
+                if (bearish)
                 {
                     return new StrategySignal
                     {
@@ -108,7 +82,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
 
             if (trade.Direction == SignalDirection.Short)
             {
-                if (bullishStructure && strongBull && spreadValid)
+                if (bullish)
                 {
                     return new StrategySignal
                     {
