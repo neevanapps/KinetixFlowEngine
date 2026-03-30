@@ -62,6 +62,13 @@ namespace KinetixFlowEngine.Core
                     client.BaseAddress = new Uri("https://fapi.binance.com");
                     client.Timeout = TimeSpan.FromSeconds(15);
                 });
+                builder.Services.AddHttpClient<FundingRateClient>(client =>
+                {
+                    client.BaseAddress = new Uri("https://api.bybit.com");
+                    client.Timeout = TimeSpan.FromSeconds(10);
+                });
+
+                builder.Services.AddSingleton<FundingRateEngine>();
                 builder.Services.AddSingleton<PropAccountRuntimeFactory>();
                 builder.Services.AddSingleton<PropAccountRuntimeManager>();
                 builder.Services.AddSingleton<BybitClientFactory>();

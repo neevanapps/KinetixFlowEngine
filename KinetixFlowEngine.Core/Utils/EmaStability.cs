@@ -7,13 +7,20 @@ namespace KinetixFlowEngine.Core.Utils
 {
     public class EmaStability
     {
-        private readonly int _level1Mins = 15 * 12;
-        private readonly int _level2Mins = 60 * 12;
-        private readonly int _level3Mins = 240 * 12;
+        //private int _level1Mins = 15 * 12;
+        //private int _level2Mins = 45 * 12;
+        //private int _level3Mins = 135 * 12;
+
+        private int minTicks = 12;
 
         public EmaStabilityState Compute(RollingWindowBuffer _scoreFast, RollingWindowBuffer _scoreMedium,
-                            RollingWindowBuffer _scoreSlow, RollingWindowBuffer _probFast, RollingWindowBuffer _probMedium, RollingWindowBuffer _probSlow)
+                            RollingWindowBuffer _scoreSlow, RollingWindowBuffer _probFast, RollingWindowBuffer _probMedium, RollingWindowBuffer _probSlow, double atr, double er)
         {
+            double regime = Math.Clamp(atr * 0.65 + er * 0.35, 0.0, 1.0);
+            int _level1Mins = (int)Lerp(10 * minTicks, 15 * minTicks, regime);
+            int _level2Mins = (int)Lerp(30 * minTicks, 45 * minTicks, regime);
+            int _level3Mins = (int)Lerp(90 * minTicks, 135 * minTicks, regime);
+
             var state = new EmaStabilityState();
             state.ScoreFastEmaLevel1 = Compute(_scoreFast, _level1Mins);
             state.ScoreMediumEmaLevel1 = Compute(_scoreMedium, _level1Mins);
@@ -56,6 +63,11 @@ namespace KinetixFlowEngine.Core.Utils
             return state;
         }
 
+        public static double Lerp(double min, double max, double t)
+        {
+            return min + (max - min) * Math.Clamp(t, 0.0, 1.0);
+        }
+
         public decimal Compute(RollingWindowBuffer buffer, int levelMins)
         {
             var values = buffer.GetValues();
@@ -67,7 +79,25 @@ namespace KinetixFlowEngine.Core.Utils
             if (slice.Count < levelMins * 0.5) // require at least 50%
                 return 0;
 
-            return (decimal)slice.Average();
+            return WeightedAverage(slice);
+        }
+
+        public decimal WeightedAverage(List<double> values)
+        {
+            int n = values.Count;
+            if (n == 0) return 0;
+
+            double sum = 0;
+            double weightSum = 0;
+
+            for (int i = 0; i < n; i++)
+            {
+                double weight = (i + 1) * (1 + 0.008 * i);
+                sum += values[i] * weight;
+                weightSum += weight;
+            }
+
+            return (decimal)(sum / weightSum);
         }
     }
 

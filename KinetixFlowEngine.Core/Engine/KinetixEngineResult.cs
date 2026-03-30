@@ -93,7 +93,9 @@ namespace KinetixFlowEngine.Core.Engine
         public double VelocityEma { get; set; }
         public bool MomentumDying { get; set; }
         public bool TradeGate { get; set; }
-
+        public double FundingRate { get; set; }
+        public double FundingPressure { get; set; }
+        public double AtrNorm { get; set; }
         public EmaStabilityState EmaStability { get; set; } = new();
     }
 }

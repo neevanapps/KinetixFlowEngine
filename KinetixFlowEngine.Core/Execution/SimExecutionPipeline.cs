@@ -7,7 +7,7 @@ namespace KinetixFlowEngine.Core.Execution
 {
     public interface ISimExecutionPipeline
     {
-        void Execute(StrategySignal signal, decimal price, decimal atr, KinetixEngineResult context);
+        Task Execute(StrategySignal signal, decimal price, decimal atr, KinetixEngineResult context);
     }
 
     public class SimExecutionPipeline : ISimExecutionPipeline
@@ -19,9 +19,9 @@ namespace KinetixFlowEngine.Core.Execution
             _positionManager = positionManager;
         }
 
-        public void Execute(StrategySignal signal, decimal price, decimal atr, KinetixEngineResult context)
+        public async Task Execute(StrategySignal signal, decimal price, decimal atr, KinetixEngineResult context)
         {
-            if (_positionManager.HasPosition(signal.StrategyName, "SIM"))
+            if (await _positionManager.HasPosition(signal.StrategyName, "SIM"))
                 return;
 
             _positionManager.TryEnterTrade(

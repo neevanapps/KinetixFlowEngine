@@ -83,13 +83,17 @@ namespace KinetixFlowEngine.Core
         private readonly ITradeExecutor _executor;
         private decimal _currentMarketPrice = 0m;
         private readonly BybitClientFactory _factory;
+        private readonly FundingRateClient _fundingRateClient;
+        private readonly FundingRateEngine _fundingRateEngine;
+
         public Worker(FlowTradeBuffer flowTradeBuffer, TradeStreamClient tradeStreamClient, ILogger<Worker> logger, KinetixEngineProcessor engineProcessor, ScoreNormalizer scoreNorm, EngineBootstrapService bootstrap,
                     VelocityNormalizer velNorm, ImbalanceNormalizer imbNorm, ExhaustionNormalizer exhNorm, CompressionNormalizer cmpNorm, MarketStateManager snapshotManager, PositionManager positionManager,
                     EngineWarmupManager warmup, PriceTrendEngine priceEngine, ScoreTrendEngine scoreEngine, OpenInterestClient openInterestClient, FlowMetricsRecorder recorder, StrategyEngine strategyEngine,
                     StrategyAggregator strategyAggregator, TelegramService telegram, IOptions<FlowEngineOptions> options, TradeJournalRecorder tradeJournal, ExceptionAlertAggregator exceptionAggregator,
                     ProbabilityTrendEngine probEngine, FlowAggregationWindow flowAggregationWindow, FlowMomentumRun momentumRun, TradeMemoryManager tradeMemory, VolumeEngine volumeEngine, FairPriceEngine fairPriceEngine,
                     PropAccountRuntimeManager accounts, PropAlertService alerts, PropAccountStatePersistence accountStatePersistence, PositionPersistence positionPersistence, BybitClientFactory factory,
-                    StrategyConfigLoader strategyConfigLoader, IExecutionRouter executionRouter, IEquityEngine equityEngine, ExecutionSyncService executionSync, ITradeExecutor executor, BybitDepthStreamClient depthClient, AdjustedScoreNormalizer adjustmentNorm)
+                    StrategyConfigLoader strategyConfigLoader, IExecutionRouter executionRouter, IEquityEngine equityEngine, ExecutionSyncService executionSync, ITradeExecutor executor, BybitDepthStreamClient depthClient,
+                    AdjustedScoreNormalizer adjustmentNorm, FundingRateClient fundingRateClient, FundingRateEngine fundingRateEngine)
         {
             _logger = logger;
             _bootstrap = bootstrap;
@@ -132,6 +136,8 @@ namespace KinetixFlowEngine.Core
             _depthClient = depthClient;
             _factory = factory;
             _adjustmentNorm = adjustmentNorm;
+            _fundingRateClient = fundingRateClient;
+            _fundingRateEngine = fundingRateEngine;
             _tradeStreamClient.OnTrade += trade =>
             {
                 _flowTradeBuffer.AddTrade(trade);
@@ -145,7 +151,7 @@ namespace KinetixFlowEngine.Core
 
                 await _alerts.SendTarget1Async(trade);
             };
-            _positionManager.TradeClosed += (trade, exitPrice) =>
+            _positionManager.TradeClosed += async (trade, exitPrice) =>
             {
                 var duration = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - trade.EntryTimeMs) / 1000;
                 var entry = trade.EntryPrice;
@@ -269,7 +275,7 @@ namespace KinetixFlowEngine.Core
                     account.Config.ApiSecret);
 
                 // Fetch real balance after close
-                decimal realBalance = client.GetUsdtWalletBalanceAsync().Result;
+                decimal realBalance = await client.GetUsdtWalletBalanceAsync();
 
                 if (realBalance > 0)
                 {
@@ -466,6 +472,13 @@ namespace KinetixFlowEngine.Core
                     _lastOiValue = await _openInterestClient.GetOpenInterestAsync();
                     _lastOiFetch = DateTime.UtcNow;
                 }
+                // === FUNDING RATE (new) ===
+                double currentFundingRate = 0;
+                if ((DateTime.UtcNow.Second % 30) == 0) // every 30 seconds
+                {
+                    currentFundingRate = await _fundingRateClient.GetCurrentFundingRateAsync();
+                    _fundingRateEngine.Update(currentFundingRate);
+                }
                 if ((DateTime.UtcNow - _lastEngineCycle).TotalSeconds < _options.EngineCycleSeconds)
                 {
                     await Task.Delay(1000, stoppingToken);
@@ -478,7 +491,7 @@ namespace KinetixFlowEngine.Core
                 try
                 {
                     result = _engineProcessor.Process(price, lastTrade.Quantity, lastTrade.Timestamp, _lastOiValue, _scoreFastBuffer, _scoreMediumBuffer, _scoreSlowBuffer,
-                        _probFastBuffer, _probMediumBuffer, _probSlowBuffer);
+                        _probFastBuffer, _probMediumBuffer, _probSlowBuffer, _fundingRateEngine.CurrentRate, _fundingRateEngine.FundingPressure);
                 }
                 catch (Exception ex)
                 {
@@ -579,7 +592,7 @@ namespace KinetixFlowEngine.Core
                 _logger.LogInformation("FLOW | P {Price:F2} Raw {RawScore:F2} Adj {AdjScore:F2} Sz {Sz:F2} VzEma {Vema:F2} ProbL:{pro:F2} | " + "FS {Fast:F2} MS {Medium:F2} SS {Slow:F2}" +
                             " | VWAP {VWAP:F2} ER5 {ER:F2} ER30 {ER30:F2} ATR {ATR:F2} " + "| B {BuyP:F2} S {SellP:F2} Net {NetP:F2} | FP {BFast:F4} MP {BMedium:F4} SP {BSlow:F4} | v15 {v15:F2} v1 {v1:F2} F {Factor:F3} | " +
                             "SF[{SFL1:F4},{SFL2:F4},{SFL3:F4}] {SFTrend} | " + "SM[{SML1:F4},{SML2:F4},{SML3:F4}] {SMTrend} | " + "SS[{SSL1:F4},{SSL2:F4},{SSL3:F4}] {SSTrend} | " +
-                            "PF[{PFL1:F4},{PFL2:F4},{PFL3:F4}] {PFTrend} | " + "PM[{PML1:F4},{PML2:F4},{PML3:F4}] {PMTrend} | " + "PS[{PSL1:F4},{PSL2:F4},{PSL3:F4}] {PSTrend}",
+                            "PF[{PFL1:F4},{PFL2:F4},{PFL3:F4}] {PFTrend} | " + "PM[{PML1:F4},{PML2:F4},{PML3:F4}] {PMTrend} | " + "PS[{PSL1:F4},{PSL2:F4},{PSL3:F4}] {PSTrend} |  FundRate {fr:F6} FundPrs {fps:F6} atrNorm {atrn:F2}",
 
                             result.Price, result.RawScore, result.AdjustedScore, result.ScoreZ, result.VelocityEma, result.LongProbability, result.ScoreFastEma, result.ScoreMediumEma,
                             result.ScoreSlowEma, result.VWAP, result.ER, result.ER30, result.ATR15m, result.BuyPressure, result.SellPressure, result.NetPressure,
@@ -590,7 +603,8 @@ namespace KinetixFlowEngine.Core
 
                             result.EmaStability.ProbFastEmaLevel1, result.EmaStability.ProbFastEmaLevel2, result.EmaStability.ProbFastEmaLevel3, result.EmaStability.FastProbTrend,
                             result.EmaStability.ProbMediumEmaLevel1, result.EmaStability.ProbMediumEmaLevel2, result.EmaStability.ProbMediumEmaLevel3, result.EmaStability.MediumProbTrend,
-                            result.EmaStability.ProbSlowEmaLevel1, result.EmaStability.ProbSlowEmaLevel2, result.EmaStability.ProbSlowEmaLevel3, result.EmaStability.SlowProbTrend);
+                            result.EmaStability.ProbSlowEmaLevel1, result.EmaStability.ProbSlowEmaLevel2, result.EmaStability.ProbSlowEmaLevel3, result.EmaStability.SlowProbTrend, result.FundingRate, result.FundingPressure, result.AtrNorm);
+
 
                 var now = DateTime.UtcNow;
 

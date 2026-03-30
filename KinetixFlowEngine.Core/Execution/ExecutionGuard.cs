@@ -9,17 +9,17 @@ namespace KinetixFlowEngine.Core.Execution
     {
         private readonly ConcurrentDictionary<string, bool> _inFlight = new();
 
-        public bool TryEnter(string accountId)
+        public async Task<bool> TryEnter(string accountId)
         {
             return _inFlight.TryAdd(accountId, true);
         }
 
-        public void Exit(string accountId)
+        public async Task Exit(string accountId)
         {
             _inFlight.TryRemove(accountId, out _);
         }
 
-        public bool IsBusy(string accountId)
+        public async Task<bool> IsBusy(string accountId)
         {
             return _inFlight.ContainsKey(accountId);
         }

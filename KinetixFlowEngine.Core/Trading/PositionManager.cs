@@ -34,7 +34,7 @@ namespace KinetixFlowEngine.Core.Trading
             _logger = logger;
         }
 
-        public bool HasPosition(string strategy, string accountId)
+        public async Task<bool> HasPosition(string strategy, string accountId)
         {
             return _activeTrades.ContainsKey(GetKey(strategy, accountId));
         }
@@ -50,7 +50,7 @@ namespace KinetixFlowEngine.Core.Trading
             return _activeTrades.Values;
         }
 
-        public void TryEnterTrade(StrategySignal signal, decimal price, double atr, KinetixEngineResult r, decimal size, string accountId, string orderId)
+        public async Task TryEnterTrade(StrategySignal signal, decimal price, double atr, KinetixEngineResult r, decimal size, string accountId, string orderId)
         {
             var key = GetKey(signal.StrategyName, accountId);
             if (_activeTrades.ContainsKey(key))
@@ -101,7 +101,7 @@ namespace KinetixFlowEngine.Core.Trading
             SaveThrottled();
         }
 
-        public void Update(decimal price)
+        public async Task Update(decimal price)
         {
             var trades = _activeTrades.Values.ToList();
 
@@ -170,7 +170,7 @@ namespace KinetixFlowEngine.Core.Trading
             SaveThrottled();
         }
 
-        public void CloseTrade(string strategyName, string accountId, decimal exitPrice, string reason = "SL")
+        public async Task CloseTrade(string strategyName, string accountId, decimal exitPrice, string reason = "SL")
         {
             var key = GetKey(strategyName, accountId);
 
@@ -191,7 +191,7 @@ namespace KinetixFlowEngine.Core.Trading
             TradeClosed?.Invoke(trade, exitPrice);
         }
 
-        private void SaveThrottled()
+        private async Task SaveThrottled()
         {
             if ((DateTime.UtcNow - _lastSave).TotalSeconds < 5)
                 return;
@@ -200,7 +200,7 @@ namespace KinetixFlowEngine.Core.Trading
             _lastSave = DateTime.UtcNow;
         }
 
-        public void Restore(IEnumerable<PersistedPosition> persisted)
+        public async Task Restore(IEnumerable<PersistedPosition> persisted)
         {
             foreach (var p in persisted)
             {
@@ -240,7 +240,7 @@ namespace KinetixFlowEngine.Core.Trading
             }
         }
 
-        public void RestoreFromExchange(ExchangePosition ex)
+        public async Task RestoreFromExchange(ExchangePosition ex)
         {
             //NaveenImp - need to make wayy to have strategy name when we dont have positions in json locally, but position open in bybit
             var trade = new ActiveTrade
@@ -263,7 +263,7 @@ namespace KinetixFlowEngine.Core.Trading
 
         }
 
-        public void ForceRemoveRemnantByPrice(string accountId, decimal entryPrice, decimal tinyQty)
+        public async Task ForceRemoveRemnantByPrice(string accountId, decimal entryPrice, decimal tinyQty)
         {
             var trade = _activeTrades.Values.FirstOrDefault(t =>
                 t.AccountId == accountId &&

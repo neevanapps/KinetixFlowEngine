@@ -40,19 +40,19 @@ namespace KinetixFlowEngine.Core.Execution
         public async Task Execute(string accountId, StrategySignal signal, decimal price, decimal atr, KinetixEngineResult context)
         {
             var acc = _accounts.Accounts.First(x => x.Config.AccountId == accountId);
-            if (_positionManager.HasPosition(signal.StrategyName, accountId) || _guard.IsBusy(accountId))
+            if (await _positionManager.HasPosition(signal.StrategyName, accountId) || await _guard.IsBusy(accountId))
             {
                 //_logger.LogInformation("Account {AccountId} already has an open position for strategy {StrategyName}. Skipping execution.",
                 //    accountId, signal.StrategyName);
                 return;
             }
-            if (_guard.IsBusy(accountId))
+            if (await _guard.IsBusy(accountId))
             {
                 _logger.LogInformation("Skipping execution, order in-flight for {AccountId}", accountId);
                 return;
             }
 
-            if (!_guard.TryEnter(accountId))
+            if (!await _guard.TryEnter(accountId))
             {
                 return;
             }
@@ -73,7 +73,7 @@ namespace KinetixFlowEngine.Core.Execution
                     accountId, acc.Config.Enabled, acc.State.IsPaused, acc.State.IsStopped);
                 return;
             }
-            
+
             // -------------------------------
             // STOP LOSS
             // -------------------------------
