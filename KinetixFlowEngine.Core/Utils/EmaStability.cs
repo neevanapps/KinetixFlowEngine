@@ -22,6 +22,9 @@ namespace KinetixFlowEngine.Core.Utils
             int _level3Mins = (int)Lerp(90 * minTicks, 135 * minTicks, regime);
 
             var state = new EmaStabilityState();
+            state.Level1 = _level1Mins;
+            state.Level2 = _level2Mins;
+            state.Level3 = _level3Mins;
             state.ScoreFastEmaLevel1 = Compute(_scoreFast, _level1Mins);
             state.ScoreMediumEmaLevel1 = Compute(_scoreMedium, _level1Mins);
             state.ScoreSlowEmaLevel1 = Compute(_scoreSlow, _level1Mins);
@@ -130,6 +133,10 @@ namespace KinetixFlowEngine.Core.Utils
         public decimal ProbSlowEmaLevel3 { get; set; }
         public decimal ProbMediumEmaLevel3 { get; set; }
         public decimal ProbFastEmaLevel3 { get; set; }
+
+        public int Level3 { get; set; }
+        public int Level2 { get; set; }
+        public int Level1 { get; set; }
 
         public StabilityDirection FastScoreTrend { get; set; }
         public StabilityDirection MediumScoreTrend { get; set; }

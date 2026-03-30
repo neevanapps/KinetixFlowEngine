@@ -592,7 +592,8 @@ namespace KinetixFlowEngine.Core
                 _logger.LogInformation("FLOW | P {Price:F2} Raw {RawScore:F2} Adj {AdjScore:F2} Sz {Sz:F2} VzEma {Vema:F2} ProbL:{pro:F2} | " + "FS {Fast:F2} MS {Medium:F2} SS {Slow:F2}" +
                             " | VWAP {VWAP:F2} ER5 {ER:F2} ER30 {ER30:F2} ATR {ATR:F2} " + "| B {BuyP:F2} S {SellP:F2} Net {NetP:F2} | FP {BFast:F4} MP {BMedium:F4} SP {BSlow:F4} | v15 {v15:F2} v1 {v1:F2} F {Factor:F3} | " +
                             "SF[{SFL1:F4},{SFL2:F4},{SFL3:F4}] {SFTrend} | " + "SM[{SML1:F4},{SML2:F4},{SML3:F4}] {SMTrend} | " + "SS[{SSL1:F4},{SSL2:F4},{SSL3:F4}] {SSTrend} | " +
-                            "PF[{PFL1:F4},{PFL2:F4},{PFL3:F4}] {PFTrend} | " + "PM[{PML1:F4},{PML2:F4},{PML3:F4}] {PMTrend} | " + "PS[{PSL1:F4},{PSL2:F4},{PSL3:F4}] {PSTrend} |  FundRate {fr:F6} FundPrs {fps:F6} atrNorm {atrn:F2}",
+                            "PF[{PFL1:F4},{PFL2:F4},{PFL3:F4}] {PFTrend} | " + "PM[{PML1:F4},{PML2:F4},{PML3:F4}] {PMTrend} | " + "PS[{PSL1:F4},{PSL2:F4},{PSL3:F4}] {PSTrend} |  FundRate {fr:F6} FundPrs {fps:F6} atrNorm {atrn:F2}" +
+                            " | L1 {l1} L2 {l2} L3 {l3}",
 
                             result.Price, result.RawScore, result.AdjustedScore, result.ScoreZ, result.VelocityEma, result.LongProbability, result.ScoreFastEma, result.ScoreMediumEma,
                             result.ScoreSlowEma, result.VWAP, result.ER, result.ER30, result.ATR15m, result.BuyPressure, result.SellPressure, result.NetPressure,
@@ -603,7 +604,8 @@ namespace KinetixFlowEngine.Core
 
                             result.EmaStability.ProbFastEmaLevel1, result.EmaStability.ProbFastEmaLevel2, result.EmaStability.ProbFastEmaLevel3, result.EmaStability.FastProbTrend,
                             result.EmaStability.ProbMediumEmaLevel1, result.EmaStability.ProbMediumEmaLevel2, result.EmaStability.ProbMediumEmaLevel3, result.EmaStability.MediumProbTrend,
-                            result.EmaStability.ProbSlowEmaLevel1, result.EmaStability.ProbSlowEmaLevel2, result.EmaStability.ProbSlowEmaLevel3, result.EmaStability.SlowProbTrend, result.FundingRate, result.FundingPressure, result.AtrNorm);
+                            result.EmaStability.ProbSlowEmaLevel1, result.EmaStability.ProbSlowEmaLevel2, result.EmaStability.ProbSlowEmaLevel3, result.EmaStability.SlowProbTrend, result.FundingRate, 
+                            result.FundingPressure, result.AtrNorm, result.EmaStability.Level1, result.EmaStability.Level2, result.EmaStability.Level3);
 
 
                 var now = DateTime.UtcNow;
