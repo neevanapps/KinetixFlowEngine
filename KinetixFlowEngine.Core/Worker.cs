@@ -65,6 +65,7 @@ namespace KinetixFlowEngine.Core
         private DateTime _lastOiFetch = DateTime.MinValue;
         private DateTime _lastDailyResetUtc = DateTime.MinValue;
         private DateTime _lastSync = DateTime.MinValue;
+        private DateTime _lastPositionLog = DateTime.MinValue;
         private int _drawdownCheckCounter = 0;
         private const int DRAW_DOWN_PERSIST_EVERY_N_CYCLES = 5;   // ~every 5–10 seconds
         private double _lastOiValue = 0;
@@ -575,7 +576,6 @@ namespace KinetixFlowEngine.Core
                     _equityEngine.UpdateAll((decimal)price);
                 }
 
-                _recorder.Record(result);
                 _logger.LogInformation("FLOW | P {Price:F2} Raw {RawScore:F2} Adj {AdjScore:F2} Sz {Sz:F2} VzEma {Vema:F2} ProbL:{pro:F2} | " + "FS {Fast:F2} MS {Medium:F2} SS {Slow:F2}" +
                             " | VWAP {VWAP:F2} ER5 {ER:F2} ER30 {ER30:F2} ATR {ATR:F2} " + "| B {BuyP:F2} S {SellP:F2} Net {NetP:F2} | FP {BFast:F4} MP {BMedium:F4} SP {BSlow:F4} | v15 {v15:F2} v1 {v1:F2} F {Factor:F3} | " +
                             "SF[{SFL1:F4},{SFL2:F4},{SFL3:F4}] {SFTrend} | " + "SM[{SML1:F4},{SML2:F4},{SML3:F4}] {SMTrend} | " + "SS[{SSL1:F4},{SSL2:F4},{SSL3:F4}] {SSTrend} | " +
@@ -590,7 +590,16 @@ namespace KinetixFlowEngine.Core
 
                             result.EmaStability.ProbFastEmaLevel1, result.EmaStability.ProbFastEmaLevel2, result.EmaStability.ProbFastEmaLevel3, result.EmaStability.FastProbTrend,
                             result.EmaStability.ProbMediumEmaLevel1, result.EmaStability.ProbMediumEmaLevel2, result.EmaStability.ProbMediumEmaLevel3, result.EmaStability.MediumProbTrend,
-                            result.EmaStability.ProbSlowEmaLevel1, result.EmaStability.ProbSlowEmaLevel2, result.EmaStability.ProbSlowEmaLevel3, result.EmaStability        .SlowProbTrend);
+                            result.EmaStability.ProbSlowEmaLevel1, result.EmaStability.ProbSlowEmaLevel2, result.EmaStability.ProbSlowEmaLevel3, result.EmaStability.SlowProbTrend);
+
+                var now = DateTime.UtcNow;
+
+                if ((now - _lastPositionLog).TotalMinutes >= 10)
+                {
+                    var positions = _positionManager.GetAllPositions();
+                    LogPositionsSnapshot(positions, (decimal)result.Price);
+                    _lastPositionLog = now;
+                }
 
                 #region EMA's Snapshot for debugging
                 _scoreFastBuffer.Add(result.ScoreFastEma);
@@ -600,6 +609,7 @@ namespace KinetixFlowEngine.Core
                 _probMediumBuffer.Add(result.ProbMediumEma);
                 _probSlowBuffer.Add(result.ProbSlowEma);
                 #endregion
+                _recorder.Record(result);
 
                 if ((DateTime.UtcNow - _lastSnapshot).TotalSeconds > 60)
                 {
@@ -656,6 +666,32 @@ namespace KinetixFlowEngine.Core
                     _lastSnapshot = DateTime.UtcNow;
                 }
                 await Task.Delay(1000, stoppingToken);
+            }
+        }
+
+        private void LogPositionsSnapshot(IEnumerable<ActiveTrade> positions, decimal currentPrice)
+        {
+            if (!positions.Any())
+            {
+                _logger.LogInformation("POS | No active positions");
+                return;
+            }
+
+            foreach (var p in positions)
+            {
+                decimal pnl = 0;
+
+                if (p.Direction == SignalDirection.Long)
+                    pnl = currentPrice - p.EntryPrice;
+                else if (p.Direction == SignalDirection.Short)
+                    pnl = p.EntryPrice - currentPrice;
+
+                _logger.LogInformation("POS | {Strategy} | {Direction} | Entry:{Entry:F2} | U-PnL:{PnL:F2}",
+                    p.StrategyName,
+                    p.Direction,
+                    p.EntryPrice,
+                    pnl
+                );
             }
         }
 

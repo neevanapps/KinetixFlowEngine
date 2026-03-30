@@ -17,8 +17,20 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
 
         public StrategySignal EvaluateEntry(KinetixEngineResult r)
         {
-            if ((decimal)r.ScoreMediumEma > r.EmaStability.ScoreMediumEmaLevel1 && r.EmaStability.ScoreMediumEmaLevel1 > r.EmaStability.ScoreMediumEmaLevel2
-                        && r.EmaStability.ScoreMediumEmaLevel2 > r.EmaStability.ScoreMediumEmaLevel3)
+            decimal slow = (decimal)r.ScoreMediumEma;
+            decimal l1 = r.EmaStability.ScoreMediumEmaLevel1;
+            decimal l2 = r.EmaStability.ScoreMediumEmaLevel2;
+            decimal l3 = r.EmaStability.ScoreMediumEmaLevel3;
+
+            bool bullishStructure = slow > l1 && l1 > l3;
+            bool bearishStructure = slow < l1 && l1 < l3;
+
+            bool strongBull = l1 > 1.0m;
+            bool strongBear = l1 < -1.0m;
+
+            bool spreadValid = Math.Abs(l1 - l3) > 0.4m;
+
+            if (bullishStructure && strongBull && spreadValid)
             {
                 return new StrategySignal
                 {
@@ -32,8 +44,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
                 };
             }
 
-            if ((decimal)r.ScoreMediumEma < r.EmaStability.ScoreMediumEmaLevel1 && r.EmaStability.ScoreMediumEmaLevel1 < r.EmaStability.ScoreMediumEmaLevel2
-                        && r.EmaStability.ScoreMediumEmaLevel2 < r.EmaStability.ScoreMediumEmaLevel3)
+            if (bearishStructure && strongBear && spreadValid)
             {
                 return new StrategySignal
                 {
@@ -47,19 +58,27 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
                 };
             }
 
-            return new StrategySignal
-            {
-                StrategyName = Name,
-                Direction = SignalDirection.None
-            };
+            return new StrategySignal { StrategyName = Name, Direction = SignalDirection.None };
         }
 
         public StrategySignal EvaluateExit(KinetixEngineResult r, ActiveTrade trade)
         {
+            decimal slow = (decimal)r.ScoreMediumEma;
+            decimal l1 = r.EmaStability.ScoreMediumEmaLevel1;
+            decimal l2 = r.EmaStability.ScoreMediumEmaLevel2;
+            decimal l3 = r.EmaStability.ScoreMediumEmaLevel3;
+
+            bool bullishStructure = slow > l1 && l1 > l3;
+            bool bearishStructure = slow < l1 && l1 < l3;
+
+            bool strongBull = l1 > 1.0m;
+            bool strongBear = l1 < -1.0m;
+
+            bool spreadValid = Math.Abs(l1 - l3) > 0.4m;
+
             if (trade.Direction == SignalDirection.Long)
             {
-                if ((decimal)r.ScoreMediumEma < r.EmaStability.ScoreMediumEmaLevel1 && r.EmaStability.ScoreMediumEmaLevel1 < r.EmaStability.ScoreMediumEmaLevel2
-                        && r.EmaStability.ScoreMediumEmaLevel2 < r.EmaStability.ScoreMediumEmaLevel3)
+                if (bearishStructure && strongBear && spreadValid)
                 {
                     return new StrategySignal
                     {
@@ -71,8 +90,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
 
             if (trade.Direction == SignalDirection.Short)
             {
-                if ((decimal)r.ScoreMediumEma > r.EmaStability.ScoreMediumEmaLevel1 && r.EmaStability.ScoreMediumEmaLevel1 > r.EmaStability.ScoreMediumEmaLevel2
-                        && r.EmaStability.ScoreMediumEmaLevel2 > r.EmaStability.ScoreMediumEmaLevel3)
+                if (bullishStructure && strongBull && spreadValid)
                 {
                     return new StrategySignal
                     {

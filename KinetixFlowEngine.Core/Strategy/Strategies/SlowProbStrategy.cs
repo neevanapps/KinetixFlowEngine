@@ -17,14 +17,35 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
 
         public StrategySignal EvaluateEntry(KinetixEngineResult r)
         {
-            if ((decimal)r.ProbSlowEma > r.EmaStability.ProbSlowEmaLevel1 && r.EmaStability.ProbSlowEmaLevel1 > r.EmaStability.ProbSlowEmaLevel2
-                        && r.EmaStability.ProbSlowEmaLevel2 > r.EmaStability.ProbSlowEmaLevel3)
+            decimal slow = (decimal)r.ProbSlowEma;
+            decimal l1 = r.EmaStability.ProbSlowEmaLevel1;
+            decimal l2 = r.EmaStability.ProbSlowEmaLevel2;
+            decimal l3 = r.EmaStability.ProbSlowEmaLevel3;
+
+            // =========================
+            // 1. DIRECTION (RELAXED)
+            // =========================
+            bool bullishStructure = slow > l1 && l1 > l3;
+            bool bearishStructure = slow < l1 && l1 < l3;
+
+            // =========================
+            // 2. STRENGTH FILTER
+            // =========================
+            bool strongBull = l1 > 0.52m;
+            bool strongBear = l1 < 0.48m;
+
+            // =========================
+            // 3. TREND SPREAD (IMPORTANT)
+            // =========================
+            bool spreadValid = Math.Abs(l1 - l3) > 0.015m;
+
+            if (bullishStructure && strongBull && spreadValid)
             {
                 return new StrategySignal
                 {
                     StrategyName = Name,
                     Direction = SignalDirection.Long,
-                    Confidence = r.ScoreZ,
+                    Confidence = (double)slow,
                     EnterOnlyAtFairPrice = _config.EnterOnlyAtFairPrice,
                     NotifyThroughTelegram = _config.NotifyThroughTelegram,
                     IsVolumeBased = _config.VolumeBased,
@@ -32,14 +53,13 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
                 };
             }
 
-            if ((decimal)r.ProbSlowEma < r.EmaStability.ProbSlowEmaLevel1 && r.EmaStability.ProbSlowEmaLevel1 < r.EmaStability.ProbSlowEmaLevel2
-                        && r.EmaStability.ProbSlowEmaLevel2 < r.EmaStability.ProbSlowEmaLevel3)
+            if (bearishStructure && strongBear && spreadValid)
             {
                 return new StrategySignal
                 {
                     StrategyName = Name,
                     Direction = SignalDirection.Short,
-                    Confidence = r.ScoreZ,
+                    Confidence = (double)slow,
                     EnterOnlyAtFairPrice = _config.EnterOnlyAtFairPrice,
                     NotifyThroughTelegram = _config.NotifyThroughTelegram,
                     IsVolumeBased = _config.VolumeBased,
@@ -47,19 +67,36 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
                 };
             }
 
-            return new StrategySignal
-            {
-                StrategyName = Name,
-                Direction = SignalDirection.None
-            };
+            return new StrategySignal { StrategyName = Name, Direction = SignalDirection.None };
         }
 
         public StrategySignal EvaluateExit(KinetixEngineResult r, ActiveTrade trade)
         {
+            decimal slow = (decimal)r.ProbSlowEma;
+            decimal l1 = r.EmaStability.ProbSlowEmaLevel1;
+            decimal l2 = r.EmaStability.ProbSlowEmaLevel2;
+            decimal l3 = r.EmaStability.ProbSlowEmaLevel3;
+
+            // =========================
+            // 1. DIRECTION (RELAXED)
+            // =========================
+            bool bullishStructure = slow > l1 && l1 > l3;
+            bool bearishStructure = slow < l1 && l1 < l3;
+
+            // =========================
+            // 2. STRENGTH FILTER
+            // =========================
+            bool strongBull = l1 > 0.52m;
+            bool strongBear = l1 < 0.48m;
+
+            // =========================
+            // 3. TREND SPREAD (IMPORTANT)
+            // =========================
+            bool spreadValid = Math.Abs(l1 - l3) > 0.015m;
+
             if (trade.Direction == SignalDirection.Long)
             {
-                if ((decimal)r.ProbSlowEma < r.EmaStability.ProbSlowEmaLevel1 && r.EmaStability.ProbSlowEmaLevel1 < r.EmaStability.ProbSlowEmaLevel2
-                        && r.EmaStability.ProbSlowEmaLevel2 < r.EmaStability.ProbSlowEmaLevel3)
+                if (bearishStructure && strongBear && spreadValid)
                 {
                     return new StrategySignal
                     {
@@ -71,8 +108,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
 
             if (trade.Direction == SignalDirection.Short)
             {
-                if ((decimal)r.ProbSlowEma > r.EmaStability.ProbSlowEmaLevel1 && r.EmaStability.ProbSlowEmaLevel1 > r.EmaStability.ProbSlowEmaLevel2
-                        && r.EmaStability.ProbSlowEmaLevel2 > r.EmaStability.ProbSlowEmaLevel3)
+                if (bullishStructure && strongBull && spreadValid)
                 {
                     return new StrategySignal
                     {
