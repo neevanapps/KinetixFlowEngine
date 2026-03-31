@@ -17,29 +17,29 @@ namespace KinetixFlowEngine.Core.Data
         {
             try
             {
-                var resp = await _http.GetAsync($"/v5/market/funding/history?category=linear&symbol={symbol}&limit=1");
+                var resp = await _http.GetAsync($"/v5/market/tickers?category=linear&symbol={symbol}");
 
                 if (!resp.IsSuccessStatusCode)
-                {
-                    Console.WriteLine($"[FundingRate] HTTP {(int)resp.StatusCode} - {resp.ReasonPhrase}");
                     return 0.0;
-                }
 
                 using var stream = await resp.Content.ReadAsStreamAsync();
                 using var doc = await JsonDocument.ParseAsync(stream);
 
-                var result = doc.RootElement.GetProperty("result");
-                var list = result.GetProperty("list");
+                var list = doc.RootElement
+                    .GetProperty("result")
+                    .GetProperty("list");
 
                 if (list.GetArrayLength() == 0)
                     return 0.0;
 
-                var fundingRateStr = list[0].GetProperty("fundingRate").GetString() ?? "0";
+                var ticker = list[0];
+
+                var fundingRateStr = ticker.GetProperty("fundingRate").GetString() ?? "0";
+
                 return double.Parse(fundingRateStr, CultureInfo.InvariantCulture);
             }
-            catch (Exception ex)
+            catch
             {
-                Console.WriteLine($"[FundingRateClient] Error: {ex.Message}");
                 return 0.0;
             }
         }

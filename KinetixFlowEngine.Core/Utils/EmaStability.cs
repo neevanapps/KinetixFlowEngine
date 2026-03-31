@@ -53,33 +53,36 @@ namespace KinetixFlowEngine.Core.Utils
             double regime = 0.7 * atrNorm + 0.3 * momentumNorm;
             regime = Math.Clamp(regime, 0.0, 1.0);
 
-            int level1 = (int)Lerp(12 * _minTicks, 20 * _minTicks, regime);
-            int level2 = (int)Lerp(45 * _minTicks, 75 * _minTicks, regime);
-            int level3 = (int)Lerp(120 * _minTicks, 240 * _minTicks, regime);
+            int level1 = (int)Lerp(6 * _minTicks, 12 * _minTicks, regime);
+            int level2 = (int)Lerp(15 * _minTicks, 30 * _minTicks, regime);
+            int level3 = (int)Lerp(30 * _minTicks, 60 * _minTicks, regime);
 
             decimal factor = 0.3m + (decimal)regime * 0.7m;
 
             // SCORE EMA (now truly adaptive)
-            decimal sf1 = _sfL1.UpdateWithFactor(scoreFast, factor, 12, level1);
-            decimal sf2 = _sfL2.UpdateWithFactor(scoreFast, factor, 12, level2);
-            decimal sf3 = _sfL3.UpdateWithFactor(scoreFast, factor, 12, level3);
-            decimal sm1 = _smL1.UpdateWithFactor(scoreMedium, factor, 12, level1);
-            decimal sm2 = _smL2.UpdateWithFactor(scoreMedium, factor, 12, level2);
-            decimal sm3 = _smL3.UpdateWithFactor(scoreMedium, factor, 12, level3);
-            decimal ss1 = _ssL1.UpdateWithFactor(scoreSlow, factor, 12, level1);
-            decimal ss2 = _ssL2.UpdateWithFactor(scoreSlow, factor, 12, level2);
-            decimal ss3 = _ssL3.UpdateWithFactor(scoreSlow, factor, 12, level3);
+            decimal sf1 = _sfL1.UpdateWithFactor(scoreFast, factor, level1, level1);
+            decimal sf2 = _sfL2.UpdateWithFactor(scoreFast, factor, level2, level2);
+            decimal sf3 = _sfL3.UpdateWithFactor(scoreFast, factor, level3, level3);
+            decimal sm1 = _smL1.UpdateWithFactor(scoreMedium, factor, level1, level1);
+            decimal sm2 = _smL2.UpdateWithFactor(scoreMedium, factor, level2, level2);
+            decimal sm3 = _smL3.UpdateWithFactor(scoreMedium, factor, level3, level3);
+            decimal ss1 = _ssL1.UpdateWithFactor(scoreSlow, factor, level1, level1);
+            decimal ss2 = _ssL2.UpdateWithFactor(scoreSlow, factor, level2, level2);
+            decimal ss3 = _ssL3.UpdateWithFactor(scoreSlow, factor, level3, level3);
 
+            decimal probFastC = probFast - 0.5m;
+            decimal probMediumC = probMedium - 0.5m;
+            decimal probSlowC = probSlow - 0.5m;
             // PROBABILITY EMA
-            decimal pf1 = _pfL1.UpdateWithFactor(probFast, factor, 12, level1);
-            decimal pf2 = _pfL2.UpdateWithFactor(probFast, factor, 12, level2);
-            decimal pf3 = _pfL3.UpdateWithFactor(probFast, factor, 12, level3);
-            decimal pm1 = _pmL1.UpdateWithFactor(probMedium, factor, 12, level1);
-            decimal pm2 = _pmL2.UpdateWithFactor(probMedium, factor, 12, level2);
-            decimal pm3 = _pmL3.UpdateWithFactor(probMedium, factor, 12, level3);
-            decimal ps1 = _psL1.UpdateWithFactor(probSlow, factor, 12, level1);
-            decimal ps2 = _psL2.UpdateWithFactor(probSlow, factor, 12, level2);
-            decimal ps3 = _psL3.UpdateWithFactor(probSlow, factor, 12, level3);
+            decimal pf1 = _pfL1.UpdateWithFactor(probFastC, factor, level1, level1);
+            decimal pf2 = _pfL2.UpdateWithFactor(probFastC, factor, level2, level2);
+            decimal pf3 = _pfL3.UpdateWithFactor(probFastC, factor, level3, level3);
+            decimal pm1 = _pmL1.UpdateWithFactor(probMediumC, factor, level1, level1);
+            decimal pm2 = _pmL2.UpdateWithFactor(probMediumC, factor, level2, level2);
+            decimal pm3 = _pmL3.UpdateWithFactor(probMediumC, factor, level3, level3);
+            decimal ps1 = _psL1.UpdateWithFactor(probSlowC, factor, level1, level1);
+            decimal ps2 = _psL2.UpdateWithFactor(probSlowC, factor, level2, level2);
+            decimal ps3 = _psL3.UpdateWithFactor(probSlowC, factor, level3, level3);
 
             var state = new EmaStabilityState
             {
@@ -109,20 +112,31 @@ namespace KinetixFlowEngine.Core.Utils
                 ProbSlowEmaLevel3 = Math.Clamp(ps3, -50m, 50m),
             };
 
-            state.FastScoreTrend = DetermineTrend(sf1, sf2, sf3);
-            state.MediumScoreTrend = DetermineTrend(sm1, sm2, sm3);
-            state.SlowScoreTrend = DetermineTrend(ss1, ss2, ss3);
-            state.FastProbTrend = DetermineTrend(pf1, pf2, pf3);
-            state.MediumProbTrend = DetermineTrend(pm1, pm2, pm3);
-            state.SlowProbTrend = DetermineTrend(ps1, ps2, ps3);
+            state.FastScoreTrend = DetermineTrend(state.ScoreFastEmaLevel1, state.ScoreFastEmaLevel2, state.ScoreFastEmaLevel3);
+            state.MediumScoreTrend = DetermineTrend(state.ScoreMediumEmaLevel1, state.ScoreMediumEmaLevel2, state.ScoreMediumEmaLevel3);
+            state.SlowScoreTrend = DetermineTrend(state.ScoreSlowEmaLevel1, state.ScoreSlowEmaLevel2, state.ScoreSlowEmaLevel3);
+            state.FastProbTrend = DetermineTrend(state.ProbFastEmaLevel1, state.ProbFastEmaLevel2, state.ProbFastEmaLevel3);
+            state.MediumProbTrend = DetermineTrend(state.ProbMediumEmaLevel1, state.ProbMediumEmaLevel2, state.ProbMediumEmaLevel3);
+            state.SlowProbTrend = DetermineTrend(state.ProbSlowEmaLevel1, state.ProbSlowEmaLevel2, state.ProbSlowEmaLevel3);
 
             return state;
         }
 
+        private const decimal EPS = 0.0001m;
+
         private static StabilityDirection DetermineTrend(decimal l1, decimal l2, decimal l3)
         {
-            if (l1 > l2 && l2 > l3) return StabilityDirection.Long;
-            if (l1 < l2 && l2 < l3) return StabilityDirection.Short;
+            bool up = (l1 - l2) > EPS && (l2 - l3) > EPS;
+            bool down = (l2 - l1) > EPS && (l3 - l2) > EPS;
+
+            // All positive → Long
+            if (l1 > 0 && l2 > 0 && l3 > 0 && up)
+                return StabilityDirection.Long;
+
+            // All negative → Short
+            if (l1 < 0 && l2 < 0 && l3 < 0 && down)
+                return StabilityDirection.Short;
+
             return StabilityDirection.Neutral;
         }
 

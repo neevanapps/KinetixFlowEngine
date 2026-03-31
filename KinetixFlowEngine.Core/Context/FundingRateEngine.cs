@@ -5,7 +5,6 @@ namespace KinetixFlowEngine.Core.Context
     public class FundingRateEngine
     {
         private readonly Ema _ema = new Ema(10);
-        private double _lastRate = 0;
 
         public double CurrentRate { get; private set; } = 0;
 
@@ -13,16 +12,12 @@ namespace KinetixFlowEngine.Core.Context
         {
             CurrentRate = newRate;
 
-            if (_lastRate == 0)
-            {
-                _lastRate = newRate;
-                return 0;
-            }
+            double scaled = newRate * 10000; // 🔴 critical scaling
+                                             // ignore micro-noise
+            if (Math.Abs(scaled) < 0.05)
+                scaled = 0;
 
-            double change = newRate - _lastRate;
-            _lastRate = newRate;
-
-            return _ema.Update(change);
+            return _ema.Update(scaled);
         }
 
         public double FundingPressure => _ema.Value;
