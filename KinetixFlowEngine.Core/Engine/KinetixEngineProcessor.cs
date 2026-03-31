@@ -50,14 +50,14 @@ namespace KinetixFlowEngine.Core.Engine
         private readonly FlowMomentumRun _momentumRun;
         private readonly EmaStability _emaStability;
         private readonly OneMinuteCandleBuilder _candleBuilder = new();
-
+        private readonly AtrNormalizer _atrNormalizer;
         public KinetixEngineProcessor(FlowAggregationWindow flowAggregationWindow, FlowFeatureEngine flowFeatureEngine, FlowCompositeEngine flowCompositeEngine, FlowScoreEngine flowScoreEngine,
             FlowRegimeEngine flowRegimeEngine, VwapEngine vwapEngine, EfficiencyRatioEngine erEngine, AtrEngine atrEngine, OpenInterestEngine oiEngine, ContextScoreEngine contextScoreEngine,
             PriceTrendEngine priceEngine, ScoreTrendEngine scoreEngine, FlowStateEngine flowStateEngine, FlowProbabilityEngine flowProbabilityEngine, SignalStabilityEngine signalStabilityEngine,
             ScoreNormalizer scoreNorm, VelocityNormalizer velNorm, ImbalanceNormalizer imbNorm, ExhaustionNormalizer exhNorm, CompressionNormalizer cmpNorm, Atr15mEngine atr15m, FlowDivergenceEngine divergenceEngine,
             EfficiencyRatio30mEngine er30m, LiquidityPressureEngine pressureEngine, VwapAbsorptionEngine vwapAbsorptionEngine, WhaleClusterEngine whaleClusterEngine, FlowImpactEngine flowImpactEngine,
             FlowPersistenceEngine flowPersistenceEngine, ProbabilityTrendEngine probEngine, FlowTradeBuffer tradeBuffer, FifteenMinuteCandleBuilder candle15m, VolumeEngine volumeEngine, FlowMomentumRun momentumRun,
-            EmaStability emaStability)
+            EmaStability emaStability, AtrNormalizer atrNormalizer)
         {
             _flowAggregationWindow = flowAggregationWindow;
             _flowFeatureEngine = flowFeatureEngine;
@@ -96,10 +96,10 @@ namespace KinetixFlowEngine.Core.Engine
             _volumeEngine = volumeEngine;
             _momentumRun = momentumRun;
             _emaStability = emaStability;
+            _atrNormalizer = atrNormalizer;
         }
 
-        public KinetixEngineResult Process(double price, decimal quantity, long timeStamp, double openInterest, RollingWindowBuffer _scoreFast, RollingWindowBuffer _scoreMedium,
-                            RollingWindowBuffer _scoreSlow, RollingWindowBuffer _probFast, RollingWindowBuffer _probMedium, RollingWindowBuffer _probSlow, double fundingRate, double fundingPressure)
+        public KinetixEngineResult Process(double price, decimal quantity, long timeStamp, double openInterest, double fundingRate, double fundingPressure)
         {
             var allTrades = _tradeBuffer.GetSnapshot();
             long cutoff = DateTimeOffset.UtcNow.AddSeconds(-60).ToUnixTimeMilliseconds();
@@ -170,8 +170,10 @@ namespace KinetixFlowEngine.Core.Engine
             bool volumeExpansion = _volumeEngine.IsVolumeExpansion();
             var adjustedScore = _contextScoreEngine.ApplyStructureFilter(contextScore, impact, bearishTrap, bullishTrap, highPersistence, volumeExpansion);
 
-            double atrNorm = Math.Max(atr, 1); // avoid divide by zero
-            double finalScore = adjustedScore / (atrNorm / 100.0);
+            _atrNormalizer.Update(atr);
+            double atrNorm = _atrNormalizer.GetNormalized(atr);
+            double atrScale = _atrNormalizer.GetScale(atrNorm);
+            double finalScore = adjustedScore / atrScale;
             finalScore = Math.Clamp(finalScore, -20, 20);
 
             // OPTIONAL: keep scoreZ only for logging (DO NOT USE IN LOGIC)
@@ -198,7 +200,7 @@ namespace KinetixFlowEngine.Core.Engine
             bool shortSignal = probability.ShortProbability > 0.65 && scoreTrend == FlowTrend.Bearish && strongTrend && tradeGate;
             var stability = _signalStabilityEngine.Update(longSignal, shortSignal);
 
-            var emaStabilityState = _emaStability.Compute(_scoreFast, _scoreMedium, _scoreSlow, _probFast, _probMedium, _probSlow, atrNorm, er5);
+            var emaStabilityState = _emaStability.Compute(_scoreEngine.Fast, _scoreEngine.Medium, _scoreEngine.Slow, _probEngine.Fast, _probEngine.Medium, _probEngine.Slow, atrNorm);
             // ===== Momentum Decay Detection (NEW) =====
             bool momentumDying = Math.Abs((decimal)_velocityEma.Value) < 0.3m;
             return new KinetixEngineResult
@@ -273,6 +275,7 @@ namespace KinetixFlowEngine.Core.Engine
                 FundingRate = fundingRate,
                 FundingPressure = fundingPressure,
                 AtrNorm = atrNorm,
+                AtrScale = atrScale
             };
         }
     }

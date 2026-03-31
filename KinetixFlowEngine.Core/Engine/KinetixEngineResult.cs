@@ -96,6 +96,8 @@ namespace KinetixFlowEngine.Core.Engine
         public double FundingRate { get; set; }
         public double FundingPressure { get; set; }
         public double AtrNorm { get; set; }
+        public double AtrScale { get; set; }
+        public double AtrRegime { get; set; }
         public EmaStabilityState EmaStability { get; set; } = new();
     }
 }

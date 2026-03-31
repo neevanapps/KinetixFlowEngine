@@ -14,6 +14,7 @@ using KinetixFlowEngine.Core.Utils;
 using Microsoft.Extensions.Options;
 using Serilog;
 using System.Globalization;
+using System.Text;
 
 namespace KinetixFlowEngine.Core
 {
@@ -32,13 +33,6 @@ namespace KinetixFlowEngine.Core
         private readonly TelegramService _telegram;
         private readonly ExceptionAlertAggregator _exceptionAggregator;
         private readonly FlowAggregationWindow _flowAggregationWindow;
-
-        private readonly RollingWindowBuffer _scoreFastBuffer = new(2880);
-        private readonly RollingWindowBuffer _scoreMediumBuffer = new(2880);
-        private readonly RollingWindowBuffer _scoreSlowBuffer = new(2880);
-        private readonly RollingWindowBuffer _probFastBuffer = new(2880);
-        private readonly RollingWindowBuffer _probMediumBuffer = new(2880);
-        private readonly RollingWindowBuffer _probSlowBuffer = new(2880);
 
         private readonly ScoreNormalizer _scoreNorm;
         private readonly VelocityNormalizer _velNorm;
@@ -85,6 +79,9 @@ namespace KinetixFlowEngine.Core
         private readonly BybitClientFactory _factory;
         private readonly FundingRateClient _fundingRateClient;
         private readonly FundingRateEngine _fundingRateEngine;
+        private readonly AtrNormalizer _atrNormalizer;
+        private readonly EmaStability _emaStability;
+        private string _lastFlowSnapshot = string.Empty;
 
         public Worker(FlowTradeBuffer flowTradeBuffer, TradeStreamClient tradeStreamClient, ILogger<Worker> logger, KinetixEngineProcessor engineProcessor, ScoreNormalizer scoreNorm, EngineBootstrapService bootstrap,
                     VelocityNormalizer velNorm, ImbalanceNormalizer imbNorm, ExhaustionNormalizer exhNorm, CompressionNormalizer cmpNorm, MarketStateManager snapshotManager, PositionManager positionManager,
@@ -93,7 +90,7 @@ namespace KinetixFlowEngine.Core
                     ProbabilityTrendEngine probEngine, FlowAggregationWindow flowAggregationWindow, FlowMomentumRun momentumRun, TradeMemoryManager tradeMemory, VolumeEngine volumeEngine, FairPriceEngine fairPriceEngine,
                     PropAccountRuntimeManager accounts, PropAlertService alerts, PropAccountStatePersistence accountStatePersistence, PositionPersistence positionPersistence, BybitClientFactory factory,
                     StrategyConfigLoader strategyConfigLoader, IExecutionRouter executionRouter, IEquityEngine equityEngine, ExecutionSyncService executionSync, ITradeExecutor executor, BybitDepthStreamClient depthClient,
-                    AdjustedScoreNormalizer adjustmentNorm, FundingRateClient fundingRateClient, FundingRateEngine fundingRateEngine)
+                    AdjustedScoreNormalizer adjustmentNorm, FundingRateClient fundingRateClient, FundingRateEngine fundingRateEngine, AtrNormalizer atrNormalizer, EmaStability ema)
         {
             _logger = logger;
             _bootstrap = bootstrap;
@@ -138,6 +135,8 @@ namespace KinetixFlowEngine.Core
             _adjustmentNorm = adjustmentNorm;
             _fundingRateClient = fundingRateClient;
             _fundingRateEngine = fundingRateEngine;
+            _atrNormalizer = atrNormalizer;
+            _emaStability = ema;
             _tradeStreamClient.OnTrade += trade =>
             {
                 _flowTradeBuffer.AddTrade(trade);
@@ -374,7 +373,6 @@ namespace KinetixFlowEngine.Core
                     Quantity = trade.RemainingSize
                 });
             };
-
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -436,23 +434,12 @@ namespace KinetixFlowEngine.Core
                     _volumeEngine.Restore(snapshot.VolumeEngineState);
                     _logger.LogInformation("VolumeEngine state restored successfully.");
                 }
-                if (snapshot.ScoreFastEmaBuffer != null)
-                    _scoreFastBuffer.Restore(snapshot.ScoreFastEmaBuffer);
+                if (snapshot.EmaStabilityState != null)
+                    _emaStability.Restore(snapshot.EmaStabilityState);
 
-                if (snapshot.ScoreMediumEmaBuffer != null)
-                    _scoreMediumBuffer.Restore(snapshot.ScoreMediumEmaBuffer);
+                if (snapshot.AtrNormalizer != null)
+                    _atrNormalizer.Restore(snapshot.AtrNormalizer);
 
-                if (snapshot.ScoreSlowEmaBuffer != null)
-                    _scoreSlowBuffer.Restore(snapshot.ScoreSlowEmaBuffer);
-
-                if (snapshot.ProbabilityFastEmaBuffer != null)
-                    _probFastBuffer.Restore(snapshot.ProbabilityFastEmaBuffer);
-
-                if (snapshot.ProbabilityMediumEmaBuffer != null)
-                    _probMediumBuffer.Restore(snapshot.ProbabilityMediumEmaBuffer);
-
-                if (snapshot.ProbabilitySlowEmaBuffer != null)
-                    _probSlowBuffer.Restore(snapshot.ProbabilitySlowEmaBuffer);
                 _logger.LogInformation("Snapshot restored successfully.");
             }
 
@@ -490,8 +477,7 @@ namespace KinetixFlowEngine.Core
 
                 try
                 {
-                    result = _engineProcessor.Process(price, lastTrade.Quantity, lastTrade.Timestamp, _lastOiValue, _scoreFastBuffer, _scoreMediumBuffer, _scoreSlowBuffer,
-                        _probFastBuffer, _probMediumBuffer, _probSlowBuffer, _fundingRateEngine.CurrentRate, _fundingRateEngine.FundingPressure);
+                    result = _engineProcessor.Process(price, lastTrade.Quantity, lastTrade.Timestamp, _lastOiValue, _fundingRateEngine.CurrentRate, _fundingRateEngine.FundingPressure);
                 }
                 catch (Exception ex)
                 {
@@ -589,23 +575,39 @@ namespace KinetixFlowEngine.Core
                     _equityEngine.UpdateAll((decimal)price);
                 }
 
-                _logger.LogInformation("FLOW | P {Price:F2} Raw {RawScore:F2} Adj {AdjScore:F2} Sz {Sz:F2} VzEma {Vema:F2} ProbL:{pro:F2} | " + "FS {Fast:F2} MS {Medium:F2} SS {Slow:F2}" +
-                            " | VWAP {VWAP:F2} ER5 {ER:F2} ER30 {ER30:F2} ATR {ATR:F2} " + "| B {BuyP:F2} S {SellP:F2} Net {NetP:F2} | FP {BFast:F4} MP {BMedium:F4} SP {BSlow:F4} | v15 {v15:F2} v1 {v1:F2} F {Factor:F3} | " +
-                            "SF[{SFL1:F4},{SFL2:F4},{SFL3:F4}] {SFTrend} | " + "SM[{SML1:F4},{SML2:F4},{SML3:F4}] {SMTrend} | " + "SS[{SSL1:F4},{SSL2:F4},{SSL3:F4}] {SSTrend} | " +
-                            "PF[{PFL1:F4},{PFL2:F4},{PFL3:F4}] {PFTrend} | " + "PM[{PML1:F4},{PML2:F4},{PML3:F4}] {PMTrend} | " + "PS[{PSL1:F4},{PSL2:F4},{PSL3:F4}] {PSTrend} |  FundRate {fr:F6} FundPrs {fps:F6} atrNorm {atrn:F2}" +
-                            " | L1 {l1} L2 {l2} L3 {l3}",
+                _lastFlowSnapshot = string.Format(
+                                            "FLOW | P {0:F2} Raw {1:F2} Adj {2:F2} Sz {3:F2} VzEma {4:F2} ProbL:{5:F2} | " +
+                                            "FS {6:F2} MS {7:F2} SS {8:F2} | VWAP {9:F2} ER5 {10:F2} ER30 {11:F2} ATR {12:F2} " +
+                                            "| B {13:F2} S {14:F2} Net {15:F2} | FP {16:F4} MP {17:F4} SP {18:F4} | " +
+                                            "v15 {19:F2} v1 {20:F2} F {21:F3} | " +
+                                            "SF[{22:F4},{23:F4},{24:F4}] {25} | " +
+                                            "SM[{26:F4},{27:F4},{28:F4}] {29} | " +
+                                            "SS[{30:F4},{31:F4},{32:F4}] {33} | " +
+                                            "PF[{34:F4},{35:F4},{36:F4}] {37} | " +
+                                            "PM[{38:F4},{39:F4},{40:F4}] {41} | " +
+                                            "PS[{42:F4},{43:F4},{44:F4}] {45} | " +
+                                            "FR {46:F6} FP {47:F6} | atrN {48:F2} atrS {49:F2} reg {50:F2} | L1 {51} L2 {52} L3 {53}",
 
-                            result.Price, result.RawScore, result.AdjustedScore, result.ScoreZ, result.VelocityEma, result.LongProbability, result.ScoreFastEma, result.ScoreMediumEma,
-                            result.ScoreSlowEma, result.VWAP, result.ER, result.ER30, result.ATR15m, result.BuyPressure, result.SellPressure, result.NetPressure,
-                            (result.ProbFastEma), (result.ProbMediumEma), (result.ProbSlowEma), result.Volume15, result.Volume1, result.TrendFactor,
-                            result.EmaStability.ScoreFastEmaLevel1, result.EmaStability.ScoreFastEmaLevel2, result.EmaStability.ScoreFastEmaLevel3, result.EmaStability.FastScoreTrend,
-                            result.EmaStability.ScoreMediumEmaLevel1, result.EmaStability.ScoreMediumEmaLevel2, result.EmaStability.ScoreMediumEmaLevel3, result.EmaStability.MediumScoreTrend,
-                            result.EmaStability.ScoreSlowEmaLevel1, result.EmaStability.ScoreSlowEmaLevel2, result.EmaStability.ScoreSlowEmaLevel3, result.EmaStability.SlowScoreTrend,
+                                            result.Price, result.RawScore, result.AdjustedScore, result.ScoreZ, result.VelocityEma,
+                                            result.LongProbability, result.ScoreFastEma, result.ScoreMediumEma, result.ScoreSlowEma,
+                                            result.VWAP, result.ER, result.ER30, result.ATR15m,
+                                            result.BuyPressure, result.SellPressure, result.NetPressure,
+                                            result.ProbFastEma, result.ProbMediumEma, result.ProbSlowEma,
+                                            result.Volume15, result.Volume1, result.TrendFactor,
 
-                            result.EmaStability.ProbFastEmaLevel1, result.EmaStability.ProbFastEmaLevel2, result.EmaStability.ProbFastEmaLevel3, result.EmaStability.FastProbTrend,
-                            result.EmaStability.ProbMediumEmaLevel1, result.EmaStability.ProbMediumEmaLevel2, result.EmaStability.ProbMediumEmaLevel3, result.EmaStability.MediumProbTrend,
-                            result.EmaStability.ProbSlowEmaLevel1, result.EmaStability.ProbSlowEmaLevel2, result.EmaStability.ProbSlowEmaLevel3, result.EmaStability.SlowProbTrend, result.FundingRate, 
-                            result.FundingPressure, result.AtrNorm, result.EmaStability.Level1, result.EmaStability.Level2, result.EmaStability.Level3);
+                                            result.EmaStability.ScoreFastEmaLevel1, result.EmaStability.ScoreFastEmaLevel2, result.EmaStability.ScoreFastEmaLevel3, result.EmaStability.FastScoreTrend,
+                                            result.EmaStability.ScoreMediumEmaLevel1, result.EmaStability.ScoreMediumEmaLevel2, result.EmaStability.ScoreMediumEmaLevel3, result.EmaStability.MediumScoreTrend,
+                                            result.EmaStability.ScoreSlowEmaLevel1, result.EmaStability.ScoreSlowEmaLevel2, result.EmaStability.ScoreSlowEmaLevel3, result.EmaStability.SlowScoreTrend,
+
+                                            result.EmaStability.ProbFastEmaLevel1, result.EmaStability.ProbFastEmaLevel2, result.EmaStability.ProbFastEmaLevel3, result.EmaStability.FastProbTrend,
+                                            result.EmaStability.ProbMediumEmaLevel1, result.EmaStability.ProbMediumEmaLevel2, result.EmaStability.ProbMediumEmaLevel3, result.EmaStability.MediumProbTrend,
+                                            result.EmaStability.ProbSlowEmaLevel1, result.EmaStability.ProbSlowEmaLevel2, result.EmaStability.ProbSlowEmaLevel3, result.EmaStability.SlowProbTrend,
+
+                                            result.FundingRate, result.FundingPressure,
+                                            result.AtrNorm, result.AtrScale, result.EmaStability.Regime,
+                                            result.EmaStability.Level1, result.EmaStability.Level2, result.EmaStability.Level3
+                                            );
+                _logger.LogInformation(_lastFlowSnapshot);
 
 
                 var now = DateTime.UtcNow;
@@ -613,18 +615,12 @@ namespace KinetixFlowEngine.Core
                 if ((now - _lastPositionLog).TotalMinutes >= 10)
                 {
                     var positions = _positionManager.GetAllPositions();
-                    LogPositionsSnapshot(positions, (decimal)result.Price);
+                    var positionText = BuildPositionSummary(positions, (decimal)result.Price);
+                    var message = $"📊 *Kinetix Update*\n\n" + $"`{_lastFlowSnapshot}`\n\n" + $"📌 *Positions*\n{positionText}";
+                    _logger.LogInformation(positionText);
+                    _ = _telegram.SendMessageAsync(message);
                     _lastPositionLog = now;
                 }
-
-                #region EMA's Snapshot for debugging
-                _scoreFastBuffer.Add(result.ScoreFastEma);
-                _scoreMediumBuffer.Add(result.ScoreMediumEma);
-                _scoreSlowBuffer.Add(result.ScoreSlowEma);
-                _probFastBuffer.Add(result.ProbFastEma);
-                _probMediumBuffer.Add(result.ProbMediumEma);
-                _probSlowBuffer.Add(result.ProbSlowEma);
-                #endregion
                 _recorder.Record(result);
 
                 if ((DateTime.UtcNow - _lastSnapshot).TotalSeconds > 60)
@@ -670,13 +666,8 @@ namespace KinetixFlowEngine.Core
                         AdjustedScoreNormalizer = _adjustmentNorm.GetState(),
                         VolumeEngineState = _volumeEngine.GetState(),
 
-                        ScoreFastEmaBuffer = _scoreFastBuffer.GetState(),
-                        ScoreMediumEmaBuffer = _scoreMediumBuffer.GetState(),
-                        ScoreSlowEmaBuffer = _scoreSlowBuffer.GetState(),
-
-                        ProbabilityFastEmaBuffer = _probFastBuffer.GetState(),
-                        ProbabilityMediumEmaBuffer = _probMediumBuffer.GetState(),
-                        ProbabilitySlowEmaBuffer = _probSlowBuffer.GetState(),
+                        EmaStabilityState= result.EmaStability,
+                        AtrNormalizer = _atrNormalizer.GetState()
                     });
 
                     _lastSnapshot = DateTime.UtcNow;
@@ -685,30 +676,22 @@ namespace KinetixFlowEngine.Core
             }
         }
 
-        private void LogPositionsSnapshot(IEnumerable<ActiveTrade> positions, decimal currentPrice)
+        private string BuildPositionSummary(IEnumerable<ActiveTrade> positions, decimal currentPrice)
         {
-            if (!positions.Any())
-            {
-                _logger.LogInformation("POS | No active positions");
-                return;
-            }
+            if (!positions.Any()) return "No open positions";
+
+            var sb = new StringBuilder();
 
             foreach (var p in positions)
             {
-                decimal pnl = 0;
+                decimal pnl = p.Direction == SignalDirection.Long
+                    ? currentPrice - p.EntryPrice
+                    : p.EntryPrice - currentPrice;
 
-                if (p.Direction == SignalDirection.Long)
-                    pnl = currentPrice - p.EntryPrice;
-                else if (p.Direction == SignalDirection.Short)
-                    pnl = p.EntryPrice - currentPrice;
-
-                _logger.LogInformation("POS | {Strategy} | {Direction} | Entry:{Entry:F2} | U-PnL:{PnL:F2}",
-                    p.StrategyName,
-                    p.Direction,
-                    p.EntryPrice,
-                    pnl
-                );
+                sb.AppendLine($"{p.StrategyName} | {p.Direction} | Entry:{p.EntryPrice:F2} | PnL:{pnl:F2}");
             }
+
+            return sb.ToString();
         }
 
         private bool IsReentryAllowed(StrategySignal signal, KinetixEngineResult r, decimal price, bool isFairPrice, bool isVolumeExpansion)
