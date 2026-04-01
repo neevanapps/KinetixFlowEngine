@@ -22,13 +22,13 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
             decimal l2 = r.EmaStability.ScoreMediumEmaLevel2;
             decimal l3 = r.EmaStability.ScoreMediumEmaLevel3;
 
-            bool bullishStructure = l2 > l3;
-            bool bearishStructure = l2 < l3;
+            bool bullishStructure = l1 > 0 && l2 > 0 && l3 > 0;
+            bool bearishStructure = l1 < 0 && l2 < 0 && l3 < 0;
 
-            bool strongBull = l2 > 0.6m;
-            bool strongBear = l2 < -0.6m;
+            bool strongBull = l2 > 1m;
+            bool strongBear = l2 < -1m;
 
-            bool spreadValid = Math.Abs(l2 - l3) > 0.5m;
+            bool spreadValid = Math.Abs(l1 - l3) > 0.5m;
 
             if (bullishStructure && strongBull && spreadValid)
             {
@@ -68,13 +68,13 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
             decimal l2 = r.EmaStability.ScoreMediumEmaLevel2;
             decimal l3 = r.EmaStability.ScoreMediumEmaLevel3;
 
-            bool bullishStructure = l2 > l3;
-            bool bearishStructure = l2 < l3;
+            bool bullishStructure = l1 > 0 && l2 > 0 && l3 > 0;
+            bool bearishStructure = l1 < 0 && l2 < 0 && l3 < 0;
 
-            bool strongBull = l2 > 0.6m;
-            bool strongBear = l2 < -0.6m;
+            bool strongBull = l2 > 1m;
+            bool strongBear = l2 < -1m;
 
-            bool spreadValid = Math.Abs(l2 - l3) > 0.5m;
+            bool spreadValid = Math.Abs(l1 - l3) > 0.5m;
 
             if (trade.Direction == SignalDirection.Long)
             {
