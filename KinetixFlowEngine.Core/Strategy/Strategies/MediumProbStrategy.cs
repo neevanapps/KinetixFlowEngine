@@ -17,22 +17,34 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
 
         public StrategySignal EvaluateEntry(KinetixEngineResult r)
         {
-            decimal slow = (decimal)r.ProbMediumEma;
             decimal l1 = r.EmaStability.ProbMediumEmaLevel1;
             decimal l2 = r.EmaStability.ProbMediumEmaLevel2;
             decimal l3 = r.EmaStability.ProbMediumEmaLevel3;
 
-            decimal divergence = l2 - l3;
-            bool bullish = l2 > 0.52m && l2 > l3 && divergence > 0.01m;
-            bool bearish = l2 < 0.48m && l2 < l3 && divergence < -0.01m;
+            // =========================
+            // STRUCTURE (same as score)
+            // =========================
+            bool bullishStructure = l1 > 0 && l2 > 0 && l3 > 0;
+            bool bearishStructure = l1 < 0 && l2 < 0 && l3 < 0;
 
-            if (bullish)
+            // =========================
+            // STRENGTH (scaled)
+            // =========================
+            bool strongBull = l2 > 0.08m;
+            bool strongBear = l2 < -0.08m;
+
+            // =========================
+            // SPREAD (scaled)
+            // =========================
+            bool spreadValid = Math.Abs(l1 - l3) > 0.05m;
+
+            if (bullishStructure && strongBull && spreadValid)
             {
                 return new StrategySignal
                 {
                     StrategyName = Name,
                     Direction = SignalDirection.Long,
-                    Confidence = (double)slow,
+                    Confidence = (double)(l2 + 0.5m),
                     EnterOnlyAtFairPrice = _config.EnterOnlyAtFairPrice,
                     NotifyThroughTelegram = _config.NotifyThroughTelegram,
                     IsVolumeBased = _config.VolumeBased,
@@ -40,13 +52,13 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
                 };
             }
 
-            if (bearish)
+            if (bearishStructure && strongBear && spreadValid)
             {
                 return new StrategySignal
                 {
                     StrategyName = Name,
                     Direction = SignalDirection.Short,
-                    Confidence = (double)slow,
+                    Confidence = (double)(0.5m + l2),
                     EnterOnlyAtFairPrice = _config.EnterOnlyAtFairPrice,
                     NotifyThroughTelegram = _config.NotifyThroughTelegram,
                     IsVolumeBased = _config.VolumeBased,
@@ -59,18 +71,30 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
 
         public StrategySignal EvaluateExit(KinetixEngineResult r, ActiveTrade trade)
         {
-            decimal slow = (decimal)r.ProbMediumEma;
             decimal l1 = r.EmaStability.ProbMediumEmaLevel1;
             decimal l2 = r.EmaStability.ProbMediumEmaLevel2;
             decimal l3 = r.EmaStability.ProbMediumEmaLevel3;
 
-            decimal divergence = l2 - l3;
-            bool bullish = l2 > 0.52m && l2 > l3 && divergence > 0.01m;
-            bool bearish = l2 < 0.48m && l2 < l3 && divergence < -0.01m;
+            // =========================
+            // STRUCTURE (same as score)
+            // =========================
+            bool bullishStructure = l1 > 0 && l2 > 0 && l3 > 0;
+            bool bearishStructure = l1 < 0 && l2 < 0 && l3 < 0;
+
+            // =========================
+            // STRENGTH (scaled)
+            // =========================
+            bool strongBull = l2 > 0.08m;
+            bool strongBear = l2 < -0.08m;
+
+            // =========================
+            // SPREAD (scaled)
+            // =========================
+            bool spreadValid = Math.Abs(l1 - l3) > 0.05m;
 
             if (trade.Direction == SignalDirection.Long)
             {
-                if (bearish)
+                if (bearishStructure && strongBear && spreadValid)
                 {
                     return new StrategySignal
                     {
@@ -82,7 +106,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
 
             if (trade.Direction == SignalDirection.Short)
             {
-                if (bullish)
+                if (bullishStructure && strongBull && spreadValid)
                 {
                     return new StrategySignal
                     {

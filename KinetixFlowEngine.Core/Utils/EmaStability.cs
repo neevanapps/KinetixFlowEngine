@@ -53,9 +53,9 @@ namespace KinetixFlowEngine.Core.Utils
             double regime = 0.7 * atrNorm + 0.3 * momentumNorm;
             regime = Math.Clamp(regime, 0.0, 1.0);
 
-            int level1 = (int)Lerp(6 * _minTicks, 12 * _minTicks, regime);
-            int level2 = (int)Lerp(15 * _minTicks, 30 * _minTicks, regime);
-            int level3 = (int)Lerp(30 * _minTicks, 60 * _minTicks, regime);
+            int level1 = (int)Lerp(15 * _minTicks, 30 * _minTicks, regime);
+            int level2 = (int)Lerp(30 * _minTicks, 60 * _minTicks, regime);
+            int level3 = (int)Lerp(60 * _minTicks, 120 * _minTicks, regime);
 
             decimal factor = 0.3m + (decimal)regime * 0.7m;
 

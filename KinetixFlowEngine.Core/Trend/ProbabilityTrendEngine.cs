@@ -30,9 +30,9 @@ namespace KinetixFlowEngine.Core.Trend
             if (highPersistence && volumeExpansion)
                 slowFactor = Math.Clamp(factor * 0.85m, 0.6m, 1.2m);
 
-            var fast = _fast.UpdateWithFactor(prob, factor, 5 * _minTicks, 12 * _minTicks);
-            var medium = _medium.UpdateWithFactor(prob, factor, 10 * _minTicks, 30 * _minTicks);
-            var slow = _slow.UpdateWithFactor(prob, slowFactor, 30 * _minTicks, 90 * _minTicks);
+            var fast = _fast.UpdateWithFactor(prob, factor, 10 * _minTicks, 15 * _minTicks);
+            var medium = _medium.UpdateWithFactor(prob, factor, 15 * _minTicks, 30 * _minTicks);
+            var slow = _slow.UpdateWithFactor(prob, slowFactor, 30 * _minTicks, 60 * _minTicks);
 
             if (fast > medium && medium > slow && (fast - slow) > 0.08m)
                 return FlowTrend.Bullish;
