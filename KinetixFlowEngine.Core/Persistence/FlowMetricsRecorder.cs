@@ -61,7 +61,7 @@ namespace KinetixFlowEngine.Core.Persistence
 
                     "pf_l1,pf_l2,pf_l3,pf_trend," +
                     "pm_l1,pm_l2,pm_l3,pm_trend," +
-                    "ps_l1,ps_l2,ps_l3,ps_trend";
+                    "ps_l1,ps_l2,ps_l3,ps_trend,fundingrate, fundingpressure";
 
             SafeWrite(path, header + Environment.NewLine);
         }
@@ -173,7 +173,9 @@ namespace KinetixFlowEngine.Core.Persistence
                 (s?.ProbSlowEmaLevel1 ?? 0).ToString(CultureInfo.InvariantCulture),
                 (s?.ProbSlowEmaLevel2 ?? 0).ToString(CultureInfo.InvariantCulture),
                 (s?.ProbSlowEmaLevel3 ?? 0).ToString(CultureInfo.InvariantCulture),
-                s?.SlowProbTrend.ToString() ?? "Neutral"
+                s?.SlowProbTrend.ToString() ?? "Neutral",
+                r.FundingRate.ToString(CultureInfo.InvariantCulture),
+                r.FundingPressure.ToString(CultureInfo.InvariantCulture)
             );
 
             File.AppendAllText(_currentFilePath, line + Environment.NewLine);

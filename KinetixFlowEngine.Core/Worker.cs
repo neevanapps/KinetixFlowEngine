@@ -575,6 +575,12 @@ namespace KinetixFlowEngine.Core
                     _equityEngine.UpdateAll((decimal)price);
                 }
 
+                var fairLongPrice = _fairPriceEngine.GetFairLongPrice(result.VWAP, result.ATR);
+                var fairShortPrice = _fairPriceEngine.GetFairShortPrice(result.VWAP, result.ATR);
+
+                var maxLong = _fairPriceEngine.GetMaxChaseLongPrice(result.VWAP, result.ATR);
+                var maxShort = _fairPriceEngine.GetMaxChaseShortPrice(result.VWAP, result.ATR);
+
                 _lastFlowSnapshot = string.Format(
                                             "FLOW | P {0:F2} Raw {1:F2} Adj {2:F2} Sz {3:F2} VzEma {4:F2} ProbL:{5:F2} | " +
                                             "FS {6:F2} MS {7:F2} SS {8:F2} | VWAP {9:F2} ER5 {10:F2} ER30 {11:F2} ATR {12:F2} " +
@@ -586,7 +592,7 @@ namespace KinetixFlowEngine.Core
                                             "PF[{34:F4},{35:F4},{36:F4}] {37} | " +
                                             "PM[{38:F4},{39:F4},{40:F4}] {41} | " +
                                             "PS[{42:F4},{43:F4},{44:F4}] {45} | " +
-                                            "FR {46:F6} FP {47:F6} | atrN {48:F2} atrS {49:F2} reg {50:F2} | L1 {51} L2 {52} L3 {53}",
+                                            "FR {46:F6} FP {47:F6} | atrN {48:F2} atrS {49:F2} reg {50:F2} | L1 {51} L2 {52} L3 {53} | FairL:{54:F2} FairS:{55:F2} MaxL:{56:F2} MaxS:{57:F2}",
 
                                             result.Price, result.RawScore, result.AdjustedScore, result.ScoreZ, result.VelocityEma,
                                             result.LongProbability, result.ScoreFastEma, result.ScoreMediumEma, result.ScoreSlowEma,
@@ -605,8 +611,7 @@ namespace KinetixFlowEngine.Core
 
                                             result.FundingRate, result.FundingPressure,
                                             result.AtrNorm, result.AtrScale, result.EmaStability.Regime,
-                                            result.EmaStability.Level1, result.EmaStability.Level2, result.EmaStability.Level3
-                                            );
+                                            result.EmaStability.Level1, result.EmaStability.Level2, result.EmaStability.Level3, fairLongPrice, fairShortPrice, maxLong, maxShort);
                 _logger.LogInformation(_lastFlowSnapshot);
 
 
@@ -666,7 +671,7 @@ namespace KinetixFlowEngine.Core
                         AdjustedScoreNormalizer = _adjustmentNorm.GetState(),
                         VolumeEngineState = _volumeEngine.GetState(),
 
-                        EmaStabilityState= result.EmaStability,
+                        EmaStabilityState = result.EmaStability,
                         AtrNormalizer = _atrNormalizer.GetState()
                     });
 
