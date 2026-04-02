@@ -100,5 +100,39 @@
     "TrailingStopAtr": 1.2,
     "VolumeBased": false,
     "AccountIds": []
+  },
+  {
+    "StrategyName": "ProbLevel1",
+    "Enabled": true,
+    "EnterOnlyAtFairPrice": false,
+    "NotifyThroughTelegram": true,
+    "MinConfidence": 0.55,
+    "CooldownSeconds": 240,
+    "PositionSize": 1,
+    "Target1Atr": 1.2,
+    "Target1SizePercent": 60,
+    "Target2Atr": 2.5,
+    "Target2SizePercent": 40,
+    "StopLossAtr": 0.8,
+    "TrailingStopAtr": 0.8,
+    "VolumeBased": false,
+    "AccountIds": []
+  },
+  {
+    "StrategyName": "ScoreLevel1",
+    "Enabled": true,
+    "EnterOnlyAtFairPrice": false,
+    "NotifyThroughTelegram": true,
+    "MinConfidence": 0.65,
+    "CooldownSeconds": 120,
+    "PositionSize": 1,
+    "Target1Atr": 2,
+    "Target1SizePercent": 40,
+    "Target2Atr": 4,
+    "Target2SizePercent": 60,
+    "StopLossAtr": 1.2,
+    "TrailingStopAtr": 1.2,
+    "VolumeBased": false,
+    "AccountIds": []
   }
 ]
