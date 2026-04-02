@@ -14,8 +14,7 @@ namespace KinetixFlowEngine.Core.Trend
         public decimal Medium => _medium.Value ?? 0;
 
         private readonly FlowMomentumRun _momentumRun;
-        private const decimal Hysteresis = 0.6m;
-                private const decimal SlowBoostWhenStrong = 1.35m;   // extremely conservative
+        private const decimal Hysteresis = 0.45m;
 
         public ScoreTrendEngine(FlowMomentumRun momentumRun)
         {
@@ -29,14 +28,14 @@ namespace KinetixFlowEngine.Core.Trend
             // Gentle Slow-only boost ONLY on strong confluence
             decimal slowFactor = factor;
             if (highPersistence && volumeExpansion)
-                slowFactor = Math.Clamp(factor * SlowBoostWhenStrong, 0.85m, 2.0m);
+                slowFactor = Math.Clamp(factor * 1.1m, 0.85m, 1.5m);
 
-            var fast = _fast.UpdateWithFactor(score, factor, 10 * _minTicks, 15 * _minTicks);
-            var medium = _medium.UpdateWithFactor(score, factor, 15 * _minTicks, 30 * _minTicks);
-            var slow = _slow.UpdateWithFactor(score, slowFactor, 30 * _minTicks, 60 * _minTicks);
+            var fast = _fast.UpdateWithFactor(score, factor, 8 * _minTicks, 12 * _minTicks);
+            var medium = _medium.UpdateWithFactor(score, factor, 12 * _minTicks, 24 * _minTicks);
+            var slow = _slow.UpdateWithFactor(score, slowFactor, 25 * _minTicks, 50 * _minTicks);
 
-            if (fast > slow && (fast - slow) > Hysteresis) return FlowTrend.Bullish;
-            if (fast < slow && (slow - fast) > Hysteresis) return FlowTrend.Bearish;
+            if (fast > medium && medium > slow && (fast - slow) > Hysteresis) return FlowTrend.Bullish;
+            if (fast < medium && medium < slow && (slow - fast) > Hysteresis) return FlowTrend.Bearish;
             return FlowTrend.Neutral;
         }
 
