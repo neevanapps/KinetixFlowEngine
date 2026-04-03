@@ -129,8 +129,9 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<IKinetixStrategy, FastProbStrategy>();
                 builder.Services.AddSingleton<IKinetixStrategy, MediumProbStrategy>();
                 builder.Services.AddSingleton<IKinetixStrategy, SlowProbStrategy>();
-                builder.Services.AddSingleton<IKinetixStrategy, ScoreLevel1Strategy>();
-                builder.Services.AddSingleton<IKinetixStrategy, ProbLevel1Strategy>();
+                builder.Services.AddSingleton<IKinetixStrategy, FastScorePrice>();
+                builder.Services.AddSingleton<IKinetixStrategy, MediumScorePrice>();
+                builder.Services.AddSingleton<IKinetixStrategy, SlowScorePrice>();
                 builder.Services.AddSingleton<StrategyEngine>();
                 builder.Services.AddSingleton<StrategyAggregator>();
                 builder.Services.AddSingleton<TradePersistence>();

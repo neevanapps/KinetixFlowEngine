@@ -21,15 +21,12 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
             decimal l2 = r.EmaStability.ScoreFastEmaLevel2;
             decimal l3 = r.EmaStability.ScoreFastEmaLevel3;
 
-            bool bullishStructure = l1 > 0 && l2 > 0 && l3 > 0;
-            bool bearishStructure = l1 < 0 && l2 < 0 && l3 < 0;
+            decimal spread = l1 - l3;
 
-            bool strongBull = l2 > 1m;
-            bool strongBear = l2 < -1m;
+            bool bullish = l1 > l2 && l2 > l3 && spread > 0.5m;
+            bool bearish = l1 < l2 && l2 < l3 && -spread > 0.5m;
 
-            bool spreadValid = Math.Abs(l1 - l3) > 0.5m;
-
-            if (bullishStructure && strongBull && spreadValid)
+            if (bullish)
             {
                 return new StrategySignal
                 {
@@ -43,7 +40,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
                 };
             }
 
-            if (bearishStructure && strongBear && spreadValid)
+            if (bearish)
             {
                 return new StrategySignal
                 {
@@ -66,17 +63,14 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
             decimal l2 = r.EmaStability.ScoreFastEmaLevel2;
             decimal l3 = r.EmaStability.ScoreFastEmaLevel3;
 
-            bool bullishStructure = l1 > 0 && l2 > 0 && l3 > 0;
-            bool bearishStructure = l1 < 0 && l2 < 0 && l3 < 0;
+            decimal spread = l1 - l3;
 
-            bool strongBull = l2 > 1m;
-            bool strongBear = l2 < -1m;
-
-            bool spreadValid = Math.Abs(l1 - l3) > 0.5m;
+            bool bullish = l1 > l2 && l2 > l3 && spread > 0.5m;
+            bool bearish = l1 < l2 && l2 < l3 && -spread > 0.5m;
 
             if (trade.Direction == SignalDirection.Long)
             {
-                if (bearishStructure && strongBear && spreadValid)
+                if (bearish)
                 {
                     return new StrategySignal
                     {
@@ -88,7 +82,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
 
             if (trade.Direction == SignalDirection.Short)
             {
-                if (bullishStructure && strongBull && spreadValid)
+                if (bullish)
                 {
                     return new StrategySignal
                     {

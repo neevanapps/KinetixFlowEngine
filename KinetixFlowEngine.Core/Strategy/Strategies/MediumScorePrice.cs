@@ -6,11 +6,11 @@ using System.Text;
 
 namespace KinetixFlowEngine.Core.Strategy.Strategies
 {
-    public class MediumScoreStrategy : IKinetixStrategy
+    public class MediumScorePrice : IKinetixStrategy
     {
-        public string Name => "MediumScore";
+        public string Name => "MediumPrice";
         private readonly StrategyConfig _config;
-        public MediumScoreStrategy(StrategyConfigLoader loader)
+        public MediumScorePrice(StrategyConfigLoader loader)
         {
             _config = loader.Get(Name);
         }

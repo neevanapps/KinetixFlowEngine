@@ -52,41 +52,50 @@ namespace KinetixFlowEngine.Core.Utils
 
             double regime = 0.7 * atrNorm + 0.3 * momentumNorm;
             regime = Math.Clamp(regime, 0.0, 1.0);
+            // FULL FLIP: high ATR → smaller windows
+            double flipped = 1.0 - regime;
 
-            int level1 = (int)Lerp(15 * _minTicks, 30 * _minTicks, regime);
-            int level2 = (int)Lerp(30 * _minTicks, 60 * _minTicks, regime);
-            int level3 = (int)Lerp(60 * _minTicks, 120 * _minTicks, regime);
+            int level1 = (int)Lerp(15 * _minTicks, 30 * _minTicks, flipped);
+            int level2 = (int)Lerp(30 * _minTicks, 60 * _minTicks, flipped);
+            int level3 = (int)Lerp(60 * _minTicks, 120 * _minTicks, flipped);
 
+            int min1 = (int)(level1 * 0.7);
+            int max1 = (int)(level1 * 1.3);
+            int min2 = (int)(level2 * 0.7);
+            int max2 = (int)(level2 * 1.3);
+            int min3 = (int)(level3 * 0.7);
+            int max3 = (int)(level3 * 1.3);
             decimal factor = 0.3m + (decimal)regime * 0.7m;
 
             // SCORE EMA (now truly adaptive)
-            decimal sf1 = _sfL1.UpdateWithFactor(scoreFast, factor, level1, level1);
-            decimal sf2 = _sfL2.UpdateWithFactor(scoreFast, factor, level2, level2);
-            decimal sf3 = _sfL3.UpdateWithFactor(scoreFast, factor, level3, level3);
-            decimal sm1 = _smL1.UpdateWithFactor(scoreMedium, factor, level1, level1);
-            decimal sm2 = _smL2.UpdateWithFactor(scoreMedium, factor, level2, level2);
-            decimal sm3 = _smL3.UpdateWithFactor(scoreMedium, factor, level3, level3);
-            decimal ss1 = _ssL1.UpdateWithFactor(scoreSlow, factor, level1, level1);
-            decimal ss2 = _ssL2.UpdateWithFactor(scoreSlow, factor, level2, level2);
-            decimal ss3 = _ssL3.UpdateWithFactor(scoreSlow, factor, level3, level3);
+            decimal sf1 = _sfL1.UpdateWithFactor(scoreFast, factor, min1, max1);
+            decimal sf2 = _sfL2.UpdateWithFactor(scoreFast, factor, min2, max2);
+            decimal sf3 = _sfL3.UpdateWithFactor(scoreFast, factor, min3, max3);
+            decimal sm1 = _smL1.UpdateWithFactor(scoreMedium, factor, min1, max1);
+            decimal sm2 = _smL2.UpdateWithFactor(scoreMedium, factor, min2, max2);
+            decimal sm3 = _smL3.UpdateWithFactor(scoreMedium, factor, min3, max3);
+            decimal ss1 = _ssL1.UpdateWithFactor(scoreSlow, factor, min1, max1);
+            decimal ss2 = _ssL2.UpdateWithFactor(scoreSlow, factor, min2, max2);
+            decimal ss3 = _ssL3.UpdateWithFactor(scoreSlow, factor, min3, max3);
 
             decimal probFastC = probFast - 0.5m;
             decimal probMediumC = probMedium - 0.5m;
             decimal probSlowC = probSlow - 0.5m;
             // PROBABILITY EMA
-            decimal pf1 = _pfL1.UpdateWithFactor(probFastC, factor, level1, level1);
-            decimal pf2 = _pfL2.UpdateWithFactor(probFastC, factor, level2, level2);
-            decimal pf3 = _pfL3.UpdateWithFactor(probFastC, factor, level3, level3);
-            decimal pm1 = _pmL1.UpdateWithFactor(probMediumC, factor, level1, level1);
-            decimal pm2 = _pmL2.UpdateWithFactor(probMediumC, factor, level2, level2);
-            decimal pm3 = _pmL3.UpdateWithFactor(probMediumC, factor, level3, level3);
-            decimal ps1 = _psL1.UpdateWithFactor(probSlowC, factor, level1, level1);
-            decimal ps2 = _psL2.UpdateWithFactor(probSlowC, factor, level2, level2);
-            decimal ps3 = _psL3.UpdateWithFactor(probSlowC, factor, level3, level3);
+            decimal pf1 = _pfL1.UpdateWithFactor(probFastC, factor, min1, max1);
+            decimal pf2 = _pfL2.UpdateWithFactor(probFastC, factor, min2, max2);
+            decimal pf3 = _pfL3.UpdateWithFactor(probFastC, factor, min3, max3);
+            decimal pm1 = _pmL1.UpdateWithFactor(probMediumC, factor, min1, max1);
+            decimal pm2 = _pmL2.UpdateWithFactor(probMediumC, factor, min2, max2);
+            decimal pm3 = _pmL3.UpdateWithFactor(probMediumC, factor, min3, max3);
+            decimal ps1 = _psL1.UpdateWithFactor(probSlowC, factor, min1, max1);
+            decimal ps2 = _psL2.UpdateWithFactor(probSlowC, factor, min2, max2);
+            decimal ps3 = _psL3.UpdateWithFactor(probSlowC, factor, min3, max3);
 
             var state = new EmaStabilityState
             {
                 Regime = regime,
+                Flip = flipped,
                 Level1 = level1,
                 Level2 = level2,
                 Level3 = level3,
@@ -130,11 +139,11 @@ namespace KinetixFlowEngine.Core.Utils
             bool down = (l2 - l1) > EPS && (l3 - l2) > EPS;
 
             // All positive → Long
-            if (l1 > 0 && l2 > 0 && l3 > 0 && up)
+            if (l1 > l2 && l2 > l3 && up)
                 return StabilityDirection.Long;
 
             // All negative → Short
-            if (l1 < 0 && l2 < 0 && l3 < 0 && down)
+            if (l1 < l2 && l2 < l3 && down)
                 return StabilityDirection.Short;
 
             return StabilityDirection.Neutral;
@@ -204,7 +213,7 @@ namespace KinetixFlowEngine.Core.Utils
         public int Level2 { get; set; }
         public int Level1 { get; set; }
         public double Regime { get; set; }
-
+        public double Flip { get; set; }
         public StabilityDirection FastScoreTrend { get; set; }
         public StabilityDirection MediumScoreTrend { get; set; }
         public StabilityDirection SlowScoreTrend { get; set; }
