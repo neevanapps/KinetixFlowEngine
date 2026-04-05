@@ -533,14 +533,14 @@ namespace KinetixFlowEngine.Core
                         if (signal.Direction == SignalDirection.None)
                             continue;
 
+                        if (!GlobalEntryGate(result))
+                            continue;
+
                         bool isFairPrice = signal.Direction == SignalDirection.Long ?
                             _fairPriceEngine.IsFairLongEntry((decimal)price, result.VWAP, result.ATR) :
                             _fairPriceEngine.IsFairShortEntry((decimal)price, result.VWAP, result.ATR);
 
                         bool isVolumeExpansion = _volumeEngine.IsVolumeExpansion();
-
-                        // IMPORTANT: reentry logic must NOT depend on account loop
-                        // Use "GLOBAL" or "SIM" or skip account filtering here
 
                         if (!IsReentryAllowed(signal, result, (decimal)price, isFairPrice, isVolumeExpansion))
                             continue;
@@ -679,6 +679,17 @@ namespace KinetixFlowEngine.Core
                 }
                 await Task.Delay(1000, stoppingToken);
             }
+        }
+
+        private bool GlobalEntryGate(KinetixEngineResult result)
+        {
+            // Example global gate: only allow entries if ATR15m is above a certain threshold
+            if (result.ATR15m < 100 && result.AtrNorm < .25)
+            {
+                _logger.LogInformation("Global entry gate: ATR15m too low ({ATR15m}), skipping entry evaluation", result.ATR15m);
+                return false;
+            }
+            return true;
         }
 
         private string BuildPositionSummary(IEnumerable<ActiveTrade> positions, decimal currentPrice)

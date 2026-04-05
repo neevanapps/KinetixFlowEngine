@@ -50,6 +50,9 @@ namespace KinetixFlowEngine.Core.Strategy
                 var config = _strategyConfigLoader.Get(strategy.Name);
                 signal.TargetAccountIds = config.AccountIds ?? new List<string>();
 
+                if (!IsTrendAligned(result, signal.Direction))
+                    continue;
+
                 signals.Add(signal);
             }
 
@@ -71,6 +74,23 @@ namespace KinetixFlowEngine.Core.Strategy
             }
 
             return null;
+        }
+
+        public bool IsTrendAligned(KinetixEngineResult result, SignalDirection direction)
+        {
+            double fast = result.ScoreFastEma;
+            double medium = result.ScoreMediumEma;
+            double slow = result.ScoreSlowEma;
+            double pm = result.ProbMediumEma;
+            double spread = fast - slow;
+
+            bool probBull = pm > 0.55;
+            bool probBear = pm < 0.45;
+            bool bullish = fast > medium && medium > slow && spread > 0.4;
+            bool bearish = fast < medium && medium < slow && -spread > 0.4;
+
+            return (direction == SignalDirection.Long && bullish && probBull)
+                || (direction == SignalDirection.Short && bearish && probBear);
         }
     }
 }
