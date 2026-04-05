@@ -48,7 +48,7 @@
     "StopLossAtr": 1.2,
     "TrailingStopAtr": 1.2,
     "VolumeBased": false,
-    "AccountIds": []
+    "AccountIds": [ "Demo10k" ]
   },
   {
     "StrategyName": "FastScore",

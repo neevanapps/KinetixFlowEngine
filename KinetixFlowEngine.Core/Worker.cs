@@ -533,7 +533,7 @@ namespace KinetixFlowEngine.Core
                         if (signal.Direction == SignalDirection.None)
                             continue;
 
-                        if (!GlobalEntryGate(result))
+                        if (!ShouldAllowEntry(result))
                             continue;
 
                         bool isFairPrice = signal.Direction == SignalDirection.Long ?
@@ -681,7 +681,7 @@ namespace KinetixFlowEngine.Core
             }
         }
 
-        private bool GlobalEntryGate(KinetixEngineResult result)
+        private bool ShouldAllowEntry(KinetixEngineResult result)
         {
             // Example global gate: only allow entries if ATR15m is above a certain threshold
             if (result.ATR15m < 100 && result.AtrNorm < .25)

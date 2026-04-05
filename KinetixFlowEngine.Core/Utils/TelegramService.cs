@@ -51,19 +51,13 @@ namespace KinetixFlowEngine.Core.Utils
             }
         }
 
-        //public async Task SendGroupMessageAsync(string message)
-        //{
-        //    try
-        //    {
-        //        await _botClient.SendMessage(chatId: _groupChatChatId, text: message);
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        // Log the error (you can replace this with your logging mechanism)
-        //        Console.WriteLine($"Failed to send Telegram message: {ex.Message}");
-        //        throw;
-        //    }
-        //}
+        public async Task SendGroupMessageAsync(string message)
+        {
+            _ = Task.Run(async () =>
+            {
+                await SendWithRetry(message, _groupChatChatId);
+            });
+        }
 
         //public async Task SendPhotoAsync(Stream photoStream, string caption = null)
         //{

@@ -18,7 +18,7 @@ namespace KinetixFlowEngine.Core.Prop
 
         public async Task SendEntryAsync(ActiveTrade trade, decimal equity, decimal dailyDd, decimal overallDd)
         {
-            await _telegram.SendMessageAsync(
+            await _telegram.SendGroupMessageAsync(
             $"""
             ENTRY | {trade.AccountId} | {trade.Direction} | {trade.StrategyName}
 
@@ -32,7 +32,7 @@ namespace KinetixFlowEngine.Core.Prop
 
         public async Task SendExitAsync(ActiveTrade trade, decimal exitPrice, decimal pnl, decimal fee, decimal equity, decimal dailyDd, decimal overallDd)
         {
-            await _telegram.SendMessageAsync(
+            await _telegram.SendGroupMessageAsync(
             $"""
             EXIT | {trade.AccountId} | {trade.Direction} | {trade.StrategyName}
 
@@ -46,7 +46,7 @@ namespace KinetixFlowEngine.Core.Prop
 
         public async Task SendTarget1Async(ActiveTrade trade)
         {
-            await _telegram.SendMessageAsync(
+            await _telegram.SendGroupMessageAsync(
             $"""
             TP1 | {trade.AccountId} | {trade.Direction} | {trade.StrategyName}
 
@@ -63,7 +63,7 @@ namespace KinetixFlowEngine.Core.Prop
 
             _dailyWarnSent[accountId] = true;
 
-            await _telegram.SendMessageAsync(
+            await _telegram.SendGroupMessageAsync(
             $"""
             ⚠️ DD WARNING | {accountId}
 
@@ -74,7 +74,7 @@ namespace KinetixFlowEngine.Core.Prop
 
         public async Task SendAccountPausedAsync(string accountId, decimal dailyDd)
         {
-            await _telegram.SendMessageAsync(
+            await _telegram.SendGroupMessageAsync(
             $"""
             ⛔ ACCOUNT PAUSED | {accountId}
 
@@ -84,7 +84,7 @@ namespace KinetixFlowEngine.Core.Prop
 
         public async Task SendAccountStoppedAsync(string accountId, decimal overallDd)
         {
-            await _telegram.SendMessageAsync(
+            await _telegram.SendGroupMessageAsync(
             $"""
             ⛔ ACCOUNT STOPPED | {accountId}
 
