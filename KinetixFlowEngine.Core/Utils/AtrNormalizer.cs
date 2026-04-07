@@ -14,7 +14,7 @@ namespace KinetixFlowEngine.Core.Utils
         public double Mean { get; private set; } = 0;
         public double StdDev { get; private set; } = 1;
 
-        public AtrNormalizer(int windowSize = 1440)
+        public AtrNormalizer(int windowSize = 720)
         {
             _windowSize = windowSize;
         }

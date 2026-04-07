@@ -110,7 +110,7 @@ namespace KinetixFlowEngine.Core
 
                 builder.Services.AddSingleton<VwapEngine>();
                 builder.Services.AddSingleton<FifteenMinuteCandleBuilder>();
-                builder.Services.AddSingleton<EfficiencyRatioEngine>(sp => new EfficiencyRatioEngine(60));
+                builder.Services.AddSingleton<EfficiencyRatioEngine>(sp => new EfficiencyRatioEngine(14));
                 builder.Services.AddSingleton<EfficiencyRatio30mEngine>();
                 builder.Services.AddSingleton<AtrEngine>();
                 builder.Services.AddSingleton<Atr15mEngine>();

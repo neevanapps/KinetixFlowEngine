@@ -22,21 +22,17 @@
             if (_prices.Count < _period)
                 return _lastEr;
 
-            var first = _prices.First();
-            var last = _prices.Last();
+            var arr = _prices.ToArray();
 
-            double change = Math.Abs(last - first);
+            double change = Math.Abs(arr[^1] - arr[0]);
 
             double volatility = 0;
-            double prev = first;
-
-            foreach (var p in _prices)
+            for (int i = 1; i < arr.Length; i++)
             {
-                volatility += Math.Abs(p - prev);
-                prev = p;
+                volatility += Math.Abs(arr[i] - arr[i - 1]);
             }
 
-            if (volatility == 0)
+            if (volatility < 1e-8)
                 return _lastEr;
 
             _lastEr = change / volatility;

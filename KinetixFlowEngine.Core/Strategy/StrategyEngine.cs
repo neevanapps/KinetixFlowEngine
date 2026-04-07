@@ -84,13 +84,13 @@ namespace KinetixFlowEngine.Core.Strategy
             double pm = result.ProbMediumEma;
             double spread = fast - slow;
 
-            bool probBull = pm > 0.55;
-            bool probBear = pm < 0.45;
-            bool bullish = fast > medium && medium > slow && spread > 0.4;
-            bool bearish = fast < medium && medium < slow && -spread > 0.4;
+            //bool probBull = pm > 0.55;
+            //bool probBear = pm < 0.45;
+            bool bullish = (fast > medium && medium > slow && spread > 0.4) || (fast > 0 && medium > 0 && slow > 0);
+            bool bearish = (fast < medium && medium < slow && -spread > 0.4) || (fast < 0 && medium < 0 && slow < 0);
 
-            return (direction == SignalDirection.Long && bullish && probBull)
-                || (direction == SignalDirection.Short && bearish && probBear);
+            return (direction == SignalDirection.Long && bullish)
+                || (direction == SignalDirection.Short && bearish);
         }
     }
 }

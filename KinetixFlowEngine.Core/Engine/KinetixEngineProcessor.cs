@@ -18,6 +18,9 @@ namespace KinetixFlowEngine.Core.Engine
         private readonly FlowRegimeEngine _flowRegimeEngine;
         private readonly FlowTradeBuffer _tradeBuffer;
 
+        private double _lastEr5 = 0.5;
+        private double _lastEr30 = 0.5;
+
         private readonly VwapEngine _vwapEngine;
         private readonly EfficiencyRatioEngine _erEngine;
         private readonly EfficiencyRatio30mEngine _er30m;
@@ -119,12 +122,10 @@ namespace KinetixFlowEngine.Core.Engine
 
             var vwapDev = _vwapEngine.Deviation((decimal)price, vwap);
 
-            var er5 = _erEngine.Update(price);
-            var er30 = _er30m.Update(price);
-
             double atr = _atrEngine.Value;
 
-            if (_candleBuilder.Update(price, timeStamp, out var candle))
+            bool candleReady = _candleBuilder.Update(price, timeStamp, out var candle);
+            if (candleReady)
             {
                 atr = _atrEngine.Update(candle.High, candle.Low, candle.Close);
             }
@@ -132,6 +133,17 @@ namespace KinetixFlowEngine.Core.Engine
             {
                 _atr15m.Update(candle15.High, candle15.Low, candle15.Close);
             }
+
+            if (candleReady)
+            {
+                _lastEr5 = _erEngine.Update(candle.Close);
+                _lastEr30 = _er30m.Update(candle.Close);
+            }
+
+            // Use last known values
+            double er5 = _lastEr5;
+            double er30 = _lastEr30;
+
             var impact = _flowImpactEngine.Calculate(price, _previousPrice, window, atr);
             _previousPrice = price;
 
@@ -179,7 +191,7 @@ namespace KinetixFlowEngine.Core.Engine
             // OPTIONAL: keep scoreZ only for logging (DO NOT USE IN LOGIC)
             var scoreZ = _scoreNorm.Update(finalScore, alpha);
 
-            var scoreTrend = _scoreEngine.Update((decimal)finalScore, velZ, highPersistence, volumeExpansion);
+            var scoreTrend = _scoreEngine.Update((decimal)finalScore, velZ, er5, atrNorm, highPersistence, volumeExpansion);
             var flowState = _flowStateEngine.Detect(finalScore, velZ, imbZ, cmpZ, exhZ, features.Persistence, scoreTrend);
 
             var probability = _flowProbabilityEngine.Calculate(finalScore, velZ, features.Persistence, _scoreEngine.Fast, _scoreEngine.Medium, _scoreEngine.Slow,
