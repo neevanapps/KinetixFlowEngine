@@ -215,6 +215,11 @@ namespace KinetixFlowEngine.Core.Engine
             var emaStabilityState = _emaStability.Compute(_scoreEngine.Fast, _scoreEngine.Medium, _scoreEngine.Slow, _probEngine.Fast, _probEngine.Medium, _probEngine.Slow, atrNorm);
             // ===== Momentum Decay Detection (NEW) =====
             bool momentumDying = Math.Abs((decimal)_velocityEma.Value) < 0.3m;
+
+            double fastPeriod = AdaptiveEma.AlphaToPeriod(_scoreEngine.FastAlpha);
+            double mediumPeriod = AdaptiveEma.AlphaToPeriod(_scoreEngine.MediumAlpha);
+            double slowPeriod = AdaptiveEma.AlphaToPeriod(_scoreEngine.SlowAlpha);
+
             return new KinetixEngineResult
             {
                 Price = price,
@@ -287,7 +292,10 @@ namespace KinetixFlowEngine.Core.Engine
                 FundingRate = fundingRate,
                 FundingPressure = fundingPressure,
                 AtrNorm = atrNorm,
-                AtrScale = atrScale
+                AtrScale = atrScale,
+                FastEmaPeriod = (int)fastPeriod,
+                MediumEmaPeriod = (int)mediumPeriod,
+                SlowEmaPeriod = (int)slowPeriod
             };
         }
     }

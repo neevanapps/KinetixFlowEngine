@@ -99,5 +99,9 @@ namespace KinetixFlowEngine.Core.Engine
         public double AtrScale { get; set; }
         public double AtrRegime { get; set; }
         public EmaStabilityState EmaStability { get; set; } = new();
+
+        public int FastEmaPeriod { get; set; }
+        public int MediumEmaPeriod { get; set; }
+        public int SlowEmaPeriod { get; set; }
     }
 }
