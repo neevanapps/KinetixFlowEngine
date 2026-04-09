@@ -687,9 +687,9 @@ namespace KinetixFlowEngine.Core
         private bool ShouldAllowEntry(KinetixEngineResult result)
         {
             // Example global gate: only allow entries if ATR15m is above a certain threshold
-            if (result.ATR15m < 100 || result.AtrNorm < .25)
+            if (result.ATR15m < 100 && result.AtrNorm < .25)
             {
-                _logger.LogInformation("Global entry gate: ATR15m too low ({ATR15m}), skipping entry evaluation", result.ATR15m);
+                //_logger.LogInformation("Global entry gate: ATR15m too low ({ATR15m}), skipping entry evaluation", result.ATR15m);
                 return false;
             }
             return true;
