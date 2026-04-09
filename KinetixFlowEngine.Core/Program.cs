@@ -107,7 +107,7 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<FlowPersistenceEngine>();
                 builder.Services.AddSingleton<FlowImpactEngine>();
                 builder.Services.AddSingleton<FlowMomentumRun>();
-
+                builder.Services.AddSingleton<SignalStrengthEngine>();
                 builder.Services.AddSingleton<VwapEngine>();
                 builder.Services.AddSingleton<FifteenMinuteCandleBuilder>();
                 builder.Services.AddSingleton<EfficiencyRatioEngine>(sp => new EfficiencyRatioEngine(14));
@@ -132,6 +132,7 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<IKinetixStrategy, FastScorePrice>();
                 builder.Services.AddSingleton<IKinetixStrategy, MediumScorePrice>();
                 builder.Services.AddSingleton<IKinetixStrategy, SlowScorePrice>();
+                builder.Services.AddSingleton<IKinetixStrategy, SlowScoreStrengthStrategy>();
                 builder.Services.AddSingleton<StrategyEngine>();
                 builder.Services.AddSingleton<StrategyAggregator>();
                 builder.Services.AddSingleton<TradePersistence>();
