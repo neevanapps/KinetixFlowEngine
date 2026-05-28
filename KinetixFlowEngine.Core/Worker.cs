@@ -581,7 +581,7 @@ namespace KinetixFlowEngine.Core
                 var fairShortPrice = _fairPriceEngine.GetFairShortPrice(result.VWAP, result.ATR);
 
                 var maxLong = _fairPriceEngine.GetMaxChaseLongPrice(result.VWAP, result.ATR);
-                var maxShort = _fairPriceEngine.GetMaxChaseShortPrice(result.VWAP, result.ATR);               
+                var maxShort = _fairPriceEngine.GetMaxChaseShortPrice(result.VWAP, result.ATR);
 
                 _lastFlowSnapshot = string.Format(
                                             "FLOW | P {0:F2} Raw {1:F2} Adj {2:F2} Sz {3:F2} VzEma {4:F2} ProbL:{5:F2} | " +

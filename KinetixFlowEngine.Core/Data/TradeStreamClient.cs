@@ -8,8 +8,8 @@ using System.Text.Json;
 public sealed class TradeStreamClient
 {
     private int _started = 0;
-    private readonly Uri _uri = new("wss://fstream.binance.com/ws/btcusdt@aggTrade");
-
+    //private readonly Uri _uri = new("wss://fstream.binance.com/ws/btcusdt@aggTrade");
+    private readonly Uri _uri = new("wss://fstream.binance.com/market/ws/btcusdt@aggTrade");
     private ClientWebSocket? _socket;
     private readonly ILogger<TradeStreamClient> _logger;
     private readonly ExceptionAlertAggregator _exceptionAggregator;
@@ -44,7 +44,7 @@ public sealed class TradeStreamClient
             {
                 _socket?.Dispose();
                 _socket = new ClientWebSocket();
-
+                _socket.Options.KeepAliveInterval = TimeSpan.FromSeconds(30);
                 _logger.LogWarning("Connecting to trade stream...");
                 await _socket.ConnectAsync(_uri, ct);
 
@@ -92,7 +92,6 @@ public sealed class TradeStreamClient
             } while (!result.EndOfMessage);
 
             var json = Encoding.UTF8.GetString(ms.ToArray());
-
             try
             {
                 Parse(json);
@@ -129,7 +128,6 @@ public sealed class TradeStreamClient
             IsBuyerMaker = isSellTaker,
             Timestamp = ts
         };
-
         _logger.LogDebug("Emitting trade: {Price}", prc); // Added for event debugging
         OnTrade?.Invoke(trade);
     }
