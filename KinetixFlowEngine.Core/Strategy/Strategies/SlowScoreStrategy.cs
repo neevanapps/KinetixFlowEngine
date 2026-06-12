@@ -21,10 +21,8 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
             decimal l2 = r.EmaStability.ScoreSlowEmaLevel2;
             decimal l3 = r.EmaStability.ScoreSlowEmaLevel3;
 
-            decimal spread = l1 - l3;
-
-            bool bullish = l1 > l2 && l2 > l3 && spread > 0.5m && l1 > .2m;
-            bool bearish = l1 < l2 && l2 < l3 && -spread > 0.5m && l1 < -.2m;
+            bool bullish = l1 > .4m && l2 > .3m && l3 > .2m;
+            bool bearish = l1 < -.4m && l2 < -.3m && l3 < -.2m;
 
             if (bullish)
             {
@@ -63,10 +61,8 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
             decimal l2 = r.EmaStability.ScoreSlowEmaLevel2;
             decimal l3 = r.EmaStability.ScoreSlowEmaLevel3;
 
-            decimal spread = l1 - l3;
-
-            bool bullish = l1 > l2 && l2 > l3 && spread > 0.5m && l1 > .2m;
-            bool bearish = l1 < l2 && l2 < l3 && -spread > 0.5m && l1 < -.2m;
+            bool bullish = l1 > .4m && l2 > .3m && l3 > .2m;
+            bool bearish = l1 < -.4m && l2 < -.3m && l3 < -.2m;
 
             if (trade.Direction == SignalDirection.Long)
             {
