@@ -5,6 +5,9 @@ using KinetixFlowEngine.Core.Data;
 using KinetixFlowEngine.Core.Engine;
 using KinetixFlowEngine.Core.Execution;
 using KinetixFlowEngine.Core.Flow;
+using KinetixFlowEngine.Core.Gpt.Models;
+using KinetixFlowEngine.Core.Gpt.Persistence;
+using KinetixFlowEngine.Core.Gpt.Services;
 using KinetixFlowEngine.Core.Persistence;
 using KinetixFlowEngine.Core.Prop;
 using KinetixFlowEngine.Core.Strategy;
@@ -54,6 +57,8 @@ namespace KinetixFlowEngine.Core
         private readonly TradeMemoryManager _tradeMemory;
         private readonly VolumeEngine _volumeEngine;
 
+        private DateTime _lastGptReviewUtc = DateTime.MinValue;
+        private DateTime _lastMarketStateSaveUtc = DateTime.MinValue;
         private DateTime _engineStartTimeUtc = DateTime.UtcNow;
         private DateTime _lastSnapshot = DateTime.MinValue;
         private DateTime _lastOiFetch = DateTime.MinValue;
@@ -83,6 +88,16 @@ namespace KinetixFlowEngine.Core
         private readonly EmaStability _emaStability;
         private string _lastFlowSnapshot = string.Empty;
         private readonly SignalStrengthEngine _strengthEngine;
+
+        private readonly GptSnapshotBuilder _gptSnapshotBuilder;
+        private readonly GptSnapshotStore _gptSnapshotStore;
+        private readonly IGptSessionManager _gptSessionManager;
+        private readonly IGptPromptBuilder _gptPromptBuilder;
+        private readonly IGptReviewService _gptReviewService;
+        private readonly GptMarketStateManager _gptMarketStateManager;
+        private readonly GptMultiTimeframeAggregator _mtfAggregator;
+        private readonly GptMarketSnapshotV2Builder _snapshotV2Builder;
+        private readonly IGptReviewQueue _gptReviewQueue;
         public Worker(FlowTradeBuffer flowTradeBuffer, TradeStreamClient tradeStreamClient, ILogger<Worker> logger, KinetixEngineProcessor engineProcessor, ScoreNormalizer scoreNorm, EngineBootstrapService bootstrap,
                     VelocityNormalizer velNorm, ImbalanceNormalizer imbNorm, ExhaustionNormalizer exhNorm, CompressionNormalizer cmpNorm, MarketStateManager snapshotManager, PositionManager positionManager,
                     EngineWarmupManager warmup, PriceTrendEngine priceEngine, ScoreTrendEngine scoreEngine, OpenInterestClient openInterestClient, FlowMetricsRecorder recorder, StrategyEngine strategyEngine,
@@ -90,7 +105,9 @@ namespace KinetixFlowEngine.Core
                     ProbabilityTrendEngine probEngine, FlowAggregationWindow flowAggregationWindow, FlowMomentumRun momentumRun, TradeMemoryManager tradeMemory, VolumeEngine volumeEngine, FairPriceEngine fairPriceEngine,
                     PropAccountRuntimeManager accounts, PropAlertService alerts, PropAccountStatePersistence accountStatePersistence, PositionPersistence positionPersistence, BybitClientFactory factory,
                     StrategyConfigLoader strategyConfigLoader, IExecutionRouter executionRouter, IEquityEngine equityEngine, ExecutionSyncService executionSync, ITradeExecutor executor, BybitDepthStreamClient depthClient,
-                    AdjustedScoreNormalizer adjustmentNorm, FundingRateClient fundingRateClient, FundingRateEngine fundingRateEngine, AtrNormalizer atrNormalizer, EmaStability ema, SignalStrengthEngine strengthEngine)
+                    AdjustedScoreNormalizer adjustmentNorm, FundingRateClient fundingRateClient, FundingRateEngine fundingRateEngine, AtrNormalizer atrNormalizer, EmaStability ema, SignalStrengthEngine strengthEngine,
+                    GptSnapshotBuilder gptSnapshotBuilder, GptSnapshotStore gptSnapshotStore, IGptSessionManager gptSessionManager, IGptPromptBuilder gptPromptBuilder, IGptReviewService gptReviewService,
+                    GptMarketStateManager gptMarketStateManager, GptMultiTimeframeAggregator mtfAggregator, GptMarketSnapshotV2Builder snapshotV2Builder, IGptReviewQueue gptReviewQueue)
         {
             _logger = logger;
             _bootstrap = bootstrap;
@@ -138,6 +155,16 @@ namespace KinetixFlowEngine.Core
             _atrNormalizer = atrNormalizer;
             _emaStability = ema;
             _strengthEngine = strengthEngine;
+            _gptSnapshotBuilder = gptSnapshotBuilder;
+            _gptSnapshotStore = gptSnapshotStore;
+            _gptSessionManager = gptSessionManager;
+            _gptPromptBuilder = gptPromptBuilder;
+            _gptReviewService = gptReviewService;
+            _gptMarketStateManager = gptMarketStateManager;
+            _mtfAggregator = mtfAggregator;
+            _snapshotV2Builder = snapshotV2Builder;
+            _gptReviewQueue = gptReviewQueue;
+
             _tradeStreamClient.OnTrade += trade =>
             {
                 _flowTradeBuffer.AddTrade(trade);
@@ -374,6 +401,7 @@ namespace KinetixFlowEngine.Core
                     Quantity = trade.RemainingSize
                 });
             };
+
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -480,6 +508,47 @@ namespace KinetixFlowEngine.Core
                 {
                     result = _engineProcessor.Process(price, lastTrade.Quantity, lastTrade.Timestamp, _lastOiValue, _fundingRateEngine.CurrentRate, _fundingRateEngine.FundingPressure);
                     _strengthEngine.Update(result);
+
+                    if (DateTime.UtcNow - _lastMarketStateSaveUtc >= TimeSpan.FromMinutes(1))
+                    {
+                        _gptMarketStateManager.Add(CreateMarketStateRow(result));
+
+                        await _gptMarketStateManager.SaveAsync(stoppingToken);
+
+                        _lastMarketStateSaveUtc = DateTime.UtcNow;
+                    }
+                    if (DateTime.UtcNow - _lastGptReviewUtc >= TimeSpan.FromMinutes(10) && _gptMarketStateManager.Rows.Count >= 60)
+                    {
+                        var sequence = _gptSessionManager.GetNextSequence();
+                        var snapshotV2 = _snapshotV2Builder.Build(sequence, EngineVersion.Version, result);
+                        _gptReviewQueue.Enqueue(snapshotV2);
+                        _lastGptReviewUtc = DateTime.UtcNow;
+                        _logger.LogInformation("GPT Review Queued | Seq:{Seq}", sequence);
+                    }
+
+
+                    //if (_gptMarketStateManager.Rows.Count > 3)
+                    //{
+                    //    try
+                    //    {
+                    //        var mtf = _mtfAggregator.Build();
+                    //        _logger.LogInformation("MTF ScoreZ => 10m:{T10:F2} 30m:{T30:F2} 60m:{T60:F2}", mtf.ScoreZ[0], mtf.ScoreZ[1], mtf.ScoreZ[2]);
+                    //        //var sequence = _gptSessionManager.GetNextSequence();
+                    //        //var gptMarketSnapshot = _gptSnapshotBuilder.BuildSnapshot(sequence, EngineVersion.Version);
+
+                    //        //var review = await _gptReviewService.ReviewAsync(gptMarketSnapshot, stoppingToken);
+                    //        //_logger.LogInformation("GPT Review | Bias:{Bias} | Long:{Long} | Short:{Short}",
+                    //        //    review.Assessment.DirectionalBias, review.Assessment.LongConfidence, review.Assessment.ShortConfidence);
+
+                    //        //await _gptSnapshotStore.AppendAsync(gptMarketSnapshot, stoppingToken);
+                    //        //_logger.LogInformation("GPT Snapshot Saved | Seq:{Seq} | Samples:{Samples}", gptMarketSnapshot.Sequence, gptMarketSnapshot.SampleCount);
+                    //        //_gptSnapshotBuilder.Reset();
+                    //    }
+                    //    catch (Exception ex)
+                    //    {
+                    //        _logger.LogError(ex, "Failed to build GPT snapshot");
+                    //    }
+                    //}
                 }
                 catch (Exception ex)
                 {
@@ -763,6 +832,43 @@ namespace KinetixFlowEngine.Core
             }
 
             return true;
+        }
+
+        private GptMarketStateRow CreateMarketStateRow(KinetixEngineResult result)
+        {
+            return new GptMarketStateRow
+            {
+                TimestampUtc = DateTime.UtcNow,
+
+                ScoreZ = result.ScoreZ,
+
+                VelocityZ = result.VelocityZ,
+
+                ImbalanceZ = result.ImbalanceZ,
+
+                CompressionZ = result.CompressionZ,
+
+                ExhaustionZ = result.ExhaustionZ,
+
+                Momentum = result.Momentum,
+
+                Acceleration = result.Acceleration,
+
+                Persistence = result.Persistence,
+
+                NetPressure = result.NetPressure,
+
+                OIChange = result.OIChange,
+
+                FundingPressure = result.FundingPressure,
+
+                FlowImpactEfficiency =
+                    result.FlowImpactEfficiency,
+
+                ER5 = result.ER5,
+
+                ER30 = result.ER30
+            };
         }
 
     }

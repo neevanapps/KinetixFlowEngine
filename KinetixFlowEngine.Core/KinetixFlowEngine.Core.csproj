@@ -7,6 +7,13 @@
 		<UserSecretsId>dotnet-KinetixFlowEngine.Core-39eccec2-e2a4-48b6-9915-cf83ad587c1c</UserSecretsId>
 	</PropertyGroup>
 
+	<!-- Ensure Debug build produces portable PDBs and disables optimizations for better debugging experience -->
+	<PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+		<DebugType>portable</DebugType>
+		<DebugSymbols>true</DebugSymbols>
+		<Optimize>false</Optimize>
+	</PropertyGroup>
+
 	<ItemGroup>
 	  <Compile Remove="Persistence\EngineSnapshot.cs" />
 	</ItemGroup>
@@ -17,6 +24,7 @@
 		<PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.3" />
 		<PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.3" />
 		<PackageReference Include="Microsoft.Extensions.Options" Version="10.0.3" />
+		<PackageReference Include="OpenAI" Version="2.11.0" />
 		<PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
 		<PackageReference Include="Serilog.Enrichers.Context" Version="4.6.5" />
 		<PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />

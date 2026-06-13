@@ -8,6 +8,10 @@ using KinetixFlowEngine.Core.Execution;
 using KinetixFlowEngine.Core.Flow;
 using KinetixFlowEngine.Core.Flow.Probability;
 using KinetixFlowEngine.Core.Flow.State;
+using KinetixFlowEngine.Core.Gpt.Configuration;
+using KinetixFlowEngine.Core.Gpt.Models;
+using KinetixFlowEngine.Core.Gpt.Persistence;
+using KinetixFlowEngine.Core.Gpt.Services;
 using KinetixFlowEngine.Core.Persistence;
 using KinetixFlowEngine.Core.Prop;
 using KinetixFlowEngine.Core.Signal;
@@ -18,6 +22,7 @@ using KinetixFlowEngine.Core.Trend;
 using KinetixFlowEngine.Core.Utils;
 using Microsoft.Extensions.Hosting.WindowsServices;
 using Serilog;
+using Serilog.Core;
 using Serilog.Events;
 
 namespace KinetixFlowEngine.Core
@@ -56,6 +61,7 @@ namespace KinetixFlowEngine.Core
                 builder.Services.Configure<FlowEngineOptions>(builder.Configuration.GetSection("FlowEngine"));
                 builder.Services.Configure<NormalizationOptions>(builder.Configuration.GetSection("Normalization"));
                 builder.Services.Configure<PropAccountsOptions>(builder.Configuration.GetSection("PropAccounts"));
+                builder.Services.Configure<GptSettings>(builder.Configuration.GetSection("OpenAI"));
 
                 builder.Services.AddHttpClient<OpenInterestClient>(client =>
                 {
@@ -67,7 +73,6 @@ namespace KinetixFlowEngine.Core
                     client.BaseAddress = new Uri("https://api.bybit.com");
                     client.Timeout = TimeSpan.FromSeconds(10);
                 });
-
                 builder.Services.AddSingleton<FundingRateEngine>();
                 builder.Services.AddSingleton<PropAccountRuntimeFactory>();
                 builder.Services.AddSingleton<PropAccountRuntimeManager>();
@@ -154,6 +159,18 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<IPositionSizer, PropPositionSizer>();
                 builder.Services.AddSingleton<AccountStateEngine>();
 
+                builder.Services.AddSingleton<GptSnapshotBuilder>();
+                builder.Services.AddSingleton<GptSnapshotStore>();
+                builder.Services.AddSingleton<GptMarketStateManager>();
+                builder.Services.AddSingleton<GptMultiTimeframeAggregator>();
+                builder.Services.AddSingleton<IGptSessionManager, GptSessionManager>();
+                builder.Services.AddSingleton<IGptPromptBuilder, GptPromptBuilder>();
+                builder.Services.AddSingleton<GptMarketSnapshotV2Builder>();
+                builder.Services.AddSingleton<IGptReviewStore, GptReviewStore>();
+                builder.Services.AddSingleton<IGptReviewService, GptReviewService>();
+                builder.Services.AddSingleton<GptReviewQueue>();
+                builder.Services.AddSingleton<IGptReviewQueue>(sp => sp.GetRequiredService<GptReviewQueue>());
+                builder.Services.AddHostedService<GptReviewBackgroundService>();
                 // Configure Windows Service lifetime using options because 'Host' is not available on HostApplicationBuilder.
                 builder.Services.AddWindowsService(options =>
                 {

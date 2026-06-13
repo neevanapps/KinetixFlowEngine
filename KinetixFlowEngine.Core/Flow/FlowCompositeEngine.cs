@@ -26,13 +26,13 @@ namespace KinetixFlowEngine.Core.Flow
             double absorptionComponent = 0.10 * f.Absorption;    // was 0.07
 
             double composite =
-                            0.30 * f.Imbalance +
-                            0.22 * persistenceNormalized +
-                            0.15 * f.Momentum +
-                            0.10 * f.Acceleration +
-                            0.10 * f.DeltaVelocity +
-                            0.06 * f.SizeBias +
-                            0.07 * f.Absorption;
+                              0.28 * f.Imbalance
+                            + 0.22 * persistenceNormalized
+                            + 0.15 * f.Momentum
+                            + 0.10 * f.Acceleration
+                            + 0.10 * f.DeltaVelocity
+                            + 0.08 * f.SizeBias
+                            + 0.07 * f.Absorption;
 
             // Wider clamp so scoreZ can actually reach ±2.5+ when whales are active
             composite = Math.Clamp(composite, -2.5, 2.5);
