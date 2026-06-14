@@ -517,7 +517,7 @@ namespace KinetixFlowEngine.Core
 
                         _lastMarketStateSaveUtc = DateTime.UtcNow;
                     }
-                    if (DateTime.UtcNow - _lastGptReviewUtc >= TimeSpan.FromMinutes(10) && _gptMarketStateManager.Rows.Count >= 60)
+                    if (DateTime.UtcNow - _lastGptReviewUtc >= TimeSpan.FromMinutes(15) && _gptMarketStateManager.Rows.Count >= 180)
                     {
                         var sequence = _gptSessionManager.GetNextSequence();
                         var snapshotV2 = _snapshotV2Builder.Build(sequence, EngineVersion.Version, result);

@@ -41,7 +41,7 @@ public sealed class GptReviewBackgroundService
                         snapshot,
                         stoppingToken);
 
-                await _telegram.SendMessageAsync(
+                await _telegram.SendGroupMessageAsync(
                     BuildTelegramMessage(review, snapshot.Price));
 
                 _logger.LogInformation(
