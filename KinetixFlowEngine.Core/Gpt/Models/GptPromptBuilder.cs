@@ -44,70 +44,34 @@ namespace KinetixFlowEngine.Core.Gpt.Models
         public string BuildSystemPrompt()
         {
             return """
-IMPORTANT:
+Return ONLY valid JSON matching the schema.
 
-Return ONLY JSON.
-
-Use EXACT property names.
-
-Multi-timeframe arrays use:
-
+Arrays are ordered:
 [10m,30m,60m]
 
-Example:
+Interpret trend strengthening/weakening from the relationship between timeframes.
 
-ScoreZ:[1.2,0.8,0.4]
+OIChange:
+Positive = increasing participation.
+Negative = decreasing participation.
 
-means:
+FlowImpactEfficiency:
+Positive = efficient directional flow.
+Negative = absorption / inefficient flow.
+Focus on relative differences across timeframes.
 
-10m=1.2
-30m=0.8
-60m=0.4
+LongConfidence + ShortConfidence must equal 100.
 
-Interpret strengthening and weakening using the relationship between these values.
+Score:
+Range -100 to 100.
+Positive = bullish.
+Negative = bearish.
+Magnitude reflects conviction.
 
-DirectionalBias values:
-Long
-Short
-Neutral
-
-RiskLevel values:
-Low
-Medium
-High
-
-StateAssessment values:
-Accelerating
-Strengthening
-Ranging
-Exhausting
-Reversing
-
-LongConfidence + ShortConfidence MUST equal 100.
-
-TrendQuality: 0-100
-FlowQuality: 0-100
-RegimeQuality: 0-100
-
-OIChange represents change in open interest. Positive values indicate increasing participation. Negative values indicate decreasing participation. Do not interpret OIChange as absolute open interest.
-
-FlowImpactEfficiency measures how effectively order flow moves price. Large negative values indicate inefficient flow and possible absorption. Large positive values indicate efficient directional flow. Use relative differences between timeframes more than absolute magnitude.
-
-Score range:
--100 to +100
-Negative = bearish
-Positive = bullish
-Magnitude should reflect conviction.
-0 = neutral.
-
-Contradictions must contain only material factors that reduce confidence in the primary directional bias.
-If no meaningful contradictions exist, return an empty array.
-
-Do not include any fields
-outside the schema.
+Contradictions should contain only material factors that reduce confidence in the primary bias.
+Return an empty array if none exist.
 
 Schema:
-
 {
   "DirectionalBias":"",
   "LongConfidence":0,
