@@ -3,6 +3,7 @@ using KinetixFlowEngine.Core.Bootstrap;
 using KinetixFlowEngine.Core.Config;
 using KinetixFlowEngine.Core.Context;
 using KinetixFlowEngine.Core.Data;
+using KinetixFlowEngine.Core.Depth;
 using KinetixFlowEngine.Core.Engine;
 using KinetixFlowEngine.Core.Execution;
 using KinetixFlowEngine.Core.Flow;
@@ -78,6 +79,11 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<PropAccountRuntimeManager>();
                 builder.Services.AddSingleton<BybitClientFactory>();
                 builder.Services.AddSingleton<ExecutionGuard>();
+                builder.Services.AddSingleton<BinanceDepthStreamClient>();
+                builder.Services.AddSingleton<DepthFeatureEngine>();
+                builder.Services.AddSingleton<DepthMinuteAggregator>();
+                builder.Services.AddSingleton<DepthWallTracker>();
+                builder.Services.AddSingleton<    DepthFeatureManager>();
 
                 builder.Services.AddSingleton<ExecutionSyncService>();
                 builder.Services.AddSingleton<ScoreNormalizer>();

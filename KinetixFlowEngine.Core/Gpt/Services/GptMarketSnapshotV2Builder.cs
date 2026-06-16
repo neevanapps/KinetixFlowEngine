@@ -1,4 +1,5 @@
-﻿using KinetixFlowEngine.Core.Engine;
+﻿using KinetixFlowEngine.Core.Depth;
+using KinetixFlowEngine.Core.Engine;
 using KinetixFlowEngine.Core.Gpt.Models;
 
 namespace KinetixFlowEngine.Core.Gpt.Services;
@@ -6,11 +7,14 @@ namespace KinetixFlowEngine.Core.Gpt.Services;
 public sealed class GptMarketSnapshotV2Builder
 {
     private readonly GptMultiTimeframeAggregator _aggregator;
+    private readonly DepthFeatureManager _depthFeatureManager;
 
     public GptMarketSnapshotV2Builder(
-        GptMultiTimeframeAggregator aggregator)
+        GptMultiTimeframeAggregator aggregator,
+    DepthFeatureManager depthFeatureManager)
     {
         _aggregator = aggregator;
+        _depthFeatureManager = depthFeatureManager;
     }
 
     public GptMarketSnapshotV2 Build(
@@ -19,6 +23,7 @@ public sealed class GptMarketSnapshotV2Builder
         KinetixEngineResult result)
     {
         var mtf = _aggregator.Build();
+        var depthMtf = new DepthMtfAggregator(_depthFeatureManager.Rows).Build();
 
         return new GptMarketSnapshotV2
         {
@@ -62,7 +67,16 @@ public sealed class GptMarketSnapshotV2Builder
 
             ER5 = mtf.ER5,
 
-            ER30 = mtf.ER30
+            ER30 = mtf.ER30,
+            Depth = new GptDepthSnapshot
+            {
+                DepthImbalance = depthMtf.Imbalance,
+                DepthBullPct = depthMtf.BullishPercent,
+                BidWallAge = depthMtf.BidWallAge,
+                AskWallAge = depthMtf.AskWallAge,
+                BidWallQty = depthMtf.BidWallQty,
+                AskWallQty = depthMtf.AskWallQty
+            },
         };
     }
 }

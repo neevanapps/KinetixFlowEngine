@@ -21,7 +21,7 @@ namespace KinetixFlowEngine.Core.Gpt.Models
     public sealed class GptPromptBuilder : IGptPromptBuilder
     {
 
-        public string BuildReviewPrompt(    GptMarketSnapshotV2 snapshot)
+        public string BuildReviewPrompt(GptMarketSnapshotV2 snapshot)
         {
             var sb = new StringBuilder();
 
@@ -44,34 +44,89 @@ namespace KinetixFlowEngine.Core.Gpt.Models
         public string BuildSystemPrompt()
         {
             return """
-Return ONLY valid JSON matching the schema.
+IMPORTANT:
 
-Arrays are ordered:
+Return ONLY JSON.
+
+Use EXACT property names.
+
+Multi-timeframe arrays use:
+
 [10m,30m,60m]
 
-Interpret trend strengthening/weakening from the relationship between timeframes.
+Example:
 
-OIChange:
-Positive = increasing participation.
-Negative = decreasing participation.
+ScoreZ:[1.2,0.8,0.4]
 
-FlowImpactEfficiency:
-Positive = efficient directional flow.
-Negative = absorption / inefficient flow.
-Focus on relative differences across timeframes.
+means:
 
-LongConfidence + ShortConfidence must equal 100.
+10m=1.2
+30m=0.8
+60m=0.4
 
-Score:
-Range -100 to 100.
-Positive = bullish.
-Negative = bearish.
-Magnitude reflects conviction.
+Interpret strengthening and weakening using the relationship between these values.
 
-Contradictions should contain only material factors that reduce confidence in the primary bias.
-Return an empty array if none exist.
+DirectionalBias values:
+Long
+Short
+Neutral
+
+RiskLevel values:
+Low
+Medium
+High
+
+StateAssessment values:
+Accelerating
+Strengthening
+Ranging
+Exhausting
+Reversing
+
+LongConfidence + ShortConfidence MUST equal 100.
+
+TrendQuality: 0-100
+FlowQuality: 0-100
+RegimeQuality: 0-100
+
+OIChange represents change in open interest. Positive values indicate increasing participation. Negative values indicate decreasing participation. Do not interpret OIChange as absolute open interest.
+
+FlowImpactEfficiency measures how effectively order flow moves price. Large negative values indicate inefficient flow and possible absorption. Large positive values indicate efficient directional flow. Use relative differences between timeframes more than absolute magnitude.
+
+Score range:
+-100 to +100
+Negative = bearish
+Positive = bullish
+Magnitude should reflect conviction.
+0 = neutral.
+
+Contradictions must contain only material factors that reduce confidence in the primary directional bias.
+If no meaningful contradictions exist, return an empty array.
+
+Depth metrics describe passive liquidity.
+
+DepthImbalance:
+Positive = stronger bids.
+Negative = stronger asks.
+
+DepthBullPct:
+Higher values indicate more frequent bid-side dominance.
+Lower values indicate more frequent ask-side dominance.
+
+BidWallAge / AskWallAge:
+Higher values indicate more persistent support or resistance.
+
+BidWallQty / AskWallQty:
+Higher values indicate stronger liquidity support or resistance.
+
+Compare bid-side and ask-side metrics directly.
+Use depth as a confirmation layer rather than a primary signal.
+
+Do not include any fields
+outside the schema.
 
 Schema:
+
 {
   "DirectionalBias":"",
   "LongConfidence":0,

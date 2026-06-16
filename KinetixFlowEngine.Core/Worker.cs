@@ -2,6 +2,7 @@ using KinetixFlowEngine.Core.Bootstrap;
 using KinetixFlowEngine.Core.Config;
 using KinetixFlowEngine.Core.Context;
 using KinetixFlowEngine.Core.Data;
+using KinetixFlowEngine.Core.Depth;
 using KinetixFlowEngine.Core.Engine;
 using KinetixFlowEngine.Core.Execution;
 using KinetixFlowEngine.Core.Flow;
@@ -23,6 +24,7 @@ namespace KinetixFlowEngine.Core
 {
     public class Worker : BackgroundService
     {
+        private readonly BinanceDepthStreamClient _depthStreamClient;
         private readonly TradeStreamClient _tradeStreamClient;
         private readonly BybitDepthStreamClient _depthClient;
         private readonly FlowTradeBuffer _flowTradeBuffer;
@@ -36,6 +38,10 @@ namespace KinetixFlowEngine.Core
         private readonly TelegramService _telegram;
         private readonly ExceptionAlertAggregator _exceptionAggregator;
         private readonly FlowAggregationWindow _flowAggregationWindow;
+        private readonly DepthFeatureEngine _depthFeatureEngine;
+        private readonly DepthMinuteAggregator _depthMinuteAggregator;
+        private readonly DepthWallTracker _depthWallTracker;
+        private readonly DepthFeatureManager _depthFeatureManager;
 
         private readonly ScoreNormalizer _scoreNorm;
         private readonly VelocityNormalizer _velNorm;
@@ -57,6 +63,7 @@ namespace KinetixFlowEngine.Core
         private readonly TradeMemoryManager _tradeMemory;
         private readonly VolumeEngine _volumeEngine;
 
+        private DateTime _lastDepthLogUtc;
         private DateTime _lastGptReviewUtc = DateTime.MinValue;
         private DateTime _lastMarketStateSaveUtc = DateTime.MinValue;
         private DateTime _engineStartTimeUtc = DateTime.UtcNow;
@@ -107,7 +114,8 @@ namespace KinetixFlowEngine.Core
                     StrategyConfigLoader strategyConfigLoader, IExecutionRouter executionRouter, IEquityEngine equityEngine, ExecutionSyncService executionSync, ITradeExecutor executor, BybitDepthStreamClient depthClient,
                     AdjustedScoreNormalizer adjustmentNorm, FundingRateClient fundingRateClient, FundingRateEngine fundingRateEngine, AtrNormalizer atrNormalizer, EmaStability ema, SignalStrengthEngine strengthEngine,
                     GptSnapshotBuilder gptSnapshotBuilder, GptSnapshotStore gptSnapshotStore, IGptSessionManager gptSessionManager, IGptPromptBuilder gptPromptBuilder, IGptReviewService gptReviewService,
-                    GptMarketStateManager gptMarketStateManager, GptMultiTimeframeAggregator mtfAggregator, GptMarketSnapshotV2Builder snapshotV2Builder, IGptReviewQueue gptReviewQueue)
+                    GptMarketStateManager gptMarketStateManager, GptMultiTimeframeAggregator mtfAggregator, GptMarketSnapshotV2Builder snapshotV2Builder, IGptReviewQueue gptReviewQueue, BinanceDepthStreamClient depthStreamClient,
+                    DepthFeatureEngine depthFeatureEngine, DepthMinuteAggregator depthMinuteAggregator, DepthWallTracker depthWallTracker, DepthFeatureManager depthFeatureManager)
         {
             _logger = logger;
             _bootstrap = bootstrap;
@@ -164,6 +172,11 @@ namespace KinetixFlowEngine.Core
             _mtfAggregator = mtfAggregator;
             _snapshotV2Builder = snapshotV2Builder;
             _gptReviewQueue = gptReviewQueue;
+            _depthStreamClient = depthStreamClient;
+            _depthFeatureEngine = depthFeatureEngine;
+            _depthMinuteAggregator = depthMinuteAggregator;
+            _depthWallTracker = depthWallTracker;
+            _depthFeatureManager = depthFeatureManager;
 
             _tradeStreamClient.OnTrade += trade =>
             {
@@ -409,6 +422,9 @@ namespace KinetixFlowEngine.Core
             await _bootstrap.InitializeAsync();
             await _depthClient.StartAsync(stoppingToken);
             await _tradeStreamClient.StartAsync(stoppingToken);
+            await _depthStreamClient.StartAsync(stoppingToken);
+            await _depthFeatureManager.LoadAsync(stoppingToken);
+            _logger.LogInformation("Depth Features Loaded | Rows:{Rows}", _depthFeatureManager.Rows.Count);
 
             var persisted = _positionPersistence.Load();
             if (persisted.Any())
@@ -475,6 +491,8 @@ namespace KinetixFlowEngine.Core
 
             while (!stoppingToken.IsCancellationRequested)
             {
+
+
                 if (!_flowTradeBuffer.TryGetLast(out var lastTrade))
                 {
                     await Task.Delay(1000, stoppingToken);
@@ -483,6 +501,42 @@ namespace KinetixFlowEngine.Core
                 double price = (double)lastTrade.Price;
                 _currentMarketPrice = (decimal)price;
 
+                var depth = _depthStreamClient.CurrentSnapshot;
+                var feature = _depthFeatureEngine.Calculate(depth);
+                _depthMinuteAggregator.Add(feature);
+                _depthWallTracker.Update(depth);
+
+                if (_depthMinuteAggregator.IsReady() && DateTime.UtcNow - _lastDepthLogUtc >= TimeSpan.FromMinutes(1))
+                {
+                    var minute = _depthMinuteAggregator.Build();
+                    var topBidWalls = _depthWallTracker.GetTopBidWalls();
+                    var topAskWalls = _depthWallTracker.GetTopAskWalls();
+
+                    var depthFeature = new DepthMinuteFeature
+                    {
+                        TimestampUtc = DateTime.UtcNow,
+                        Price = (decimal)price,
+                        PriceChange1m = minute.PriceChange1m,
+                        AvgImbalance10 = minute.AverageImbalanceTop10,
+                        BullishPercent = minute.BullishBookPercent,
+                        BearishPercent = minute.BearishBookPercent,
+                        BullishPersistenceSeconds = minute.BullishPersistenceSeconds,
+                        BearishPersistenceSeconds = minute.BearishPersistenceSeconds,
+                        LargestBidWallAgeSec = topBidWalls.Any() ? topBidWalls.Max(x => (x.LastSeenUtc - x.FirstSeenUtc).TotalSeconds) : 0,
+                        LargestAskWallAgeSec = topAskWalls.Any() ? topAskWalls.Max(x => (x.LastSeenUtc - x.FirstSeenUtc).TotalSeconds) : 0,
+                        LargestBidWallQty = topBidWalls.Any() ? topBidWalls.Max(x => x.MaxQuantitySeen) : 0,
+                        LargestAskWallQty = topAskWalls.Any() ? topAskWalls.Max(x => x.MaxQuantitySeen) : 0,
+                        ConsumedBidWallCount = topBidWalls.Count(x => x.IsConsumed),
+                        ConsumedAskWallCount = topAskWalls.Count(x => x.IsConsumed),
+                        AvgBidQuantityChangePct = topBidWalls.Any() ? topBidWalls.Average(x => x.QuantityChangePercent) : 0,
+                        AvgAskQuantityChangePct = topAskWalls.Any() ? topAskWalls.Average(x => x.QuantityChangePercent) : 0
+                    };
+
+                    _depthFeatureManager.Add(depthFeature);
+                    await _depthFeatureManager.SaveAsync(stoppingToken);
+                    var mtf = new DepthMtfAggregator(_depthFeatureManager.Rows).Build();
+                    _lastDepthLogUtc = DateTime.UtcNow;
+                }
                 if ((DateTime.UtcNow - _lastOiFetch).TotalSeconds > 120)
                 {
                     _lastOiValue = await _openInterestClient.GetOpenInterestAsync();
@@ -517,7 +571,7 @@ namespace KinetixFlowEngine.Core
 
                         _lastMarketStateSaveUtc = DateTime.UtcNow;
                     }
-                    if (DateTime.UtcNow - _lastGptReviewUtc >= TimeSpan.FromMinutes(15) && _gptMarketStateManager.Rows.Count >= 180)
+                    if (DateTime.UtcNow - _lastGptReviewUtc >= TimeSpan.FromMinutes(15) && _gptMarketStateManager.Rows.Count >= 60 && _depthFeatureManager.Rows.Count >= 60)
                     {
                         var sequence = _gptSessionManager.GetNextSequence();
                         var snapshotV2 = _snapshotV2Builder.Build(sequence, EngineVersion.Version, result);
@@ -525,30 +579,6 @@ namespace KinetixFlowEngine.Core
                         _lastGptReviewUtc = DateTime.UtcNow;
                         _logger.LogInformation("GPT Review Queued | Seq:{Seq}", sequence);
                     }
-
-
-                    //if (_gptMarketStateManager.Rows.Count > 3)
-                    //{
-                    //    try
-                    //    {
-                    //        var mtf = _mtfAggregator.Build();
-                    //        _logger.LogInformation("MTF ScoreZ => 10m:{T10:F2} 30m:{T30:F2} 60m:{T60:F2}", mtf.ScoreZ[0], mtf.ScoreZ[1], mtf.ScoreZ[2]);
-                    //        //var sequence = _gptSessionManager.GetNextSequence();
-                    //        //var gptMarketSnapshot = _gptSnapshotBuilder.BuildSnapshot(sequence, EngineVersion.Version);
-
-                    //        //var review = await _gptReviewService.ReviewAsync(gptMarketSnapshot, stoppingToken);
-                    //        //_logger.LogInformation("GPT Review | Bias:{Bias} | Long:{Long} | Short:{Short}",
-                    //        //    review.Assessment.DirectionalBias, review.Assessment.LongConfidence, review.Assessment.ShortConfidence);
-
-                    //        //await _gptSnapshotStore.AppendAsync(gptMarketSnapshot, stoppingToken);
-                    //        //_logger.LogInformation("GPT Snapshot Saved | Seq:{Seq} | Samples:{Samples}", gptMarketSnapshot.Sequence, gptMarketSnapshot.SampleCount);
-                    //        //_gptSnapshotBuilder.Reset();
-                    //    }
-                    //    catch (Exception ex)
-                    //    {
-                    //        _logger.LogError(ex, "Failed to build GPT snapshot");
-                    //    }
-                    //}
                 }
                 catch (Exception ex)
                 {

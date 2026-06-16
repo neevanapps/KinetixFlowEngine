@@ -46,4 +46,6 @@ public sealed class GptMarketSnapshotV2
     public double[] ER5 { get; init; } = [];
 
     public double[] ER30 { get; init; } = [];
+
+    public GptDepthSnapshot Depth { get; init; } = new();
 }
