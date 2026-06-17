@@ -8,7 +8,7 @@ namespace KinetixFlowEngine.Core.Utils
         private readonly ConcurrentDictionary<string, int> _exceptionCounts = new();
         private readonly TimeSpan _flushInterval = TimeSpan.FromMinutes(5);
         private readonly PeriodicTimer _timer;
-        private readonly TelegramService _telegram;
+        private readonly INotificationService _notificationService;
         private readonly ILogger<ExceptionAlertAggregator> _logger;
         private readonly CancellationTokenSource _cts = new();
 
@@ -18,10 +18,10 @@ namespace KinetixFlowEngine.Core.Utils
         private DateTime _lastFlush = DateTime.UtcNow;
 
         public ExceptionAlertAggregator(
-            TelegramService telegram,
+            INotificationService notificationService,
             ILogger<ExceptionAlertAggregator> logger)
         {
-            _telegram = telegram;
+            _notificationService = notificationService;
             _logger = logger;
             _timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
 
@@ -101,7 +101,7 @@ namespace KinetixFlowEngine.Core.Utils
 
                 var message = sb.ToString();
 
-                await _telegram.SendMessageAsync(message);
+                await _notificationService.SendMessageAsync(message);
 
                 _exceptionCounts.Clear();
                 _lastFlush = DateTime.UtcNow;

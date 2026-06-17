@@ -12,18 +12,18 @@ namespace KinetixFlowEngine.Core.Execution
 {
     public class BybitExecutor : ITradeExecutor
     {
-        private readonly TelegramService _telegram;
+        private readonly INotificationService _notificationService;
         private readonly BybitClientFactory _factory;
         private readonly BybitDepthStreamClient _depth;
         private readonly ILogger<BybitExecutor> _logger;
         private const decimal TICK = 0.5m;
         private const int MAX_RETRIES = 5;
-        public BybitExecutor(BybitClientFactory factory, BybitDepthStreamClient client, ILogger<BybitExecutor> logger, TelegramService telegram)
+        public BybitExecutor(BybitClientFactory factory, BybitDepthStreamClient client, ILogger<BybitExecutor> logger, INotificationService notificationService)
         {
             _factory = factory;
             _depth = client;
             _logger = logger;
-            _telegram = telegram;
+            _notificationService = notificationService;
         }
 
         public decimal GetMakerPrice(OrderSide orderSide)
@@ -97,7 +97,7 @@ namespace KinetixFlowEngine.Core.Execution
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Market fallback failed");
-                await _telegram.SendMessageAsync($"CRITICAL remnant close failed {accountId}");
+                await _notificationService.SendMessageAsync($"CRITICAL remnant close failed {accountId}");
             }
         }
 

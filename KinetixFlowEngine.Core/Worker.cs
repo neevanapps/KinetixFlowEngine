@@ -35,7 +35,7 @@ namespace KinetixFlowEngine.Core
         private readonly ScoreTrendEngine _scoreEngine;
         private readonly ProbabilityTrendEngine _probEngine;
         private readonly EngineBootstrapService _bootstrap;
-        private readonly TelegramService _telegram;
+        private readonly INotificationService _notificationService;
         private readonly ExceptionAlertAggregator _exceptionAggregator;
         private readonly FlowAggregationWindow _flowAggregationWindow;
         private readonly DepthFeatureEngine _depthFeatureEngine;
@@ -108,7 +108,7 @@ namespace KinetixFlowEngine.Core
         public Worker(FlowTradeBuffer flowTradeBuffer, TradeStreamClient tradeStreamClient, ILogger<Worker> logger, KinetixEngineProcessor engineProcessor, ScoreNormalizer scoreNorm, EngineBootstrapService bootstrap,
                     VelocityNormalizer velNorm, ImbalanceNormalizer imbNorm, ExhaustionNormalizer exhNorm, CompressionNormalizer cmpNorm, MarketStateManager snapshotManager, PositionManager positionManager,
                     EngineWarmupManager warmup, PriceTrendEngine priceEngine, ScoreTrendEngine scoreEngine, OpenInterestClient openInterestClient, FlowMetricsRecorder recorder, StrategyEngine strategyEngine,
-                    StrategyAggregator strategyAggregator, TelegramService telegram, IOptions<FlowEngineOptions> options, TradeJournalRecorder tradeJournal, ExceptionAlertAggregator exceptionAggregator,
+                    StrategyAggregator strategyAggregator, INotificationService notificationService, IOptions<FlowEngineOptions> options, TradeJournalRecorder tradeJournal, ExceptionAlertAggregator exceptionAggregator,
                     ProbabilityTrendEngine probEngine, FlowAggregationWindow flowAggregationWindow, FlowMomentumRun momentumRun, TradeMemoryManager tradeMemory, VolumeEngine volumeEngine, FairPriceEngine fairPriceEngine,
                     PropAccountRuntimeManager accounts, PropAlertService alerts, PropAccountStatePersistence accountStatePersistence, PositionPersistence positionPersistence, BybitClientFactory factory,
                     StrategyConfigLoader strategyConfigLoader, IExecutionRouter executionRouter, IEquityEngine equityEngine, ExecutionSyncService executionSync, ITradeExecutor executor, BybitDepthStreamClient depthClient,
@@ -123,7 +123,7 @@ namespace KinetixFlowEngine.Core
             _warmup = warmup;
             _flowTradeBuffer = flowTradeBuffer;
             _tradeStreamClient = tradeStreamClient;
-            _telegram = telegram;
+            _notificationService = notificationService;
             _scoreNorm = scoreNorm;
             _velNorm = velNorm;
             _imbNorm = imbNorm;
@@ -725,7 +725,7 @@ namespace KinetixFlowEngine.Core
                     var positionText = BuildPositionSummary(positions, (decimal)result.Price);
                     var message = $"📊 *Kinetix Update*\n\n" + $"`{_lastFlowSnapshot}`\n\n" + $"📌 *Positions*\n{positionText}";
                     _logger.LogInformation(positionText);
-                    _ = _telegram.SendMessageAsync(message);
+                    _ = _notificationService.SendMessageAsync(message);
                     _lastPositionLog = now;
                 }
                 _recorder.Record(result);

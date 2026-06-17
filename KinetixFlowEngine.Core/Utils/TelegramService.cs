@@ -3,7 +3,13 @@ using Telegram.Bot.Types;
 
 namespace KinetixFlowEngine.Core.Utils
 {
-    public class TelegramService
+    public interface INotificationService
+    {
+        Task SendMessageAsync(string message);
+        Task SendGroupMessageAsync(string message);
+    }
+
+    public class TelegramService : INotificationService
     {
         private readonly TelegramBotClient _botClient;
         private readonly string _chatId;

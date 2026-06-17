@@ -25,6 +25,10 @@ public sealed class GptAssessment
     public List<string> KeyDrivers { get; init; } = [];
 
     public List<string> Contradictions { get; init; } = [];
+
+    public string DominantIntent { get; init; } = string.Empty;
+
+    public List<string> BehaviorEvidence { get; init; } = [];
 }
 
 public enum RiskLevel

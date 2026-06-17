@@ -7,11 +7,11 @@ namespace KinetixFlowEngine.Core.Prop
 {
     public class AccountStateEngine
     {
-        private readonly TelegramService _telegram;
+        private readonly INotificationService _notificationService;
 
-        public AccountStateEngine(TelegramService telegram)
+        public AccountStateEngine(INotificationService notificationService)
         {
-            _telegram = telegram;
+            _notificationService = notificationService;
         }
 
         public void UpdateState(
@@ -31,7 +31,7 @@ namespace KinetixFlowEngine.Core.Prop
                 state.HighWaterMarkDaily = equity;
                 state.IsPaused = false;
 
-                _telegram.SendMessageAsync($"Daily reset for account {config.AccountId}. New daily base: {equity:C}");
+                _notificationService.SendMessageAsync($"Daily reset for account {config.AccountId}. New daily base: {equity:C}");
             }
 
             // -----------------------

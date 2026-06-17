@@ -12,17 +12,17 @@ namespace KinetixFlowEngine.Core.Execution
         private readonly BybitClientFactory _factory;
         private readonly PropAccountRuntimeManager _accounts;
         private readonly Dictionary<string, List<ExchangePosition>> _lastSnapshot = new();
-        private readonly TelegramService _telegramService;
+        private readonly INotificationService _notificationService;
         private readonly PropAccountStatePersistence _accountStatePersistence;
 
         public ExecutionSyncService(PositionManager positions, ILogger<ExecutionSyncService> logger, BybitClientFactory factory,
-            PropAccountRuntimeManager accounts, TelegramService telegramService, PropAccountStatePersistence accountStatePersistence)
+            PropAccountRuntimeManager accounts, INotificationService notificationService, PropAccountStatePersistence accountStatePersistence)
         {
             _positions = positions;
             _logger = logger;
             _factory = factory;
             _accounts = accounts;
-            _telegramService = telegramService;
+            _notificationService = notificationService;
             _accountStatePersistence = accountStatePersistence;
         }
 
@@ -109,7 +109,7 @@ namespace KinetixFlowEngine.Core.Execution
                         if (local == null)
                         {
                             _logger.LogWarning("Recovered missing trade {OrderId}", ex.OrderId);
-                            await _telegramService.SendMessageAsync($"Strange: Recovered missing trade {ex.OrderId} on account {accountId}");
+                            await _notificationService.SendMessageAsync($"Strange: Recovered missing trade {ex.OrderId} on account {accountId}");
                             _positions.RestoreFromExchange(ex);
                         }
                     }

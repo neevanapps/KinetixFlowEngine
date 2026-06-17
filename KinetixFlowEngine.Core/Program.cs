@@ -98,7 +98,7 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<TradeStreamClient>();
                 builder.Services.AddSingleton<BybitDepthStreamClient>();
                 builder.Services.AddSingleton<OpenInterestClient>();
-                builder.Services.AddSingleton<TelegramService>();
+                builder.Services.AddSingleton<INotificationService, DiscordWebhookService>();
                 builder.Services.AddSingleton<ExceptionAlertAggregator>();
                 builder.Services.AddSingleton<VolumeEngine>();
                 builder.Services.AddSingleton<AtrNormalizer>();
