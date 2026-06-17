@@ -73,12 +73,10 @@ Seq: {review.Sequence}
 Time Taken: {timeTaken}
 
 Bias: {review.Assessment.DirectionalBias}
+DominantIntent: {review.Assessment.DominantIntent}
 
 Long: {review.Assessment.LongConfidence}%
 Short: {review.Assessment.ShortConfidence}%
-
-DominantIntent: {review.Assessment.DominantIntent}
-BehaviorEvidence: {string.Join(", ", review.Assessment.BehaviorEvidence)}
 
 Score: {review.Assessment.Score}
 Risk: {review.Assessment.RiskLevel}
