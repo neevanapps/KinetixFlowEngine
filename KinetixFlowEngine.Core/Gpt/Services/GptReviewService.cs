@@ -25,6 +25,7 @@ namespace KinetixFlowEngine.Core.Gpt.Services
         private readonly IGptReviewStore _reviewStore;
         private readonly IGptPromptBuilder _promptBuilder;
         private readonly ChatClient _chatClient;
+        private readonly ILogger _logger;
 
         private static readonly JsonSerializerOptions JsonOptions =
             new()
@@ -39,10 +40,12 @@ namespace KinetixFlowEngine.Core.Gpt.Services
         public GptReviewService(
             IGptReviewStore reviewStore,
             IGptPromptBuilder promptBuilder,
-            IOptions<GptSettings> settings)
+            IOptions<GptSettings> settings,
+            ILogger<GptReviewService> logger)
         {
             _reviewStore = reviewStore;
             _promptBuilder = promptBuilder;
+            _logger = logger;
 
             var client =
                 new OpenAIClient(settings.Value.ApiKey);
@@ -59,10 +62,21 @@ namespace KinetixFlowEngine.Core.Gpt.Services
             var prompt =
                 _promptBuilder.BuildReviewPrompt(
                     snapshot);
+            var systemPrompt =
+                _promptBuilder.BuildSystemPrompt();
+
+            _logger.LogInformation(
+                "Reviewing snapshot {Sequence} with prompt: {Prompt}",
+                snapshot.Sequence,
+                prompt);
+
+            _logger.LogInformation(
+               "Reviewing system prompt: {Prompt}",
+               systemPrompt);
 
             var messages = new List<ChatMessage>
                             {
-                                new SystemChatMessage(        _promptBuilder.BuildSystemPrompt()),
+                                new SystemChatMessage(systemPrompt),
                                 new UserChatMessage(prompt)
                             };
 

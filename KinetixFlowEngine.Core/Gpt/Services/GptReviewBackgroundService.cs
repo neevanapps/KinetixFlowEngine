@@ -74,6 +74,7 @@ Time Taken: {timeTaken}
 
 Bias: {review.Assessment.DirectionalBias}
 DominantIntent: {review.Assessment.DominantIntent}
+MarketStructure: {review.Assessment.MarketStructure}
 
 Long: {review.Assessment.LongConfidence}%
 Short: {review.Assessment.ShortConfidence}%

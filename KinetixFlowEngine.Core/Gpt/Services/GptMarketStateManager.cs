@@ -5,7 +5,7 @@ namespace KinetixFlowEngine.Core.Gpt.Services;
 
 public sealed class GptMarketStateManager
 {
-    private const int MaxRows = 180;
+    private const int MaxRows = 120;
 
     private readonly string _filePath;
 

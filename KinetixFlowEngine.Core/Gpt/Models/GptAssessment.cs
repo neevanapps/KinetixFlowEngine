@@ -29,6 +29,8 @@ public sealed class GptAssessment
     public string DominantIntent { get; init; } = string.Empty;
 
     public List<string> BehaviorEvidence { get; init; } = [];
+
+    public string MarketStructure { get; init; } = string.Empty;
 }
 
 public enum RiskLevel

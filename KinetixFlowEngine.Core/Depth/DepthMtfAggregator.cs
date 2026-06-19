@@ -4,6 +4,9 @@ public sealed class DepthMtfAggregator
 {
     private readonly IReadOnlyList<DepthMinuteFeature> _rows;
 
+    private readonly int _level1 = 15;
+    private readonly int _level2 = 45;
+    private readonly int _level3 = 120;
     public DepthMtfAggregator(
         IReadOnlyList<DepthMinuteFeature> rows)
     {
@@ -16,65 +19,65 @@ public sealed class DepthMtfAggregator
         {
             Imbalance =
             [
-                Avg(10, x => x.AvgImbalance10),
-                Avg(30, x => x.AvgImbalance10),
-                Avg(60, x => x.AvgImbalance10)
+                Avg(_level1, x => x.AvgImbalance10),
+                Avg(_level2, x => x.AvgImbalance10),
+                Avg(_level3, x => x.AvgImbalance10)
             ],
 
             BullishPercent =
             [
-                Avg(10, x => x.BullishPercent),
-                Avg(30, x => x.BullishPercent),
-                Avg(60, x => x.BullishPercent)
+                Avg(_level1, x => x.BullishPercent),
+                Avg(_level2, x => x.BullishPercent),
+                Avg(_level3, x => x.BullishPercent)
             ],
 
             BullishPersistence =
             [
-                Avg(10, x => x.BullishPersistenceSeconds),
-                Avg(30, x => x.BullishPersistenceSeconds),
-                Avg(60, x => x.BullishPersistenceSeconds)
+                Avg(_level1, x => x.BullishPersistenceSeconds),
+                Avg(_level2, x => x.BullishPersistenceSeconds),
+                Avg(_level3, x => x.BullishPersistenceSeconds)
             ],
 
             BidWallAge =
             [
-                Avg(10, x => x.LargestBidWallAgeSec),
-                Avg(30, x => x.LargestBidWallAgeSec),
-                Avg(60, x => x.LargestBidWallAgeSec)
+                Avg(_level1, x => x.LargestBidWallAgeSec),
+                Avg(_level2, x => x.LargestBidWallAgeSec),
+                Avg(_level3, x => x.LargestBidWallAgeSec)
             ],
 
             AskWallAge =
             [
-                Avg(10, x => x.LargestAskWallAgeSec),
-                Avg(30, x => x.LargestAskWallAgeSec),
-                Avg(60, x => x.LargestAskWallAgeSec)
+                Avg(_level1, x => x.LargestAskWallAgeSec),
+                Avg(_level2, x => x.LargestAskWallAgeSec),
+                Avg(_level3, x => x.LargestAskWallAgeSec)
             ],
 
             BidWallQty =
             [
-                Avg(10, x => (double)x.LargestBidWallQty),
-                Avg(30, x => (double)x.LargestBidWallQty),
-                Avg(60, x => (double)x.LargestBidWallQty)
+                Avg(_level1, x => (double)x.LargestBidWallQty),
+                Avg(_level2, x => (double)x.LargestBidWallQty),
+                Avg(_level3, x => (double)x.LargestBidWallQty)
             ],
 
             AskWallQty =
             [
-                Avg(10, x => (double)x.LargestAskWallQty),
-                Avg(30, x => (double)x.LargestAskWallQty),
-                Avg(60, x => (double)x.LargestAskWallQty)
+                Avg(_level1, x => (double)x.LargestAskWallQty),
+                Avg(_level2, x => (double)x.LargestAskWallQty),
+                Avg(_level3, x => (double)x.LargestAskWallQty)
             ],
 
             BidConsumption =
             [
-                Avg(10, x => x.ConsumedBidWallCount),
-                Avg(30, x => x.ConsumedBidWallCount),
-                Avg(60, x => x.ConsumedBidWallCount)
+                Avg(_level1, x => x.ConsumedBidWallCount),
+                Avg(_level2, x => x.ConsumedBidWallCount),
+                Avg(_level3, x => x.ConsumedBidWallCount)
             ],
 
             AskConsumption =
             [
-                Avg(10, x => x.ConsumedAskWallCount),
-                Avg(30, x => x.ConsumedAskWallCount),
-                Avg(60, x => x.ConsumedAskWallCount)
+                Avg(_level1, x => x.ConsumedAskWallCount),
+                Avg(_level2, x => x.ConsumedAskWallCount),
+                Avg(_level3, x => x.ConsumedAskWallCount)
             ]
         };
     }

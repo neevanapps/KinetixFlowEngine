@@ -46,7 +46,7 @@ public sealed class DepthFeatureManager
     {
         Rows.Add(row);
 
-        while (Rows.Count > 180)
+        while (Rows.Count > 120)
         {
             Rows.RemoveAt(0);
         }

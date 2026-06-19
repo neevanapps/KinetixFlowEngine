@@ -6,7 +6,7 @@ public sealed class DepthMinuteAggregator
 {
     private readonly Queue<DepthSecondFeature> _samples = new();
 
-    private const int MaxSamples = 60;
+    private const int MaxSamples = 120;
 
     public int Count => _samples.Count;
 
