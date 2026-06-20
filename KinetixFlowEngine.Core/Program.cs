@@ -3,6 +3,8 @@ using KinetixFlowEngine.Core.Bootstrap;
 using KinetixFlowEngine.Core.Config;
 using KinetixFlowEngine.Core.Context;
 using KinetixFlowEngine.Core.Data;
+using KinetixFlowEngine.Core.Database;
+using KinetixFlowEngine.Core.Database.Repositories;
 using KinetixFlowEngine.Core.Depth;
 using KinetixFlowEngine.Core.Engine;
 using KinetixFlowEngine.Core.Execution;
@@ -21,6 +23,7 @@ using KinetixFlowEngine.Core.Strategy.Strategies;
 using KinetixFlowEngine.Core.Trading;
 using KinetixFlowEngine.Core.Trend;
 using KinetixFlowEngine.Core.Utils;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting.WindowsServices;
 using Serilog;
 using Serilog.Core;
@@ -63,7 +66,10 @@ namespace KinetixFlowEngine.Core
                 builder.Services.Configure<NormalizationOptions>(builder.Configuration.GetSection("Normalization"));
                 builder.Services.Configure<PropAccountsOptions>(builder.Configuration.GetSection("PropAccounts"));
                 builder.Services.Configure<GptSettings>(builder.Configuration.GetSection("OpenAI"));
-
+                builder.Services.AddDbContextFactory<KinetixDbContext>(options =>
+                {
+                    options.UseNpgsql(builder.Configuration.GetConnectionString("KinetixDb"));
+                });
                 builder.Services.AddHttpClient<OpenInterestClient>(client =>
                 {
                     client.BaseAddress = new Uri("https://fapi.binance.com");
@@ -74,6 +80,11 @@ namespace KinetixFlowEngine.Core
                     client.BaseAddress = new Uri("https://api.bybit.com");
                     client.Timeout = TimeSpan.FromSeconds(10);
                 });
+
+                builder.Services.AddScoped<ISnapshotRepository, SnapshotRepository>();
+                builder.Services.AddScoped<IModelReviewRepository, ModelReviewRepository>();
+                builder.Services.AddScoped<IMarketPriceRepository, MarketPriceRepository>();
+
                 builder.Services.AddSingleton<FundingRateEngine>();
                 builder.Services.AddSingleton<PropAccountRuntimeFactory>();
                 builder.Services.AddSingleton<PropAccountRuntimeManager>();
@@ -83,7 +94,7 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<DepthFeatureEngine>();
                 builder.Services.AddSingleton<DepthMinuteAggregator>();
                 builder.Services.AddSingleton<DepthWallTracker>();
-                builder.Services.AddSingleton<    DepthFeatureManager>();
+                builder.Services.AddSingleton<DepthFeatureManager>();
 
                 builder.Services.AddSingleton<ExecutionSyncService>();
                 builder.Services.AddSingleton<ScoreNormalizer>();
@@ -92,6 +103,7 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<ExhaustionNormalizer>();
                 builder.Services.AddSingleton<CompressionNormalizer>();
                 builder.Services.AddSingleton<AdjustedScoreNormalizer>();
+                builder.Services.AddSingleton<FlowImpactNormalizer>();
                 builder.Services.AddSingleton<MarketStateManager>();
                 builder.Services.AddSingleton<EngineBootstrapService>();
                 builder.Services.AddSingleton<EngineWarmupManager>();
@@ -173,7 +185,9 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<IGptPromptBuilder, GptPromptBuilder>();
                 builder.Services.AddSingleton<GptMarketSnapshotV2Builder>();
                 builder.Services.AddSingleton<IGptReviewStore, GptReviewStore>();
-                builder.Services.AddSingleton<IGptReviewService, GptReviewService>();
+                builder.Services.AddSingleton<IModelReviewer, QwenReviewService>();
+                builder.Services.AddSingleton<IModelReviewer, MistralReviewService>();
+                builder.Services.AddSingleton<CompositeReviewService>();
                 builder.Services.AddSingleton<GptReviewQueue>();
                 builder.Services.AddSingleton<IGptReviewQueue>(sp => sp.GetRequiredService<GptReviewQueue>());
                 builder.Services.AddHostedService<GptReviewBackgroundService>();

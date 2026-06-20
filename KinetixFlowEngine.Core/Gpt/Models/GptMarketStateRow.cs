@@ -26,7 +26,7 @@ public sealed class GptMarketStateRow
 
     public double FundingPressure { get; init; }
 
-    public double FlowImpactEfficiency { get; init; }
+    public double FlowImpactEfficiencyZ { get; init; }
 
     public double ER5 { get; init; }
 

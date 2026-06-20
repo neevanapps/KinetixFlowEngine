@@ -63,7 +63,7 @@ public sealed class GptMarketSnapshotV2Builder
 
             NetPressure = mtf.NetPressure,
 
-            FlowImpactEfficiency = mtf.FlowImpactEfficiency,
+            FlowImpactEfficiency = mtf.FlowImpactEfficiencyZ,
 
             ER5 = mtf.ER5,
 

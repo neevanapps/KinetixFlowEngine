@@ -7,49 +7,79 @@ namespace KinetixFlowEngine.Core.Flow
         public double Efficiency { get; set; }
 
         public bool BullishControl { get; set; }
+
         public bool BearishControl { get; set; }
     }
 
     public class FlowImpactEngine
     {
         public FlowImpactSnapshot Calculate(
-    double price,
-    double previousPrice,
-    FlowWindowSnapshot window,
-    double atr)
+            double price,
+            double previousPrice,
+            FlowWindowSnapshot window,
+            double atr)
         {
+            //------------------------------------------------
+            // Safety checks
+            //------------------------------------------------
+
+            if (previousPrice <= 0 || atr <= 0)
+            {
+                return new FlowImpactSnapshot
+                {
+                    Efficiency = 0,
+                    BullishControl = false,
+                    BearishControl = false
+                };
+            }
+
+            //------------------------------------------------
+            // Price movement normalized by ATR
+            //------------------------------------------------
+
             double priceMove = price - previousPrice;
+
+            double normalizedMove =
+                priceMove / atr;
+
+            //------------------------------------------------
+            // Flow imbalance
+            //------------------------------------------------
 
             double buyVol = (double)window.BuyVolume;
             double sellVol = (double)window.SellVolume;
 
-            double netFlow = buyVol - sellVol;
+            double totalFlow = buyVol + sellVol;
 
-            //------------------------------------------------
-            // Stabilize very small flow values
-            //------------------------------------------------
+            double imbalance = 0;
 
-            const double minFlow = 0.01;
-
-            if (Math.Abs(netFlow) < minFlow)
+            if (totalFlow > 0)
             {
-                netFlow = Math.Sign(netFlow) == 0
-                    ? minFlow
-                    : Math.Sign(netFlow) * minFlow;
+                imbalance =
+                    (buyVol - sellVol) /
+                    totalFlow;
             }
 
             //------------------------------------------------
-            // Efficiency calculation
+            // Flow Impact Efficiency
+            //
+            // Interpretation:
+            //
+            // +1  = aggressive buying efficiently moves price
+            //  0  = neutral
+            // -1  = aggressive flow absorbed / ineffective
+            //
             //------------------------------------------------
 
-            double efficiency = priceMove / netFlow;
+            double rawEfficiency =
+                normalizedMove * imbalance;
 
             //------------------------------------------------
-            // ATR normalization
+            // Compress to bounded range
             //------------------------------------------------
 
-            if (atr > 0)
-                efficiency /= atr;
+            double efficiency =
+                Math.Tanh(rawEfficiency * 10.0);
 
             //------------------------------------------------
             // Price control detection
@@ -58,10 +88,10 @@ namespace KinetixFlowEngine.Core.Flow
             bool bullishControl = false;
             bool bearishControl = false;
 
-            if (priceMove > 0 && netFlow <= 0)
+            if (priceMove > 0 && imbalance <= 0)
                 bullishControl = true;
 
-            if (priceMove < 0 && netFlow >= 0)
+            if (priceMove < 0 && imbalance >= 0)
                 bearishControl = true;
 
             return new FlowImpactSnapshot

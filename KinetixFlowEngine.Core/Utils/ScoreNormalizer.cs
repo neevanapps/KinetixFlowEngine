@@ -40,4 +40,12 @@
         {
         }
     }
+
+    public class FlowImpactNormalizer : UniversalNormalizer
+    {
+        public FlowImpactNormalizer()
+            : base(8640)
+        {
+        }
+    }
 }

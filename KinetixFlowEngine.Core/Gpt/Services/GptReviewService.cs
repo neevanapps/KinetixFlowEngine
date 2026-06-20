@@ -66,13 +66,13 @@ namespace KinetixFlowEngine.Core.Gpt.Services
                 _promptBuilder.BuildSystemPrompt();
 
             _logger.LogInformation(
-                "Reviewing snapshot {Sequence} with prompt: {Prompt}",
-                snapshot.Sequence,
-                prompt);
-
-            _logger.LogInformation(
                "Reviewing system prompt: {Prompt}",
                systemPrompt);
+
+            _logger.LogInformation(
+                "Reviewing snapshot {Sequence} with prompt: {Prompt}",
+                snapshot.Sequence,
+                prompt);            
 
             var messages = new List<ChatMessage>
                             {

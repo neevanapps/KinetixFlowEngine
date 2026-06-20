@@ -30,6 +30,8 @@ namespace KinetixFlowEngine.Core.Persistence
         public NormalizerState ExhaustionNormalizer { get; set; } = new();
         public NormalizerState CompressionNormalizer { get; set; } = new();
 
+        public NormalizerState FlowImpactEfficiencyNormalizer { get; set; } = new();
+
         public VolumeState VolumeEngineState { get; set; } = new VolumeState();
 
         public EmaStabilityState EmaStabilityState { get; set; }

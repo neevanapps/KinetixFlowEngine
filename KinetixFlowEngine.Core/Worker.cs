@@ -2,6 +2,8 @@ using KinetixFlowEngine.Core.Bootstrap;
 using KinetixFlowEngine.Core.Config;
 using KinetixFlowEngine.Core.Context;
 using KinetixFlowEngine.Core.Data;
+using KinetixFlowEngine.Core.Database;
+using KinetixFlowEngine.Core.Database.Repositories;
 using KinetixFlowEngine.Core.Depth;
 using KinetixFlowEngine.Core.Engine;
 using KinetixFlowEngine.Core.Execution;
@@ -49,6 +51,7 @@ namespace KinetixFlowEngine.Core
         private readonly ExhaustionNormalizer _exhNorm;
         private readonly CompressionNormalizer _cmpNorm;
         private readonly AdjustedScoreNormalizer _adjustmentNorm;
+        private readonly FlowImpactNormalizer _flowImpactNorm;
 
         private readonly FairPriceEngine _fairPriceEngine;
         private readonly MarketStateManager _marketStateManager;
@@ -75,6 +78,7 @@ namespace KinetixFlowEngine.Core
         private int _drawdownCheckCounter = 0;
         private const int DRAW_DOWN_PERSIST_EVERY_N_CYCLES = 5;   // ~every 5–10 seconds
         private double _lastOiValue = 0;
+        private DateTime _lastPriceSaveUtc = DateTime.MinValue;
 
         private readonly PositionPersistence _positionPersistence;
         private readonly PropAccountStatePersistence _accountStatePersistence;
@@ -100,11 +104,13 @@ namespace KinetixFlowEngine.Core
         private readonly GptSnapshotStore _gptSnapshotStore;
         private readonly IGptSessionManager _gptSessionManager;
         private readonly IGptPromptBuilder _gptPromptBuilder;
-        private readonly IGptReviewService _gptReviewService;
+        private readonly CompositeReviewService _gptReviewService;
         private readonly GptMarketStateManager _gptMarketStateManager;
         private readonly GptMultiTimeframeAggregator _mtfAggregator;
         private readonly GptMarketSnapshotV2Builder _snapshotV2Builder;
         private readonly IGptReviewQueue _gptReviewQueue;
+        private readonly IServiceScopeFactory _scopeFactory;
+
         public Worker(FlowTradeBuffer flowTradeBuffer, TradeStreamClient tradeStreamClient, ILogger<Worker> logger, KinetixEngineProcessor engineProcessor, ScoreNormalizer scoreNorm, EngineBootstrapService bootstrap,
                     VelocityNormalizer velNorm, ImbalanceNormalizer imbNorm, ExhaustionNormalizer exhNorm, CompressionNormalizer cmpNorm, MarketStateManager snapshotManager, PositionManager positionManager,
                     EngineWarmupManager warmup, PriceTrendEngine priceEngine, ScoreTrendEngine scoreEngine, OpenInterestClient openInterestClient, FlowMetricsRecorder recorder, StrategyEngine strategyEngine,
@@ -113,9 +119,9 @@ namespace KinetixFlowEngine.Core
                     PropAccountRuntimeManager accounts, PropAlertService alerts, PropAccountStatePersistence accountStatePersistence, PositionPersistence positionPersistence, BybitClientFactory factory,
                     StrategyConfigLoader strategyConfigLoader, IExecutionRouter executionRouter, IEquityEngine equityEngine, ExecutionSyncService executionSync, ITradeExecutor executor, BybitDepthStreamClient depthClient,
                     AdjustedScoreNormalizer adjustmentNorm, FundingRateClient fundingRateClient, FundingRateEngine fundingRateEngine, AtrNormalizer atrNormalizer, EmaStability ema, SignalStrengthEngine strengthEngine,
-                    GptSnapshotBuilder gptSnapshotBuilder, GptSnapshotStore gptSnapshotStore, IGptSessionManager gptSessionManager, IGptPromptBuilder gptPromptBuilder, IGptReviewService gptReviewService,
+                    GptSnapshotBuilder gptSnapshotBuilder, GptSnapshotStore gptSnapshotStore, IGptSessionManager gptSessionManager, IGptPromptBuilder gptPromptBuilder, CompositeReviewService gptReviewService,
                     GptMarketStateManager gptMarketStateManager, GptMultiTimeframeAggregator mtfAggregator, GptMarketSnapshotV2Builder snapshotV2Builder, IGptReviewQueue gptReviewQueue, BinanceDepthStreamClient depthStreamClient,
-                    DepthFeatureEngine depthFeatureEngine, DepthMinuteAggregator depthMinuteAggregator, DepthWallTracker depthWallTracker, DepthFeatureManager depthFeatureManager)
+                    DepthFeatureEngine depthFeatureEngine, DepthMinuteAggregator depthMinuteAggregator, DepthWallTracker depthWallTracker, DepthFeatureManager depthFeatureManager, FlowImpactNormalizer flowImpactNormalizer, IServiceScopeFactory scopeFactory)
         {
             _logger = logger;
             _bootstrap = bootstrap;
@@ -129,6 +135,7 @@ namespace KinetixFlowEngine.Core
             _imbNorm = imbNorm;
             _exhNorm = exhNorm;
             _cmpNorm = cmpNorm;
+            _flowImpactNorm = flowImpactNormalizer;
             _options = options.Value;
             _tradeMemory = tradeMemory;
             _marketStateManager = snapshotManager;
@@ -414,7 +421,7 @@ namespace KinetixFlowEngine.Core
                     Quantity = trade.RemainingSize
                 });
             };
-
+            _scopeFactory = scopeFactory;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -462,6 +469,7 @@ namespace KinetixFlowEngine.Core
                 _imbNorm.Restore(snapshot.ImbalanceNormalizer);
                 _exhNorm.Restore(snapshot.ExhaustionNormalizer);
                 _cmpNorm.Restore(snapshot.CompressionNormalizer);
+                _flowImpactNorm.Restore(snapshot.FlowImpactEfficiencyNormalizer);
                 _adjustmentNorm.Restore(snapshot.AdjustedScoreNormalizer);
 
                 if (snapshot.MomentumRun == 0)
@@ -566,12 +574,19 @@ namespace KinetixFlowEngine.Core
                     if (DateTime.UtcNow - _lastMarketStateSaveUtc >= TimeSpan.FromMinutes(1))
                     {
                         _gptMarketStateManager.Add(CreateMarketStateRow(result));
-
                         await _gptMarketStateManager.SaveAsync(stoppingToken);
-
                         _lastMarketStateSaveUtc = DateTime.UtcNow;
                     }
-                    if (DateTime.UtcNow - _lastGptReviewUtc >= TimeSpan.FromMinutes(15) && _gptMarketStateManager.Rows.Count >= 120 && _depthFeatureManager.Rows.Count >= 120)
+                    if (DateTime.UtcNow - _lastPriceSaveUtc >= TimeSpan.FromMinutes(1))
+                    {
+                        using var scope = _scopeFactory.CreateScope();
+                        var repository = scope.ServiceProvider.GetRequiredService<IMarketPriceRepository>();
+                        await repository.SaveAsync(new MarketPriceEntity { TimestampUtc = DateTime.UtcNow, Price = (decimal)result.Price }, stoppingToken);
+
+                        _lastPriceSaveUtc = DateTime.UtcNow;
+                    }
+
+                    if (DateTime.UtcNow - _lastGptReviewUtc >= TimeSpan.FromMinutes(10) && _gptMarketStateManager.Rows.Count >= 120 && _depthFeatureManager.Rows.Count >= 120)
                     {
                         var sequence = _gptSessionManager.GetNextSequence();
                         var snapshotV2 = _snapshotV2Builder.Build(sequence, EngineVersion.Version, result);
@@ -772,6 +787,7 @@ namespace KinetixFlowEngine.Core
                         CompressionNormalizer = _cmpNorm.GetState(),
                         AdjustedScoreNormalizer = _adjustmentNorm.GetState(),
                         VolumeEngineState = _volumeEngine.GetState(),
+                        FlowImpactEfficiencyNormalizer = _flowImpactNorm.GetState(),
 
                         EmaStabilityState = result.EmaStability,
                         AtrNormalizer = _atrNormalizer.GetState()
@@ -892,7 +908,7 @@ namespace KinetixFlowEngine.Core
 
                 FundingPressure = result.FundingPressure,
 
-                FlowImpactEfficiency =
+                FlowImpactEfficiencyZ =
                     result.FlowImpactEfficiency,
 
                 ER5 = result.ER5,

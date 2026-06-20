@@ -40,8 +40,8 @@ public sealed class GptMultiTimeframeAggregator
 
             FundingPressure = BuildArray(rows, x => x.FundingPressure),
 
-            FlowImpactEfficiency =
-                BuildArray(rows, x => x.FlowImpactEfficiency),
+            FlowImpactEfficiencyZ =
+                BuildArray(rows, x => x.FlowImpactEfficiencyZ),
 
             ER5 = BuildArray(rows, x => x.ER5),
 
@@ -55,9 +55,9 @@ public sealed class GptMultiTimeframeAggregator
     {
         return
         [
-            Average(rows, 15, selector),
-            Average(rows, 45, selector),
-            Average(rows, 120, selector)
+            Average(rows, 10, selector),
+            Average(rows, 30, selector),
+            Average(rows, 60, selector)
         ];
     }
 

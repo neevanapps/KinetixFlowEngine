@@ -4,9 +4,9 @@ public sealed class DepthMtfAggregator
 {
     private readonly IReadOnlyList<DepthMinuteFeature> _rows;
 
-    private readonly int _level1 = 15;
-    private readonly int _level2 = 45;
-    private readonly int _level3 = 120;
+    private readonly int _level1 = 10;
+    private readonly int _level2 = 30;
+    private readonly int _level3 = 60;
     public DepthMtfAggregator(
         IReadOnlyList<DepthMinuteFeature> rows)
     {

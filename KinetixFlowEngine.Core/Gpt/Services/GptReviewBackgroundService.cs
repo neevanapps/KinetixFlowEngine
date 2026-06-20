@@ -1,4 +1,6 @@
-﻿using KinetixFlowEngine.Core.Gpt.Models;
+﻿using KinetixFlowEngine.Core.Database.Mappers;
+using KinetixFlowEngine.Core.Database.Repositories;
+using KinetixFlowEngine.Core.Gpt.Models;
 using KinetixFlowEngine.Core.Utils;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -10,19 +12,23 @@ public sealed class GptReviewBackgroundService
     : BackgroundService
 {
     private readonly GptReviewQueue _queue;
-    private readonly IGptReviewService _reviewService;
+    private readonly CompositeReviewService _reviewService;
     private readonly INotificationService _notificationService;
     private readonly ILogger<GptReviewBackgroundService> _logger;
+    private readonly IServiceScopeFactory _scopeFactory;
+
     public GptReviewBackgroundService(
         GptReviewQueue queue,
-        IGptReviewService reviewService,
+        CompositeReviewService reviewService,
         INotificationService notificationService,
-        ILogger<GptReviewBackgroundService> logger)
+        ILogger<GptReviewBackgroundService> logger,
+        IServiceScopeFactory scopeFactory)
     {
         _queue = queue;
         _reviewService = reviewService;
         _notificationService = notificationService;
         _logger = logger;
+        _scopeFactory = scopeFactory;
     }
 
     protected override async Task ExecuteAsync(
@@ -37,15 +43,34 @@ public sealed class GptReviewBackgroundService
                     "Processing GPT Review | Seq:{Seq}",
                     snapshot.Sequence);
 
+                using var scope = _scopeFactory.CreateScope();
+                var repository = scope.ServiceProvider.GetRequiredService<ISnapshotRepository>();
+                var snapshotEntity = SnapshotMapper.Map(snapshot);
+                long snapshotId = await repository.SaveSnapshotAsync(snapshotEntity, stoppingToken);
+                _logger.LogInformation("Snapshot Saved | Seq:{Seq} | DbId:{Id}", snapshot.Sequence, snapshotId);
+
                 var stopwatch = Stopwatch.StartNew();
-                var review =
-                    await _reviewService.ReviewAsync(
+                var reviews =
+                    await _reviewService.ReviewAllAsync(
                         snapshot,
                         stoppingToken);
                 stopwatch.Stop();
 
-                await _notificationService.SendGroupMessageAsync(
-                    BuildTelegramMessage(review, snapshot.Price, stopwatch.Elapsed));
+                foreach (var review in reviews)
+                {
+                    await _notificationService.SendGroupMessageAsync(
+                        BuildTelegramMessage(
+                            review,
+                            snapshot.Price,
+                            stopwatch.Elapsed));
+                }
+                using var reviewScope = _scopeFactory.CreateScope();
+                var reviewRepo = reviewScope.ServiceProvider.GetRequiredService<IModelReviewRepository>();
+                foreach (var review in reviews)
+                {
+                    var entity = ReviewMapper.Map(snapshotId, review);
+                    await reviewRepo.SaveAsync(entity, stoppingToken);
+                }
 
                 _logger.LogInformation(
                     "GPT Review Completed | Seq:{Seq}",
@@ -66,7 +91,7 @@ public sealed class GptReviewBackgroundService
         string timeTaken = FormatElapsedTime(duration);
         return
 $"""
-🤖 GPT REVIEW
+🤖 Model: {review.ModelName}
 
 Price: {price:C}
 Seq: {review.Sequence}
@@ -75,6 +100,7 @@ Time Taken: {timeTaken}
 Bias: {review.Assessment.DirectionalBias}
 DominantIntent: {review.Assessment.DominantIntent}
 MarketStructure: {review.Assessment.MarketStructure}
+Tradeability: {review.Assessment.Tradeability}
 
 Long: {review.Assessment.LongConfidence}%
 Short: {review.Assessment.ShortConfidence}%

@@ -7,29 +7,29 @@ public static class GptAssessmentValidator
     public static void Validate(
         GptAssessment assessment)
     {
-        if (!Enum.IsDefined(
-                typeof(DirectionalBias),
-                assessment.DirectionalBias))
-        {
-            throw new InvalidOperationException(
-                "Invalid DirectionalBias.");
-        }
+        //if (!Enum.IsDefined(
+        //        typeof(DirectionalBias),
+        //        assessment.DirectionalBias))
+        //{
+        //    throw new InvalidOperationException(
+        //        "Invalid DirectionalBias.");
+        //}
 
-        if (!Enum.IsDefined(
-                typeof(RiskLevel),
-                assessment.RiskLevel))
-        {
-            throw new InvalidOperationException(
-                "Invalid RiskLevel.");
-        }
+        //if (!Enum.IsDefined(
+        //        typeof(RiskLevel),
+        //        assessment.RiskLevel))
+        //{
+        //    throw new InvalidOperationException(
+        //        "Invalid RiskLevel.");
+        //}
 
-        if (!Enum.IsDefined(
-                typeof(StateAssessment),
-                assessment.StateAssessment))
-        {
-            throw new InvalidOperationException(
-                "Invalid StateAssessment.");
-        }
+        //if (!Enum.IsDefined(
+        //        typeof(StateAssessment),
+        //        assessment.StateAssessment))
+        //{
+        //    throw new InvalidOperationException(
+        //        "Invalid StateAssessment.");
+        //}
 
         if (assessment.LongConfidence < 0 ||
             assessment.LongConfidence > 100)

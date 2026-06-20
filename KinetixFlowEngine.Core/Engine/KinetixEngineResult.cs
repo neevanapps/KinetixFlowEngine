@@ -82,7 +82,7 @@ namespace KinetixFlowEngine.Core.Engine
         public bool StrongBullishPersistence { get; set; }
         public bool StrongBearishPersistence { get; set; }
         public double FlowImpactEfficiency { get; set; }
-
+        public double FlowImpactEfficiencyZ { get; set; }
         public bool BullishPriceControl { get; set; }
         public bool BearishPriceControl { get; set; }
 

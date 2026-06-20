@@ -48,6 +48,8 @@ namespace KinetixFlowEngine.Core.Engine
         private readonly ImbalanceNormalizer _imbNorm;
         private readonly ExhaustionNormalizer _exhNorm;
         private readonly CompressionNormalizer _cmpNorm;
+        private readonly FlowImpactNormalizer _impactNorm;
+
         private readonly Ema _velocityEma = new(30);
         public double VelocityEma;
         private readonly FlowMomentumRun _momentumRun;
@@ -60,7 +62,7 @@ namespace KinetixFlowEngine.Core.Engine
             ScoreNormalizer scoreNorm, VelocityNormalizer velNorm, ImbalanceNormalizer imbNorm, ExhaustionNormalizer exhNorm, CompressionNormalizer cmpNorm, Atr15mEngine atr15m, FlowDivergenceEngine divergenceEngine,
             EfficiencyRatio30mEngine er30m, LiquidityPressureEngine pressureEngine, VwapAbsorptionEngine vwapAbsorptionEngine, WhaleClusterEngine whaleClusterEngine, FlowImpactEngine flowImpactEngine,
             FlowPersistenceEngine flowPersistenceEngine, ProbabilityTrendEngine probEngine, FlowTradeBuffer tradeBuffer, FifteenMinuteCandleBuilder candle15m, VolumeEngine volumeEngine, FlowMomentumRun momentumRun,
-            EmaStability emaStability, AtrNormalizer atrNormalizer)
+            EmaStability emaStability, AtrNormalizer atrNormalizer, FlowImpactNormalizer impactNorm)
         {
             _flowAggregationWindow = flowAggregationWindow;
             _flowFeatureEngine = flowFeatureEngine;
@@ -100,6 +102,7 @@ namespace KinetixFlowEngine.Core.Engine
             _momentumRun = momentumRun;
             _emaStability = emaStability;
             _atrNormalizer = atrNormalizer;
+            _impactNorm = impactNorm;
         }
 
         public KinetixEngineResult Process(double price, decimal quantity, long timeStamp, double openInterest, double fundingRate, double fundingPressure)
@@ -144,7 +147,7 @@ namespace KinetixFlowEngine.Core.Engine
             double er5 = _lastEr5;
             double er30 = _lastEr30;
 
-            var impact = _flowImpactEngine.Calculate(price, _previousPrice, window, atr);
+            var impact = _flowImpactEngine.Calculate(price, _previousPrice, window, atr);            
             _previousPrice = price;
 
             var oiChange = _oiEngine.Update(openInterest);
@@ -161,6 +164,9 @@ namespace KinetixFlowEngine.Core.Engine
             var factor = (double)_momentumRun.LastFactor;
             var alpha = baseAlpha * (0.9 + 0.2 * factor);
             alpha = Math.Clamp(alpha, 0.04, 0.35);
+
+            var impactZ = _impactNorm.Update(impact.Efficiency, alpha);
+            impactZ = Math.Clamp(impactZ, -3, 3);
 
             var velZ = _velNorm.Update(features.DeltaVelocity, alpha);
             velZ = Math.Clamp(velZ, -2, 2);
@@ -279,6 +285,7 @@ namespace KinetixFlowEngine.Core.Engine
                 BuyClusterStrength = whaleClusters.BuyClusterStrength,
                 SellClusterStrength = whaleClusters.SellClusterStrength,
                 FlowImpactEfficiency = impact.Efficiency,
+                FlowImpactEfficiencyZ = impactZ,
                 BullishPriceControl = impact.BullishControl,
                 BearishPriceControl = impact.BearishControl,
                 ProbFastEma = (double)_probEngine.Fast,
