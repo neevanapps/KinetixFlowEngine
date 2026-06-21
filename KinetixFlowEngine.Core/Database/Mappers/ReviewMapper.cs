@@ -16,6 +16,7 @@ public static class ReviewMapper
             Sequence = review.Sequence,
             CreatedUtc = DateTime.UtcNow,
             DirectionalBias = review.Assessment.DirectionalBias,
+            RecommendedAction = review.Assessment.RecommendedAction,
             LongConfidence = review.Assessment.LongConfidence,
             ShortConfidence = review.Assessment.ShortConfidence,
             Score = (int)review.Assessment.Score,

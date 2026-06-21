@@ -6,6 +6,8 @@ namespace KinetixFlowEngine.Core.Gpt.Models
     {
         public string DirectionalBias { get; init; } = string.Empty;
 
+        public string RecommendedAction { get; init; } = string.Empty;
+
         public int LongConfidence { get; init; }
 
         public int ShortConfidence { get; init; }

@@ -19,7 +19,8 @@ namespace KinetixFlowEngine.Core.Database
         public DateTime CreatedUtc { get; set; }
 
         public string DirectionalBias { get; set; } = string.Empty;
-
+        public string RecommendedAction { get; set; } = string.Empty;
+        
         public int LongConfidence { get; set; }
 
         public int ShortConfidence { get; set; }

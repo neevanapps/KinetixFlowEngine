@@ -79,7 +79,7 @@ namespace KinetixFlowEngine.Core.Gpt.Services
                     Temperature = 0.0f,
                     TopP = 0.1f,
                     NumCtx = 4096,
-                    NumPredict = 512,
+                    NumPredict = 1200,
                     RepeatPenalty = 1.15f
                 }
             };

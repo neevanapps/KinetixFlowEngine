@@ -98,6 +98,7 @@ Seq: {review.Sequence}
 Time Taken: {timeTaken}
 
 Bias: {review.Assessment.DirectionalBias}
+Direction: {review.Assessment.RecommendedAction}
 DominantIntent: {review.Assessment.DominantIntent}
 MarketStructure: {review.Assessment.MarketStructure}
 Tradeability: {review.Assessment.Tradeability}
