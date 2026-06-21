@@ -1,6 +1,7 @@
 ﻿using KinetixFlowEngine.Core.Depth;
 using KinetixFlowEngine.Core.Engine;
 using KinetixFlowEngine.Core.Gpt.Models;
+using Serilog.Core;
 
 namespace KinetixFlowEngine.Core.Gpt.Services;
 
@@ -8,6 +9,7 @@ public sealed class GptMarketSnapshotV2Builder
 {
     private readonly GptMultiTimeframeAggregator _aggregator;
     private readonly DepthFeatureManager _depthFeatureManager;
+
 
     public GptMarketSnapshotV2Builder(
         GptMultiTimeframeAggregator aggregator,
@@ -20,10 +22,11 @@ public sealed class GptMarketSnapshotV2Builder
     public GptMarketSnapshotV2 Build(
         int sequence,
         string engineVersion,
-        KinetixEngineResult result)
+        KinetixEngineResult result,ILogger logger)
+
     {
         var mtf = _aggregator.Build();
-        var depthMtf = new DepthMtfAggregator(_depthFeatureManager.Rows).Build();
+        var depthMtf = new DepthMtfAggregator(_depthFeatureManager.Rows).Build(logger);
 
         return new GptMarketSnapshotV2
         {

@@ -72,10 +72,10 @@ OIChange
 Represents change in market participation.
 Positive = participation is increasing. Negative = participation is decreasing.
 
-Multi-timeframe data is provided in this order: [10m, 30m, 60m].
-- 10m reflects short-term execution dynamics.
-- 30m reflects the dominant intraday trend.
-- 60m reflects broader structural bias.
+Multi-timeframe data is provided in this order: [15m, 45m, 120m].
+- 15m reflects short-term execution dynamics.
+- 45m reflects the dominant intraday trend.
+- 120m reflects broader structural bias.
 Generally give more weight to higher timeframes, but do not ignore meaningful short-term deterioration or acceleration.
 
 

@@ -5,16 +5,21 @@ namespace KinetixFlowEngine.Core.Gpt.Services;
 public sealed class GptMultiTimeframeAggregator
 {
     private readonly GptMarketStateManager _marketStateManager;
+    private readonly ILogger<GptMultiTimeframeAggregator> _logger;
 
     public GptMultiTimeframeAggregator(
-        GptMarketStateManager marketStateManager)
+        GptMarketStateManager marketStateManager,
+        ILogger<GptMultiTimeframeAggregator> logger)
     {
         _marketStateManager = marketStateManager;
+        _logger = logger;
     }
 
     public GptMultiTimeframeSnapshot Build()
     {
         var rows = _marketStateManager.Rows;
+
+        _logger.LogInformation("Building GptMultiTimeframeSnapshot with {RowCount} rows", rows.Count);
 
         return new GptMultiTimeframeSnapshot
         {
@@ -55,9 +60,9 @@ public sealed class GptMultiTimeframeAggregator
     {
         return
         [
-            Average(rows, 10, selector),
-            Average(rows, 30, selector),
-            Average(rows, 60, selector)
+            Average(rows, 15, selector),
+            Average(rows, 45, selector),
+            Average(rows, 120, selector)
         ];
     }
 

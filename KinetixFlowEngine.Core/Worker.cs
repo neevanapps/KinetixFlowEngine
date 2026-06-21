@@ -589,7 +589,7 @@ namespace KinetixFlowEngine.Core
                     if (DateTime.UtcNow - _lastGptReviewUtc >= TimeSpan.FromMinutes(10) && _gptMarketStateManager.Rows.Count >= 120 && _depthFeatureManager.Rows.Count >= 120)
                     {
                         var sequence = _gptSessionManager.GetNextSequence();
-                        var snapshotV2 = _snapshotV2Builder.Build(sequence, EngineVersion.Version, result);
+                        var snapshotV2 = _snapshotV2Builder.Build(sequence, EngineVersion.Version, result, _logger);
                         _gptReviewQueue.Enqueue(snapshotV2);
                         _lastGptReviewUtc = DateTime.UtcNow;
                         _logger.LogInformation("GPT Review Queued | Seq:{Seq}", sequence);
