@@ -110,6 +110,7 @@ namespace KinetixFlowEngine.Core
         private readonly GptMarketSnapshotV2Builder _snapshotV2Builder;
         private readonly IGptReviewQueue _gptReviewQueue;
         private readonly IServiceScopeFactory _scopeFactory;
+        private readonly MarketStructureEngine _marketStructureEngine;
 
         public Worker(FlowTradeBuffer flowTradeBuffer, TradeStreamClient tradeStreamClient, ILogger<Worker> logger, KinetixEngineProcessor engineProcessor, ScoreNormalizer scoreNorm, EngineBootstrapService bootstrap,
                     VelocityNormalizer velNorm, ImbalanceNormalizer imbNorm, ExhaustionNormalizer exhNorm, CompressionNormalizer cmpNorm, MarketStateManager snapshotManager, PositionManager positionManager,
@@ -121,7 +122,8 @@ namespace KinetixFlowEngine.Core
                     AdjustedScoreNormalizer adjustmentNorm, FundingRateClient fundingRateClient, FundingRateEngine fundingRateEngine, AtrNormalizer atrNormalizer, EmaStability ema, SignalStrengthEngine strengthEngine,
                     GptSnapshotBuilder gptSnapshotBuilder, GptSnapshotStore gptSnapshotStore, IGptSessionManager gptSessionManager, IGptPromptBuilder gptPromptBuilder, CompositeReviewService gptReviewService,
                     GptMarketStateManager gptMarketStateManager, GptMultiTimeframeAggregator mtfAggregator, GptMarketSnapshotV2Builder snapshotV2Builder, IGptReviewQueue gptReviewQueue, BinanceDepthStreamClient depthStreamClient,
-                    DepthFeatureEngine depthFeatureEngine, DepthMinuteAggregator depthMinuteAggregator, DepthWallTracker depthWallTracker, DepthFeatureManager depthFeatureManager, FlowImpactNormalizer flowImpactNormalizer, IServiceScopeFactory scopeFactory)
+                    DepthFeatureEngine depthFeatureEngine, DepthMinuteAggregator depthMinuteAggregator, DepthWallTracker depthWallTracker, DepthFeatureManager depthFeatureManager, FlowImpactNormalizer flowImpactNormalizer,
+                    IServiceScopeFactory scopeFactory, MarketStructureEngine marketStructureEngine)
         {
             _logger = logger;
             _bootstrap = bootstrap;
@@ -184,6 +186,7 @@ namespace KinetixFlowEngine.Core
             _depthMinuteAggregator = depthMinuteAggregator;
             _depthWallTracker = depthWallTracker;
             _depthFeatureManager = depthFeatureManager;
+            _marketStructureEngine = marketStructureEngine;
 
             _tradeStreamClient.OnTrade += trade =>
             {
@@ -586,11 +589,17 @@ namespace KinetixFlowEngine.Core
                         _lastPriceSaveUtc = DateTime.UtcNow;
                     }
 
-                    if (DateTime.UtcNow - _lastGptReviewUtc >= TimeSpan.FromMinutes(10) && _gptMarketStateManager.Rows.Count >= 120 && _depthFeatureManager.Rows.Count >= 120)
+                    if (DateTime.UtcNow - _lastGptReviewUtc >= TimeSpan.FromMinutes(10) && _gptMarketStateManager.Rows.Count >= KinetixConstants.MaxDepthCount && _depthFeatureManager.Rows.Count >= KinetixConstants.MaxDepthCount)
                     {
                         _logger.LogInformation("depth count: {DepthCount}", _depthFeatureManager.Rows.Count);
                         var sequence = _gptSessionManager.GetNextSequence();
-                        var snapshotV2 = _snapshotV2Builder.Build(sequence, EngineVersion.Version, result, _logger);
+                        using var scope = _scopeFactory.CreateScope();
+                        var priceRepository = scope.ServiceProvider.GetRequiredService<IMarketPriceRepository>();
+
+                        var prices = await priceRepository.GetRecentAsync(KinetixConstants.MaxDepthCount, stoppingToken);
+                        var structure = _marketStructureEngine.Build(prices, (decimal)result.Price, (decimal)result.VWAP);
+
+                        var snapshotV2 = _snapshotV2Builder.Build(sequence, EngineVersion.Version, result, structure);
                         _gptReviewQueue.Enqueue(snapshotV2);
                         _lastGptReviewUtc = DateTime.UtcNow;
                         _logger.LogInformation("GPT Review Queued | Seq:{Seq}", sequence);

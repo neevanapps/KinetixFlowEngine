@@ -115,6 +115,7 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<VolumeEngine>();
                 builder.Services.AddSingleton<AtrNormalizer>();
                 builder.Services.AddSingleton<EmaStability>();
+                builder.Services.AddSingleton<MarketStructureEngine>();
 
                 builder.Services.AddSingleton<FlowTradeBuffer>();
                 builder.Services.AddSingleton<FlowAggregationWindow>();

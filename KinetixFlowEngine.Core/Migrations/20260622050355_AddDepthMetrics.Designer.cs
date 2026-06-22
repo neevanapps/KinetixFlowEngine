@@ -3,6 +3,7 @@ using System;
 using KinetixFlowEngine.Core.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace KinetixFlowEngine.Core.Migrations
 {
     [DbContext(typeof(KinetixDbContext))]
-    partial class KinetixDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260622050355_AddDepthMetrics")]
+    partial class AddDepthMetrics
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -211,15 +214,6 @@ namespace KinetixFlowEngine.Core.Migrations
                     b.Property<double>("BullishPersistence60m")
                         .HasColumnType("double precision");
 
-                    b.Property<decimal>("Close10m")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("Close30m")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("Close60m")
-                        .HasColumnType("numeric");
-
                     b.Property<double>("CompressionZ10m")
                         .HasColumnType("double precision");
 
@@ -268,12 +262,6 @@ namespace KinetixFlowEngine.Core.Migrations
                     b.Property<double>("DistanceFrom60mLow")
                         .HasColumnType("double precision");
 
-                    b.Property<double>("DistanceFromVWAP")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("DistanceFromVWAPPct")
-                        .HasColumnType("double precision");
-
                     b.Property<double>("ER30_10m")
                         .HasColumnType("double precision");
 
@@ -320,15 +308,6 @@ namespace KinetixFlowEngine.Core.Migrations
                     b.Property<double>("FundingRate")
                         .HasColumnType("double precision");
 
-                    b.Property<decimal>("High10m")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("High30m")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("High60m")
-                        .HasColumnType("numeric");
-
                     b.Property<double>("ImbalanceZ10m")
                         .HasColumnType("double precision");
 
@@ -337,15 +316,6 @@ namespace KinetixFlowEngine.Core.Migrations
 
                     b.Property<double>("ImbalanceZ60m")
                         .HasColumnType("double precision");
-
-                    b.Property<decimal>("Low10m")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("Low30m")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("Low60m")
-                        .HasColumnType("numeric");
 
                     b.Property<double>("LowerWickPct10m")
                         .HasColumnType("double precision");
@@ -377,15 +347,6 @@ namespace KinetixFlowEngine.Core.Migrations
                     b.Property<double>("OIChange")
                         .HasColumnType("double precision");
 
-                    b.Property<decimal>("Open10m")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("Open30m")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("Open60m")
-                        .HasColumnType("numeric");
-
                     b.Property<double>("Persistence10m")
                         .HasColumnType("double precision");
 
@@ -396,24 +357,6 @@ namespace KinetixFlowEngine.Core.Migrations
                         .HasColumnType("double precision");
 
                     b.Property<decimal>("Price")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("RangeHigh10m")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("RangeHigh30m")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("RangeHigh60m")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("RangeLow10m")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("RangeLow30m")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("RangeLow60m")
                         .HasColumnType("numeric");
 
                     b.Property<double>("ScoreZ10m")
@@ -439,7 +382,7 @@ namespace KinetixFlowEngine.Core.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("Trend60m")
+                    b.Property<string>("Trend600m")
                         .IsRequired()
                         .HasColumnType("text");
 

@@ -1,4 +1,5 @@
-﻿using KinetixFlowEngine.Core.Gpt.Models;
+﻿using KinetixFlowEngine.Core.Data;
+using KinetixFlowEngine.Core.Gpt.Models;
 
 namespace KinetixFlowEngine.Core.Gpt.Services;
 
@@ -60,9 +61,9 @@ public sealed class GptMultiTimeframeAggregator
     {
         return
         [
-            Average(rows, 15, selector),
-            Average(rows, 45, selector),
-            Average(rows, 120, selector)
+            Average(rows, KinetixConstants.Level1, selector),
+            Average(rows, KinetixConstants.Level2, selector),
+            Average(rows, KinetixConstants.Level3, selector)
         ];
     }
 

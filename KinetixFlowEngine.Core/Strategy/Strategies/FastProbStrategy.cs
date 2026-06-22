@@ -1,96 +1,94 @@
-﻿    using KinetixFlowEngine.Core.Engine;
-    using KinetixFlowEngine.Core.Trading;
-    using System;
-    using System.Collections.Generic;
-    using System.Text;
+﻿using KinetixFlowEngine.Core.Engine;
+using KinetixFlowEngine.Core.Trading;
+using System;
+using System.Collections.Generic;
+using System.Text;
 
-    namespace KinetixFlowEngine.Core.Strategy.Strategies
+namespace KinetixFlowEngine.Core.Strategy.Strategies
+{
+    public class FastProbStrategy : IKinetixStrategy
     {
-        public class FastProbStrategy : IKinetixStrategy
+        public string Name => "FastProb";
+        private readonly StrategyConfig _config;
+        public FastProbStrategy(StrategyConfigLoader loader)
         {
-            public string Name => "FastProb";
-            private readonly StrategyConfig _config;
-            public FastProbStrategy(StrategyConfigLoader loader)
+            _config = loader.Get(Name);
+        }
+
+        public StrategySignal EvaluateEntry(KinetixEngineResult r)
+        {
+            decimal l1 = r.EmaStability.ProbFastEmaLevel1;
+            decimal l2 = r.EmaStability.ProbFastEmaLevel2;
+            decimal l3 = r.EmaStability.ProbFastEmaLevel3;
+
+            bool bullish = l1 > 0 && l2 > 0 && l3 > 0;
+            bool bearish = l1 < 0 && l2 < 0 && l3 < 0;
+
+            if (bullish)
             {
-                _config = loader.Get(Name);
+                return new StrategySignal
+                {
+                    StrategyName = Name,
+                    Direction = SignalDirection.Long,
+                    Confidence = (double)(l2 + 0.5m),
+                    EnterOnlyAtFairPrice = _config.EnterOnlyAtFairPrice,
+                    NotifyThroughTelegram = _config.NotifyThroughTelegram,
+                    IsVolumeBased = _config.VolumeBased,
+                    TargetAccountIds = _config.AccountIds
+                };
             }
 
-            public StrategySignal EvaluateEntry(KinetixEngineResult r)
+            if (bearish)
             {
-                decimal l1 = r.EmaStability.ProbFastEmaLevel1;
-                decimal l2 = r.EmaStability.ProbFastEmaLevel2;
-                decimal l3 = r.EmaStability.ProbFastEmaLevel3;
-                decimal spread = l1 - l3;
-
-                bool bullish = l1 > l2 && l2 > l3 && spread > 0.05m;
-                bool bearish = l1 < l2 && l2 < l3 && -spread > 0.05m;
-
-                if (bullish)
+                return new StrategySignal
                 {
-                    return new StrategySignal
-                    {
-                        StrategyName = Name,
-                        Direction = SignalDirection.Long,
-                        Confidence = (double)(l2 + 0.5m),
-                        EnterOnlyAtFairPrice = _config.EnterOnlyAtFairPrice,
-                        NotifyThroughTelegram = _config.NotifyThroughTelegram,
-                        IsVolumeBased = _config.VolumeBased,
-                        TargetAccountIds = _config.AccountIds
-                    };
-                }
+                    StrategyName = Name,
+                    Direction = SignalDirection.Short,
+                    Confidence = (double)(0.5m + l2),
+                    EnterOnlyAtFairPrice = _config.EnterOnlyAtFairPrice,
+                    NotifyThroughTelegram = _config.NotifyThroughTelegram,
+                    IsVolumeBased = _config.VolumeBased,
+                    TargetAccountIds = _config.AccountIds
+                };
+            }
 
+            return new StrategySignal { StrategyName = Name, Direction = SignalDirection.None };
+        }
+
+        public StrategySignal EvaluateExit(KinetixEngineResult r, ActiveTrade trade)
+        {
+            decimal l1 = r.EmaStability.ProbFastEmaLevel1;
+            decimal l2 = r.EmaStability.ProbFastEmaLevel2;
+            decimal l3 = r.EmaStability.ProbFastEmaLevel3;
+
+            bool bullish = l1 > 0 && l2 > 0 && l3 > 0;
+            bool bearish = l1 < 0 && l2 < 0 && l3 < 0;
+
+            if (trade.Direction == SignalDirection.Long)
+            {
                 if (bearish)
                 {
                     return new StrategySignal
                     {
                         StrategyName = Name,
-                        Direction = SignalDirection.Short,
-                        Confidence = (double)(0.5m + l2),
-                        EnterOnlyAtFairPrice = _config.EnterOnlyAtFairPrice,
-                        NotifyThroughTelegram = _config.NotifyThroughTelegram,
-                        IsVolumeBased = _config.VolumeBased,
-                        TargetAccountIds = _config.AccountIds
+                        ExitSignal = true
                     };
                 }
-
-                return new StrategySignal { StrategyName = Name, Direction = SignalDirection.None };
             }
 
-            public StrategySignal EvaluateExit(KinetixEngineResult r, ActiveTrade trade)
+            if (trade.Direction == SignalDirection.Short)
             {
-                decimal l1 = r.EmaStability.ProbFastEmaLevel1;
-                decimal l2 = r.EmaStability.ProbFastEmaLevel2;
-                decimal l3 = r.EmaStability.ProbFastEmaLevel3;
-                decimal spread = l1 - l3;
-
-                bool bullish = l1 > l2 && l2 > l3 && spread > 0.05m;
-                bool bearish = l1 < l2 && l2 < l3 && -spread > 0.05m;
-
-                if (trade.Direction == SignalDirection.Long)
+                if (bullish)
                 {
-                    if (bearish)
+                    return new StrategySignal
                     {
-                        return new StrategySignal
-                        {
-                            StrategyName = Name,
-                            ExitSignal = true
-                        };
-                    }
+                        StrategyName = Name,
+                        ExitSignal = true
+                    };
                 }
-
-                if (trade.Direction == SignalDirection.Short)
-                {
-                    if (bullish)
-                    {
-                        return new StrategySignal
-                        {
-                            StrategyName = Name,
-                            ExitSignal = true
-                        };
-                    }
-                }
-
-                return new StrategySignal { ExitSignal = false };
             }
+
+            return new StrategySignal { ExitSignal = false };
         }
     }
+}

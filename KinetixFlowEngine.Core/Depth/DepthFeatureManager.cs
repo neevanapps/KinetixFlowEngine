@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using KinetixFlowEngine.Core.Data;
+using System.Text.Json;
 
 namespace KinetixFlowEngine.Core.Depth;
 
@@ -46,7 +47,7 @@ public sealed class DepthFeatureManager
     {
         Rows.Add(row);
 
-        while (Rows.Count > 120)
+        while (Rows.Count > KinetixConstants.MaxDepthCount)
         {
             Rows.RemoveAt(0);
         }

@@ -1,12 +1,11 @@
-﻿using System.Collections.Generic;
+﻿using KinetixFlowEngine.Core.Data;
+using System.Collections.Generic;
 
 namespace KinetixFlowEngine.Core.Depth;
 
 public sealed class DepthMinuteAggregator
 {
     private readonly Queue<DepthSecondFeature> _samples = new();
-
-    private const int MaxSamples = 120;
 
     public int Count => _samples.Count;
 
@@ -15,7 +14,7 @@ public sealed class DepthMinuteAggregator
     {
         _samples.Enqueue(feature);
 
-        while (_samples.Count > MaxSamples)
+        while (_samples.Count > KinetixConstants.MaxDepthCount)
         {
             _samples.Dequeue();
         }
@@ -23,7 +22,7 @@ public sealed class DepthMinuteAggregator
 
     public bool IsReady()
     {
-        return _samples.Count >= MaxSamples;
+        return _samples.Count >= KinetixConstants.MaxDepthCount;
     }
 
     public DepthMinuteSummary Build()

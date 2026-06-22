@@ -118,6 +118,77 @@ namespace KinetixFlowEngine.Core.Database
         public double AskWallQty30m { get; set; }
         public double AskWallQty60m { get; set; }
 
+
+        // -----------------------------
+        //Price structure
+        // -----------------------------
+
+        public string Trend10m { get; set; } = "";
+        public string Trend30m { get; set; } = "";
+        public string Trend60m { get; set; } = "";
+
+        public double DistanceFrom10mHigh { get; set; }
+        public double DistanceFrom10mLow { get; set; }
+
+        public double DistanceFrom30mHigh { get; set; }
+        public double DistanceFrom30mLow { get; set; }
+
+        public double DistanceFrom60mHigh { get; set; }
+        public double DistanceFrom60mLow { get; set; }
+
+        public double BodyPct10m { get; set; }
+        public double UpperWickPct10m { get; set; }
+        public double LowerWickPct10m { get; set; }
+
+        public double BodyPct30m { get; set; }
+        public double UpperWickPct30m { get; set; }
+        public double LowerWickPct30m { get; set; }
+
+        public double BodyPct60m { get; set; }
+        public double UpperWickPct60m { get; set; }
+        public double LowerWickPct60m { get; set; }
+
+
+        public double BullishPersistence10m { get; set; }
+        public double BullishPersistence30m { get; set; }
+        public double BullishPersistence60m { get; set; }
+
+        public double BidConsumption10m { get; set; }
+        public double BidConsumption30m { get; set; }
+        public double BidConsumption60m { get; set; }
+
+        public double AskConsumption10m { get; set; }
+        public double AskConsumption30m { get; set; }
+        public double AskConsumption60m { get; set; }
+
+        public double DistanceFromVWAP { get; set; }
+
+        public double DistanceFromVWAPPct { get; set; }
+
+        public decimal Open10m { get; set; }
+        public decimal High10m { get; set; }
+        public decimal Low10m { get; set; }
+        public decimal Close10m { get; set; }
+
+        public decimal Open30m { get; set; }
+        public decimal High30m { get; set; }
+        public decimal Low30m { get; set; }
+        public decimal Close30m { get; set; }
+
+        public decimal Open60m { get; set; }
+        public decimal High60m { get; set; }
+        public decimal Low60m { get; set; }
+        public decimal Close60m { get; set; }
+
+        public decimal RangeHigh10m { get; set; }
+        public decimal RangeLow10m { get; set; }
+
+        public decimal RangeHigh30m { get; set; }
+        public decimal RangeLow30m { get; set; }
+
+        public decimal RangeHigh60m { get; set; }
+        public decimal RangeLow60m { get; set; }
+
         public ICollection<ModelReviewEntity> Reviews { get; set; }
             = new List<ModelReviewEntity>();
     }

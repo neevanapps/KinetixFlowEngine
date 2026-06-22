@@ -13,4 +13,10 @@ public sealed class GptDepthSnapshot
     public double[] BidWallQty { get; init; } = [];
 
     public double[] AskWallQty { get; init; } = [];
+
+    public double[] BullishPersistence { get; init; } = [];
+
+    public double[] BidConsumption { get; init; } = [];
+
+    public double[] AskConsumption { get; init; } = [];
 }

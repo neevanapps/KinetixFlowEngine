@@ -1,12 +1,11 @@
 ﻿using System.Text.Json;
+using KinetixFlowEngine.Core.Data;
 using KinetixFlowEngine.Core.Gpt.Models;
 
 namespace KinetixFlowEngine.Core.Gpt.Services;
 
 public sealed class GptMarketStateManager
 {
-    private const int MaxRows = 120;
-
     private readonly string _filePath;
 
     private readonly List<GptMarketStateRow> _rows = [];
@@ -41,7 +40,7 @@ public sealed class GptMarketStateManager
     {
         _rows.Add(row);
 
-        while (_rows.Count > MaxRows)
+        while (_rows.Count > KinetixConstants.MaxDepthCount)
         {
             _rows.RemoveAt(0);
         }
@@ -79,8 +78,7 @@ public sealed class GptMarketStateManager
             {
                 _rows.Clear();
 
-                _rows.AddRange(
-                    rows.TakeLast(MaxRows));
+                _rows.AddRange(rows.TakeLast(KinetixConstants.MaxDepthCount));
             }
         }
         catch

@@ -200,7 +200,9 @@ namespace KinetixFlowEngine.Core.Gpt.Services
                 BehaviorEvidence = a.BehaviorEvidence,
                 Summary = a.Summary,
                 KeyDrivers = a.KeyDrivers,
-                Contradictions = a.Contradictions
+                Contradictions = a.Contradictions,
+                Tradeability = a.Tradeability,
+                RecommendedAction = a.RecommendedAction,
             };
         }
     }

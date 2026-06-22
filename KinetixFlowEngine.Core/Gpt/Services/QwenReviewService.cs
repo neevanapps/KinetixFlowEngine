@@ -202,6 +202,7 @@ namespace KinetixFlowEngine.Core.Gpt.Services
                 KeyDrivers = a.KeyDrivers,
                 Contradictions = a.Contradictions,
                 RecommendedAction = a.RecommendedAction,
+                Tradeability = a.Tradeability
             };
         }
     }
