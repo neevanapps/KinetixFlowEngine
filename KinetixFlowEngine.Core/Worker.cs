@@ -588,6 +588,7 @@ namespace KinetixFlowEngine.Core
 
                     if (DateTime.UtcNow - _lastGptReviewUtc >= TimeSpan.FromMinutes(10) && _gptMarketStateManager.Rows.Count >= 120 && _depthFeatureManager.Rows.Count >= 120)
                     {
+                        _logger.LogInformation("depth count: {DepthCount}", _depthFeatureManager.Rows.Count);
                         var sequence = _gptSessionManager.GetNextSequence();
                         var snapshotV2 = _snapshotV2Builder.Build(sequence, EngineVersion.Version, result, _logger);
                         _gptReviewQueue.Enqueue(snapshotV2);
@@ -623,7 +624,7 @@ namespace KinetixFlowEngine.Core
 
                         if (exitSignal?.ExitSignal == true)
                         {
-                            _positionManager.CloseTrade(trade.StrategyName, trade.AccountId, (decimal)price, "SignalFlip");
+                            await _positionManager.CloseTrade(trade.StrategyName, trade.AccountId, (decimal)price, "SignalFlip");
                             if (trade.NotifyThroughTelegram)
                             {
                                 var exitPrice = (decimal)price;
@@ -687,7 +688,7 @@ namespace KinetixFlowEngine.Core
                             }
                         }
                     }
-                    _positionManager.Update((decimal)price);
+                    await _positionManager.Update((decimal)price);
                     _equityEngine.UpdateAll((decimal)price);
                 }
 

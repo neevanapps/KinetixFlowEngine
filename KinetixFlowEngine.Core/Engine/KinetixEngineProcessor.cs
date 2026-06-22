@@ -147,7 +147,7 @@ namespace KinetixFlowEngine.Core.Engine
             double er5 = _lastEr5;
             double er30 = _lastEr30;
 
-            var impact = _flowImpactEngine.Calculate(price, _previousPrice, window, atr);            
+            var impact = _flowImpactEngine.Calculate(price, _previousPrice, window, atr);
             _previousPrice = price;
 
             var oiChange = _oiEngine.Update(openInterest);
@@ -197,7 +197,7 @@ namespace KinetixFlowEngine.Core.Engine
             // OPTIONAL: keep scoreZ only for logging (DO NOT USE IN LOGIC)
             var scoreZ = _scoreNorm.Update(finalScore, alpha);
 
-            var scoreTrend = _scoreEngine.Update((decimal)finalScore, velZ, er5, atrNorm, highPersistence, volumeExpansion);
+            var scoreTrend = _scoreEngine.Update((decimal)scoreZ, velZ, er5, atrNorm, highPersistence, volumeExpansion);
             var flowState = _flowStateEngine.Detect(finalScore, velZ, imbZ, cmpZ, exhZ, features.Persistence, scoreTrend);
 
             var probability = _flowProbabilityEngine.Calculate(finalScore, velZ, features.Persistence, _scoreEngine.Fast, _scoreEngine.Medium, _scoreEngine.Slow,

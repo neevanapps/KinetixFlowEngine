@@ -26,7 +26,7 @@ public sealed class GptMarketSnapshotV2Builder
 
     {
         var mtf = _aggregator.Build();
-        var depthMtf = new DepthMtfAggregator(_depthFeatureManager.Rows).Build(logger);
+        var depthMtf = new DepthMtfAggregator(_depthFeatureManager.Rows).Build();
 
         return new GptMarketSnapshotV2
         {

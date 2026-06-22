@@ -156,6 +156,10 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<IKinetixStrategy, MediumScorePrice>();
                 builder.Services.AddSingleton<IKinetixStrategy, SlowScorePrice>();
                 builder.Services.AddSingleton<IKinetixStrategy, SlowScoreStrengthStrategy>();
+                builder.Services.AddSingleton<IKinetixStrategy, LlmConsensusStrategy>();
+                builder.Services.AddSingleton<IKinetixStrategy, QwenStrategy>();
+                builder.Services.AddSingleton<IKinetixStrategy, MistralStrategy>();
+
                 builder.Services.AddSingleton<StrategyEngine>();
                 builder.Services.AddSingleton<StrategyAggregator>();
                 builder.Services.AddSingleton<TradePersistence>();
@@ -191,6 +195,7 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<GptReviewQueue>();
                 builder.Services.AddSingleton<IGptReviewQueue>(sp => sp.GetRequiredService<GptReviewQueue>());
                 builder.Services.AddHostedService<GptReviewBackgroundService>();
+                builder.Services.AddSingleton<LlmReviewMemory>();
                 // Configure Windows Service lifetime using options because 'Host' is not available on HostApplicationBuilder.
                 builder.Services.AddWindowsService(options =>
                 {

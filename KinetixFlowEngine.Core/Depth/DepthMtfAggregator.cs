@@ -12,9 +12,9 @@ public sealed class DepthMtfAggregator
         _rows = rows;
     }
 
-    public DepthMtfSnapshot Build(ILogger? logger = null)
+    public DepthMtfSnapshot Build()
     {
-        logger.LogInformation("Building DepthMtfSnapshot with {RowCount} rows", _rows.Count);
+        //_logger.LogInformation("Building DepthMtfSnapshot with {RowCount} rows", _rows.Count);
         return new DepthMtfSnapshot
         {
             Imbalance =

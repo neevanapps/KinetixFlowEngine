@@ -16,19 +16,22 @@ public sealed class GptReviewBackgroundService
     private readonly INotificationService _notificationService;
     private readonly ILogger<GptReviewBackgroundService> _logger;
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly LlmReviewMemory _llmReviewMemory;
 
     public GptReviewBackgroundService(
         GptReviewQueue queue,
         CompositeReviewService reviewService,
         INotificationService notificationService,
         ILogger<GptReviewBackgroundService> logger,
-        IServiceScopeFactory scopeFactory)
+        IServiceScopeFactory scopeFactory,
+        LlmReviewMemory llmReviewMemory)
     {
         _queue = queue;
         _reviewService = reviewService;
         _notificationService = notificationService;
         _logger = logger;
         _scopeFactory = scopeFactory;
+        _llmReviewMemory = llmReviewMemory;
     }
 
     protected override async Task ExecuteAsync(
@@ -55,6 +58,11 @@ public sealed class GptReviewBackgroundService
                         snapshot,
                         stoppingToken);
                 stopwatch.Stop();
+
+                foreach (var review in reviews)
+                {
+                    _llmReviewMemory.Update(review);
+                }
 
                 foreach (var review in reviews)
                 {
