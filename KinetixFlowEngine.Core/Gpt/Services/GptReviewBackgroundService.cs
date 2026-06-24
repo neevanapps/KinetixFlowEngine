@@ -61,6 +61,8 @@ public sealed class GptReviewBackgroundService
 
                 foreach (var review in reviews)
                 {
+                    if (review == null)
+                        continue;
                     _llmReviewMemory.Update(review);
                 }
 

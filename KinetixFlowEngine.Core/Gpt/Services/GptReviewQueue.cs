@@ -5,7 +5,7 @@ namespace KinetixFlowEngine.Core.Gpt.Services;
 
 public interface IGptReviewQueue
 {
-    void Enqueue(GptMarketSnapshotV2 snapshot);
+    Task EnqueueAsync(GptMarketSnapshotV2 snapshot);
 }
 
 public sealed class GptReviewQueue : IGptReviewQueue
@@ -13,10 +13,10 @@ public sealed class GptReviewQueue : IGptReviewQueue
     private readonly Channel<GptMarketSnapshotV2> _channel =
         Channel.CreateUnbounded<GptMarketSnapshotV2>();
 
-    public void Enqueue(
+    public async Task EnqueueAsync(
         GptMarketSnapshotV2 snapshot)
     {
-        _channel.Writer.TryWrite(snapshot);
+        await _channel.Writer.WriteAsync(snapshot);
     }
 
     public ChannelReader<GptMarketSnapshotV2> Reader

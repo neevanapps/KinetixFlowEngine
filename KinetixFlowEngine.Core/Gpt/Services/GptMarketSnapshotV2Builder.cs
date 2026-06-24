@@ -1,7 +1,9 @@
-﻿using KinetixFlowEngine.Core.Depth;
+﻿using KinetixFlowEngine.Core.Database.Repositories;
+using KinetixFlowEngine.Core.Depth;
 using KinetixFlowEngine.Core.Engine;
 using KinetixFlowEngine.Core.Gpt.Models;
 using Serilog.Core;
+using System.Text;
 
 namespace KinetixFlowEngine.Core.Gpt.Services;
 
@@ -9,25 +11,21 @@ public sealed class GptMarketSnapshotV2Builder
 {
     private readonly GptMultiTimeframeAggregator _aggregator;
     private readonly DepthFeatureManager _depthFeatureManager;
+    private readonly ISnapshotRepository _snapshotRepository;
 
-
-    public GptMarketSnapshotV2Builder(
-        GptMultiTimeframeAggregator aggregator,
-    DepthFeatureManager depthFeatureManager)
+    public GptMarketSnapshotV2Builder(GptMultiTimeframeAggregator aggregator, DepthFeatureManager depthFeatureManager, ISnapshotRepository snapshotRepository)
     {
         _aggregator = aggregator;
         _depthFeatureManager = depthFeatureManager;
+        _snapshotRepository = snapshotRepository;
     }
 
-    public GptMarketSnapshotV2 Build(
-    int sequence,
-    string engineVersion,
-    KinetixEngineResult result,
-    MarketStructureSnapshot structure)
-
+    public async Task<GptMarketSnapshotV2> Build(int sequence, string engineVersion, KinetixEngineResult result, MarketStructureSnapshot structure)
     {
         var mtf = _aggregator.Build();
         var depthMtf = new DepthMtfAggregator(_depthFeatureManager.Rows).Build();
+        var snapshots = await _snapshotRepository.GetRecentSnapshotsAsync(3);
+        var history = snapshots.OrderBy(x => x.Sequence).Select(HistoricalSnapshotMapper.Map).ToList();
 
         return new GptMarketSnapshotV2
         {
@@ -84,57 +82,78 @@ public sealed class GptMarketSnapshotV2Builder
                 BullishPersistence = depthMtf.BullishPersistence,
                 AskConsumption = depthMtf.AskConsumption
             },
-            Trend10m = structure.Trend10m,
-            Trend30m = structure.Trend30m,
-            Trend60m = structure.Trend60m,
+            TrendLevel1 = structure.Trend10m,
+            TrendLevel2 = structure.Trend30m,
+            TrendLevel3 = structure.Trend60m,
 
-            DistanceFrom10mHigh = structure.DistanceFrom10mHigh,
-            DistanceFrom10mLow = structure.DistanceFrom10mLow,
+            DistanceFromLevel1High = structure.DistanceFrom10mHigh,
+            DistanceFromLevel1Low = structure.DistanceFrom10mLow,
 
-            DistanceFrom30mHigh = structure.DistanceFrom30mHigh,
-            DistanceFrom30mLow = structure.DistanceFrom30mLow,
+            DistanceFromLevel2High = structure.DistanceFrom30mHigh,
+            DistanceFromLevel2Low = structure.DistanceFrom30mLow,
 
-            DistanceFrom60mHigh = structure.DistanceFrom60mHigh,
-            DistanceFrom60mLow = structure.DistanceFrom60mLow,
+            DistanceFromLevel3High = structure.DistanceFrom60mHigh,
+            DistanceFromLevel3Low = structure.DistanceFrom60mLow,
 
             DistanceFromVWAP = structure.DistanceFromVWAP,
             DistanceFromVWAPPct = structure.DistanceFromVWAPPct,
 
-            Open10m = structure.Candle10m.Open,
-            High10m = structure.Candle10m.High,
-            Low10m = structure.Candle10m.Low,
-            Close10m = structure.Candle10m.Close,
+            BodyPctLevel1 = structure.Candle10m.BodyPct,
+            UpperWickPctLevel1 = structure.Candle10m.UpperWickPct,
+            LowerWickPctLevel1 = structure.Candle10m.LowerWickPct,
 
-            Open30m = structure.Candle30m.Open,
-            High30m = structure.Candle30m.High,
-            Low30m = structure.Candle30m.Low,
-            Close30m = structure.Candle30m.Close,
+            BodyPctLevel2 = structure.Candle30m.BodyPct,
+            UpperWickPctLevel2 = structure.Candle30m.UpperWickPct,
+            LowerWickPctLevel2 = structure.Candle30m.LowerWickPct,
 
-            Open60m = structure.Candle60m.Open,
-            High60m = structure.Candle60m.High,
-            Low60m = structure.Candle60m.Low,
-            Close60m = structure.Candle60m.Close,
+            BodyPctLevel3 = structure.Candle60m.BodyPct,
+            UpperWickPctLevel3 = structure.Candle60m.UpperWickPct,
+            LowerWickPctLevel3 = structure.Candle60m.LowerWickPct,
 
-            BodyPct10m = structure.Candle10m.BodyPct,
-            UpperWickPct10m = structure.Candle10m.UpperWickPct,
-            LowerWickPct10m = structure.Candle10m.LowerWickPct,
-
-            BodyPct30m = structure.Candle30m.BodyPct,
-            UpperWickPct30m = structure.Candle30m.UpperWickPct,
-            LowerWickPct30m = structure.Candle30m.LowerWickPct,
-
-            BodyPct60m = structure.Candle60m.BodyPct,
-            UpperWickPct60m = structure.Candle60m.UpperWickPct,
-            LowerWickPct60m = structure.Candle60m.LowerWickPct,
-
-            RangeHigh10m = structure.RangeHigh10m,
-            RangeLow10m = structure.RangeLow10m,
-
-            RangeHigh30m = structure.RangeHigh30m,
-            RangeLow30m = structure.RangeLow30m,
-
-            RangeHigh60m = structure.RangeHigh60m,
-            RangeLow60m = structure.RangeLow60m,
+            HistorySummary = HistorySummaryGenerator.Generate(history)
         };
+    }
+
+    public static class HistorySummaryGenerator
+    {
+        public static string Generate(List<HistoricalSnapshotSummary> history)
+        {
+            if (history == null || history.Count == 0)
+                return "No recent history available.";
+
+            var sb = new StringBuilder();
+            sb.AppendLine("Recent History Summary (Last 3 Snapshots):");
+
+            for (int i = 0; i < history.Count; i++)
+            {
+                var current = history[i];
+                var previous = i > 0 ? history[i - 1] : null;
+
+                sb.AppendLine($"- Seq {current.Sequence}: Price = {current.Price}");
+
+                if (previous != null)
+                {
+                    sb.AppendLine($"  → Price moved from {previous.Price} to {current.Price}");
+
+                    // Trend changes
+                    if (previous.TrendLevel1 != current.TrendLevel1)
+                        sb.AppendLine($"  → Level1 trend changed from {previous.TrendLevel1} to {current.TrendLevel1}");
+
+                    if (previous.TrendLevel2 != current.TrendLevel2)
+                        sb.AppendLine($"  → Level2 trend changed from {previous.TrendLevel2} to {current.TrendLevel2}");
+
+                    // ScoreZ trend
+                    sb.AppendLine($"  → ScoreZ: L1={current.ScoreZLevel1:F3}, L2={current.ScoreZLevel2:F3}, L3={current.ScoreZLevel3:F3}");
+
+                    // Momentum trend
+                    sb.AppendLine($"  → Momentum: L1={current.MomentumLevel1:F4}, L2={current.MomentumLevel2:F4}");
+
+                    // Persistence trend (highlight Level2 as it's important)
+                    sb.AppendLine($"  → Persistence L2: {current.PersistenceLevel2:F2}");
+                }
+            }
+
+            return sb.ToString().TrimEnd();
+        }
     }
 }

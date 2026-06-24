@@ -109,57 +109,33 @@ namespace KinetixFlowEngine.Core.Database.Mappers
                 AskConsumption30m = s.Depth.AskConsumption[1],
                 AskConsumption60m = s.Depth.AskConsumption[2],
 
-                Trend10m = s.Trend10m,
-                Trend30m = s.Trend30m,
-                Trend60m = s.Trend60m,
+                Trend10m = s.TrendLevel1,
+                Trend30m = s.TrendLevel2,
+                Trend60m = s.TrendLevel3,
 
-                DistanceFrom10mHigh = s.DistanceFrom10mHigh,
-                DistanceFrom10mLow = s.DistanceFrom10mLow,
+                DistanceFrom10mHigh = s.DistanceFromLevel1High,
+                DistanceFrom10mLow = s.DistanceFromLevel1Low,
 
-                DistanceFrom30mHigh = s.DistanceFrom30mHigh,
-                DistanceFrom30mLow = s.DistanceFrom30mLow,
+                DistanceFrom30mHigh = s.DistanceFromLevel2High,
+                DistanceFrom30mLow = s.DistanceFromLevel2Low,
 
-                DistanceFrom60mHigh = s.DistanceFrom60mHigh,
-                DistanceFrom60mLow = s.DistanceFrom60mLow,
+                DistanceFrom60mHigh = s.DistanceFromLevel3High,
+                DistanceFrom60mLow = s.DistanceFromLevel3Low,
 
                 DistanceFromVWAP = s.DistanceFromVWAP,
                 DistanceFromVWAPPct = s.DistanceFromVWAPPct,
 
-                Open10m = s.Open10m,
-                High10m = s.High10m,
-                Low10m = s.Low10m,
-                Close10m = s.Close10m,
+                BodyPct10m = s.BodyPctLevel1,
+                UpperWickPct10m = s.UpperWickPctLevel1,
+                LowerWickPct10m = s.LowerWickPctLevel1,
 
-                Open30m = s.Open30m,
-                High30m = s.High30m,
-                Low30m = s.Low30m,
-                Close30m = s.Close30m,
+                BodyPct30m = s.BodyPctLevel2,
+                UpperWickPct30m = s.UpperWickPctLevel2,
+                LowerWickPct30m = s.LowerWickPctLevel2,
 
-                Open60m = s.Open60m,
-                High60m = s.High60m,
-                Low60m = s.Low60m,
-                Close60m = s.Close60m,
-
-                BodyPct10m = s.BodyPct10m,
-                UpperWickPct10m = s.UpperWickPct10m,
-                LowerWickPct10m = s.LowerWickPct10m,
-
-                BodyPct30m = s.BodyPct30m,
-                UpperWickPct30m = s.UpperWickPct30m,
-                LowerWickPct30m = s.LowerWickPct30m,
-
-                BodyPct60m = s.BodyPct60m,
-                UpperWickPct60m = s.UpperWickPct60m,
-                LowerWickPct60m = s.LowerWickPct60m,
-
-                RangeHigh10m = s.RangeHigh10m,
-                RangeLow10m = s.RangeLow10m,
-
-                RangeHigh30m = s.RangeHigh30m,
-                RangeLow30m = s.RangeLow30m,
-
-                RangeHigh60m = s.RangeHigh60m,
-                RangeLow60m = s.RangeLow60m,
+                BodyPct60m = s.BodyPctLevel3,
+                UpperWickPct60m = s.UpperWickPctLevel3,
+                LowerWickPct60m = s.LowerWickPctLevel3
 
             };
         }

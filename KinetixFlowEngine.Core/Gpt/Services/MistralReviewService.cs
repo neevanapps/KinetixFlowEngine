@@ -15,7 +15,7 @@ using System.Threading.Tasks;
 
 namespace KinetixFlowEngine.Core.Gpt.Services
 {
-    public sealed class MistralReviewService : IModelReviewer
+    public sealed class MistralReviewService : ILocalModelReviewer
     {
         private readonly IGptReviewStore _reviewStore;
         private readonly IGptPromptBuilder _promptBuilder;
@@ -30,10 +30,7 @@ namespace KinetixFlowEngine.Core.Gpt.Services
             Converters = { new JsonStringEnumConverter() }
         };
 
-        public MistralReviewService(
-            IGptReviewStore reviewStore,
-            IGptPromptBuilder promptBuilder,
-            ILogger<MistralReviewService> logger)
+        public MistralReviewService(IGptReviewStore reviewStore, IGptPromptBuilder promptBuilder, ILogger<MistralReviewService> logger)
         {
             _reviewStore = reviewStore;
             _promptBuilder = promptBuilder;
@@ -45,32 +42,25 @@ namespace KinetixFlowEngine.Core.Gpt.Services
             };
         }
 
-        public async Task<GptReviewRecord> ReviewAsync(
-    GptMarketSnapshotV2 snapshot,
-    CancellationToken ct = default)
+        public async Task<GptReviewRecord> ReviewAsync(GptMarketSnapshotV2 snapshot, CancellationToken ct = default)
         {
             var stopwatch = Stopwatch.StartNew();
 
             var systemPrompt = _promptBuilder.BuildSystemPrompt();
             var userContent = _promptBuilder.BuildReviewPrompt(snapshot);
 
-            _logger.LogInformation(
-               "Reviewing system prompt: {Prompt}",
-               systemPrompt);
+            _logger.LogInformation("Reviewing system prompt: {Prompt}", systemPrompt);
 
-            _logger.LogInformation(
-                "Reviewing snapshot {Sequence} with prompt: {Prompt}",
-                snapshot.Sequence,
-                userContent);
+            _logger.LogInformation("Reviewing snapshot {Sequence} with prompt: {Prompt}", snapshot.Sequence, userContent);
 
             var chatRequest = new ChatRequest
             {
                 Model = _ollamaClient.SelectedModel,
                 Messages = new List<Message>
-        {
-            new Message { Role = ChatRole.System, Content = systemPrompt },
-            new Message { Role = ChatRole.User, Content = userContent }
-        },
+                {
+                    new Message { Role = ChatRole.System, Content = systemPrompt },
+                    new Message { Role = ChatRole.User, Content = userContent }
+                },
                 Stream = true,
                 Format = "json",                    // ← Strongly recommended for Qwen3
                 Think = false,
@@ -104,9 +94,7 @@ namespace KinetixFlowEngine.Core.Gpt.Services
 
             stopwatch.Stop();
 
-            _logger?.LogInformation("LLM Inference Time | Seq:{Seq} | {Time}ms",
-                snapshot.Sequence, stopwatch.ElapsedMilliseconds);
-
+            _logger?.LogInformation("LLM Inference Time | Seq:{Seq} | {Time}ms", snapshot.Sequence, stopwatch.ElapsedMilliseconds);
             _logger?.LogInformation("Raw LLM Response | Seq:{Seq} | {Response}", snapshot.Sequence, rawResponse);
 
             if (string.IsNullOrWhiteSpace(rawResponse))

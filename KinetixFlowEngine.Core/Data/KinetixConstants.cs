@@ -6,9 +6,9 @@ namespace KinetixFlowEngine.Core.Data
 {
     public static class KinetixConstants
     {
-        public static int Level1 = 15;
-        public static int Level2 = 45;
-        public static int Level3 = 120;
+        public static int Level1 = 10;
+        public static int Level2 = 30;
+        public static int Level3 = 60;
 
         public static int MaxDepthCount = 120;
     }

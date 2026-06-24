@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using Microsoft.EntityFrameworkCore;
 
 namespace KinetixFlowEngine.Core.Database.Repositories
 {
@@ -9,6 +7,10 @@ namespace KinetixFlowEngine.Core.Database.Repositories
         Task<long> SaveSnapshotAsync(
             MarketSnapshotEntity snapshot,
             CancellationToken ct = default);
+
+        Task<List<MarketSnapshotEntity>> GetRecentSnapshotsAsync(
+       int count,
+       CancellationToken ct = default);
     }
 
     public sealed class SnapshotRepository
@@ -30,6 +32,14 @@ namespace KinetixFlowEngine.Core.Database.Repositories
             await _db.SaveChangesAsync(ct);
 
             return snapshot.Id;
+        }
+
+        public async Task<List<MarketSnapshotEntity>> GetRecentSnapshotsAsync(int count, CancellationToken ct = default)
+        {
+            return await _db.MarketSnapshots
+                .OrderByDescending(x => x.Id)
+                .Take(count)
+                .ToListAsync(ct);
         }
     }
 }

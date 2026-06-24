@@ -13,4 +13,15 @@ namespace KinetixFlowEngine.Core.Gpt.Services
             GptMarketSnapshotV2 snapshot,
             CancellationToken ct = default);
     }
+
+    public interface ILocalModelReviewer
+    : IModelReviewer
+    {
+    }
+
+
+    public interface ICloudModelReviewer
+        : IModelReviewer
+    {
+    }
 }

@@ -15,7 +15,7 @@ using System.Threading.Tasks;
 
 namespace KinetixFlowEngine.Core.Gpt.Services
 {
-    public sealed class QwenReviewService : IModelReviewer
+    public sealed class QwenReviewService : ILocalModelReviewer
     {
         private readonly IGptReviewStore _reviewStore;
         private readonly IGptPromptBuilder _promptBuilder;

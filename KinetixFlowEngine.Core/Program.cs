@@ -66,6 +66,7 @@ namespace KinetixFlowEngine.Core
                 builder.Services.Configure<NormalizationOptions>(builder.Configuration.GetSection("Normalization"));
                 builder.Services.Configure<PropAccountsOptions>(builder.Configuration.GetSection("PropAccounts"));
                 builder.Services.Configure<GptSettings>(builder.Configuration.GetSection("OpenAI"));
+                builder.Services.Configure<CloudAiSettings>(builder.Configuration.GetSection("CloudAI"));
                 builder.Services.AddDbContextFactory<KinetixDbContext>(options =>
                 {
                     options.UseNpgsql(builder.Configuration.GetConnectionString("KinetixDb"));
@@ -147,19 +148,21 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<FlowStateEngine>();
                 builder.Services.AddSingleton<KinetixEngineProcessor>();
                 builder.Services.AddSingleton<ProbabilityTrendEngine>();
-                builder.Services.AddSingleton<IKinetixStrategy, FastScoreStrategy>();
-                builder.Services.AddSingleton<IKinetixStrategy, MediumScoreStrategy>();
-                builder.Services.AddSingleton<IKinetixStrategy, SlowScoreStrategy>();
-                builder.Services.AddSingleton<IKinetixStrategy, FastProbStrategy>();
-                builder.Services.AddSingleton<IKinetixStrategy, MediumProbStrategy>();
-                builder.Services.AddSingleton<IKinetixStrategy, SlowProbStrategy>();
-                builder.Services.AddSingleton<IKinetixStrategy, FastScorePrice>();
-                builder.Services.AddSingleton<IKinetixStrategy, MediumScorePrice>();
-                builder.Services.AddSingleton<IKinetixStrategy, SlowScorePrice>();
-                builder.Services.AddSingleton<IKinetixStrategy, SlowScoreStrengthStrategy>();
-                builder.Services.AddSingleton<IKinetixStrategy, LlmConsensusStrategy>();
+                //builder.Services.AddSingleton<IKinetixStrategy, FastScoreStrategy>();
+                //builder.Services.AddSingleton<IKinetixStrategy, MediumScoreStrategy>();
+                //builder.Services.AddSingleton<IKinetixStrategy, SlowScoreStrategy>();
+                //builder.Services.AddSingleton<IKinetixStrategy, FastProbStrategy>();
+                //builder.Services.AddSingleton<IKinetixStrategy, MediumProbStrategy>();
+                //builder.Services.AddSingleton<IKinetixStrategy, SlowProbStrategy>();
+                //builder.Services.AddSingleton<IKinetixStrategy, FastScorePrice>();
+                //builder.Services.AddSingleton<IKinetixStrategy, MediumScorePrice>();
+                //builder.Services.AddSingleton<IKinetixStrategy, SlowScorePrice>();
+                //builder.Services.AddSingleton<IKinetixStrategy, SlowScoreStrengthStrategy>();
+                //builder.Services.AddSingleton<IKinetixStrategy, LlmConsensusStrategy>();
                 builder.Services.AddSingleton<IKinetixStrategy, QwenStrategy>();
                 builder.Services.AddSingleton<IKinetixStrategy, MistralStrategy>();
+                builder.Services.AddSingleton<IKinetixStrategy, GptOssStrategy>();
+                builder.Services.AddSingleton<IKinetixStrategy, GlmStrategy>();
 
                 builder.Services.AddSingleton<StrategyEngine>();
                 builder.Services.AddSingleton<StrategyAggregator>();
@@ -190,8 +193,13 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<IGptPromptBuilder, GptPromptBuilder>();
                 builder.Services.AddSingleton<GptMarketSnapshotV2Builder>();
                 builder.Services.AddSingleton<IGptReviewStore, GptReviewStore>();
-                builder.Services.AddSingleton<IModelReviewer, QwenReviewService>();
-                builder.Services.AddSingleton<IModelReviewer, MistralReviewService>();
+                builder.Services.AddSingleton<ILocalModelReviewer, QwenReviewService>();
+                builder.Services.AddSingleton<ILocalModelReviewer, MistralReviewService>();
+                builder.Services.AddSingleton<ICloudModelReviewer, GptOssReviewService>();
+                builder.Services.AddSingleton<ICloudModelReviewer, GlmResvireService>();
+                //builder.Services.AddSingleton<ICloudModelReviewer, DeepSeekReviewService>();
+                //builder.Services.AddSingleton<ICloudModelReviewer, NemotronReviewService>();
+
                 builder.Services.AddSingleton<CompositeReviewService>();
                 builder.Services.AddSingleton<GptReviewQueue>();
                 builder.Services.AddSingleton<IGptReviewQueue>(sp => sp.GetRequiredService<GptReviewQueue>());
