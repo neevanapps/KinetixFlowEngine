@@ -599,7 +599,11 @@ namespace KinetixFlowEngine.Core
                         var prices = await priceRepository.GetRecentAsync(KinetixConstants.MaxDepthCount, stoppingToken);
                         var structure = _marketStructureEngine.Build(prices, (decimal)result.Price, (decimal)result.VWAP);
 
-                        var snapshotV2 = await _snapshotV2Builder.Build(sequence, EngineVersion.Version, result, structure);
+                        var snapshotRepository = scope.ServiceProvider.GetRequiredService<ISnapshotRepository>();
+                        var snapshots = await snapshotRepository.GetRecentSnapshotsAsync(3);
+                        var history = snapshots.OrderBy(x => x.Sequence).Select(HistoricalSnapshotMapper.Map).ToList();
+                        var snapshotV2 = await _snapshotV2Builder.Build(sequence, EngineVersion.Version, result, structure, history);
+
                         await _gptReviewQueue.EnqueueAsync(snapshotV2);
                         _lastGptReviewUtc = DateTime.UtcNow;
                         _logger.LogInformation("GPT Review Queued | Seq:{Seq}", sequence);

@@ -1,34 +1,81 @@
 ﻿using KinetixFlowEngine.Core.Gpt.Models;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
-namespace KinetixFlowEngine.Core.Gpt.Services
+namespace KinetixFlowEngine.Core.Gpt.Services;
+
+public sealed class LlmReviewMemory
 {
-    public sealed class LlmReviewMemory
+    private readonly object _lock = new();
+
+    private readonly Dictionary<string, Queue<GptReviewRecord>>
+        _reviews = new();
+
+    private const int MaxHistory = 3;
+
+    public void Update(GptReviewRecord review)
     {
-        private readonly object _lock = new();
-
-        private readonly Dictionary<string, GptReviewRecord> _latest
-            = new();
-
-        public void Update(GptReviewRecord? review)
+        lock (_lock)
         {
-            if (review == null)
-                return;
-
-            lock (_lock)
+            if (!_reviews.TryGetValue(
+                review.ModelName,
+                out var queue))
             {
-                _latest[review.ModelName] = review;
+                queue = new Queue<GptReviewRecord>();
+
+                _reviews[review.ModelName] = queue;
             }
-        }
 
-        public IReadOnlyCollection<GptReviewRecord> GetLatest()
-        {
-            lock (_lock)
+            queue.Enqueue(review);
+
+            while (queue.Count > MaxHistory)
             {
-                return _latest.Values.ToList();
+                queue.Dequeue();
             }
         }
     }
+
+    public IReadOnlyList<GptReviewRecord>
+        GetReviews(string modelName)
+    {
+        lock (_lock)
+        {
+            if (!_reviews.TryGetValue(
+                modelName,
+                out var queue))
+            {
+                return [];
+            }
+
+            return queue.ToList();
+        }
+    }
+
+    public IReadOnlyDictionary<
+        string,
+        IReadOnlyList<GptReviewRecord>>
+        GetAll()
+    {
+        lock (_lock)
+        {
+            return _reviews.ToDictionary(
+                x => x.Key,
+                x => (IReadOnlyList<GptReviewRecord>)
+                    x.Value.ToList());
+        }
+    }
+
+    public IReadOnlyDictionary<
+    string,
+    IReadOnlyList<GptReviewRecord>>
+    GetAllReviews()
+    {
+        lock (_lock)
+        {
+            return _reviews.ToDictionary(
+                x => x.Key,
+                x => (IReadOnlyList<GptReviewRecord>)
+                    x.Value.ToList());
+        }
+    }
+
+
 }

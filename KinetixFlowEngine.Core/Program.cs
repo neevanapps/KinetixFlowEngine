@@ -158,7 +158,8 @@ namespace KinetixFlowEngine.Core
                 //builder.Services.AddSingleton<IKinetixStrategy, MediumScorePrice>();
                 //builder.Services.AddSingleton<IKinetixStrategy, SlowScorePrice>();
                 //builder.Services.AddSingleton<IKinetixStrategy, SlowScoreStrengthStrategy>();
-                //builder.Services.AddSingleton<IKinetixStrategy, LlmConsensusStrategy>();
+                builder.Services.AddSingleton<StrategyHelper>();
+                builder.Services.AddSingleton<IKinetixStrategy, ConsensusStrategy>();
                 builder.Services.AddSingleton<IKinetixStrategy, QwenStrategy>();
                 builder.Services.AddSingleton<IKinetixStrategy, MistralStrategy>();
                 builder.Services.AddSingleton<IKinetixStrategy, GptOssStrategy>();
@@ -192,6 +193,7 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<IGptSessionManager, GptSessionManager>();
                 builder.Services.AddSingleton<IGptPromptBuilder, GptPromptBuilder>();
                 builder.Services.AddSingleton<GptMarketSnapshotV2Builder>();
+                
                 builder.Services.AddSingleton<IGptReviewStore, GptReviewStore>();
                 builder.Services.AddSingleton<ILocalModelReviewer, QwenReviewService>();
                 builder.Services.AddSingleton<ILocalModelReviewer, MistralReviewService>();
@@ -200,11 +202,16 @@ namespace KinetixFlowEngine.Core
                 //builder.Services.AddSingleton<ICloudModelReviewer, DeepSeekReviewService>();
                 //builder.Services.AddSingleton<ICloudModelReviewer, NemotronReviewService>();
 
+                builder.Services.AddHostedService<ReviewMemoryWarmupService>();
                 builder.Services.AddSingleton<CompositeReviewService>();
                 builder.Services.AddSingleton<GptReviewQueue>();
                 builder.Services.AddSingleton<IGptReviewQueue>(sp => sp.GetRequiredService<GptReviewQueue>());
                 builder.Services.AddHostedService<GptReviewBackgroundService>();
                 builder.Services.AddSingleton<LlmReviewMemory>();
+                builder.Services.AddSingleton<ReviewSmoothingService>();
+                builder.Services.AddSingleton<ConsensusReviewService>();
+                builder.Services.AddSingleton<ModelReviewProvider>();
+                builder.Services.AddSingleton<ConsensusProvider>();
                 // Configure Windows Service lifetime using options because 'Host' is not available on HostApplicationBuilder.
                 builder.Services.AddWindowsService(options =>
                 {

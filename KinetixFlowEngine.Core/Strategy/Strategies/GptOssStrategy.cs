@@ -9,107 +9,28 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies
 {
     internal class GptOssStrategy : IKinetixStrategy
     {
-        private readonly LlmReviewMemory _memory;
+        private readonly StrategyHelper _helper; 
         private readonly StrategyConfig _config;
-        private readonly ILogger<GptOssStrategy> _logger;
 
         public string Name => "GPTOSS";
+        public string ModelName => "gpt-oss-120b";  
 
-        public GptOssStrategy(LlmReviewMemory memory, StrategyConfigLoader config, ILogger<GptOssStrategy> logger)
+        public GptOssStrategy(StrategyHelper helper, StrategyConfigLoader config)
         {
-            _memory = memory;
+            _helper = helper;
             _config = config.Get(Name);
-            _logger = logger;
         }
 
         public StrategySignal EvaluateEntry(KinetixEngineResult result)
         {
-            var reviews = _memory.GetLatest();
-
-            if (reviews.Count < 2)
-                return NoSignal();
-
-            var gptOssReview = reviews.Where(r => r.ModelName.Contains("gpt"))?.FirstOrDefault();
-            if (gptOssReview == null)
-            {
-                _logger.LogInformation("GPTOSS review not found.");
-            }
-            if (gptOssReview != null && gptOssReview.Assessment.LongConfidence > 50 && gptOssReview.Assessment.Score > 10 && (gptOssReview.Assessment.DirectionalBias == "Long" || gptOssReview.Assessment.RecommendedAction == "Long"))
-            {
-                return new StrategySignal
-                {
-                    StrategyName = Name,
-                    Direction = SignalDirection.Long,
-                    Confidence = gptOssReview.Assessment.LongConfidence,
-                    EnterOnlyAtFairPrice = _config.EnterOnlyAtFairPrice,
-                    NotifyThroughTelegram = _config.NotifyThroughTelegram,
-                    IsVolumeBased = _config.VolumeBased,
-                    TargetAccountIds = _config.AccountIds
-                };
-            }
-
-            if (gptOssReview != null && gptOssReview.Assessment.ShortConfidence > 50 && gptOssReview.Assessment.Score < -10 && (gptOssReview.Assessment.DirectionalBias == "Short" || gptOssReview.Assessment.RecommendedAction == "Short"))
-            {
-                return new StrategySignal
-                {
-                    StrategyName = Name,
-                    Direction = SignalDirection.Short,
-                    Confidence = gptOssReview.Assessment.ShortConfidence,
-                    EnterOnlyAtFairPrice = _config.EnterOnlyAtFairPrice,
-                    NotifyThroughTelegram = _config.NotifyThroughTelegram,
-                    IsVolumeBased = _config.VolumeBased,
-                    TargetAccountIds = _config.AccountIds
-                };
-            }
-
-            return NoSignal();
+            return _helper.EvaluateEntry(result, ModelName, _config);
         }
 
         public StrategySignal EvaluateExit(KinetixEngineResult result, ActiveTrade trade)
         {
-            var reviews = _memory.GetLatest();
-            if (reviews.Count < 2)
-                return NoSignal();
-
-            var gptOssReview = reviews.Where(r => r.ModelName.Contains("gpt"))?.FirstOrDefault();
-
-            if (trade.Direction == SignalDirection.Long)
-            {
-                if (gptOssReview != null && gptOssReview.Assessment.ShortConfidence > 50 && gptOssReview.Assessment.Score < -10 && (gptOssReview.Assessment.DirectionalBias == "Short" || gptOssReview.Assessment.RecommendedAction == "Short"))
-                {
-                    return new StrategySignal
-                    {
-                        StrategyName = Name,
-                        ExitSignal = true
-                    };
-                }
-
-            }
-            else if (trade.Direction == SignalDirection.Short)
-            {
-                if (gptOssReview != null && gptOssReview.Assessment.LongConfidence > 50 && gptOssReview.Assessment.Score > 10 && (gptOssReview.Assessment.DirectionalBias == "Long" || gptOssReview.Assessment.RecommendedAction == "Long"))
-                {
-                    return new StrategySignal
-                    {
-                        StrategyName = Name,
-                        ExitSignal = true
-                    };
-                }
-            }
-            else
-            {
-                return NoSignal();
-            }
-            return NoSignal();
-        }
-
-        private StrategySignal NoSignal()
-        {
-            return new()
-            {
-                StrategyName = Name,
-                Direction = SignalDirection.None
-            };
+            return _helper.EvaluateExit(result, trade, ModelName, _config);
         }
     }
 }
+
+            

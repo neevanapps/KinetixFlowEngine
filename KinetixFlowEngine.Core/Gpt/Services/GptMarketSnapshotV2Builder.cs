@@ -11,21 +11,19 @@ public sealed class GptMarketSnapshotV2Builder
 {
     private readonly GptMultiTimeframeAggregator _aggregator;
     private readonly DepthFeatureManager _depthFeatureManager;
-    private readonly ISnapshotRepository _snapshotRepository;
 
-    public GptMarketSnapshotV2Builder(GptMultiTimeframeAggregator aggregator, DepthFeatureManager depthFeatureManager, ISnapshotRepository snapshotRepository)
+    public GptMarketSnapshotV2Builder(GptMultiTimeframeAggregator aggregator, DepthFeatureManager depthFeatureManager)
     {
         _aggregator = aggregator;
         _depthFeatureManager = depthFeatureManager;
-        _snapshotRepository = snapshotRepository;
     }
 
-    public async Task<GptMarketSnapshotV2> Build(int sequence, string engineVersion, KinetixEngineResult result, MarketStructureSnapshot structure)
+    public async Task<GptMarketSnapshotV2> Build(int sequence, string engineVersion, KinetixEngineResult result, MarketStructureSnapshot structure, List<HistoricalSnapshotSummary> history)
     {
         var mtf = _aggregator.Build();
         var depthMtf = new DepthMtfAggregator(_depthFeatureManager.Rows).Build();
-        var snapshots = await _snapshotRepository.GetRecentSnapshotsAsync(3);
-        var history = snapshots.OrderBy(x => x.Sequence).Select(HistoricalSnapshotMapper.Map).ToList();
+        //var snapshots = await _snapshotRepository.GetRecentSnapshotsAsync(3);
+        //var history = snapshots.OrderBy(x => x.Sequence).Select(HistoricalSnapshotMapper.Map).ToList();
 
         return new GptMarketSnapshotV2
         {
@@ -124,6 +122,7 @@ public sealed class GptMarketSnapshotV2Builder
             var sb = new StringBuilder();
             sb.AppendLine("Recent History Summary (Last 3 Snapshots):");
 
+            // Process each snapshot with comparison to previous
             for (int i = 0; i < history.Count; i++)
             {
                 var current = history[i];
@@ -133,27 +132,84 @@ public sealed class GptMarketSnapshotV2Builder
 
                 if (previous != null)
                 {
-                    sb.AppendLine($"  → Price moved from {previous.Price} to {current.Price}");
+                    // Price direction
+                    string priceMove = current.Price > previous.Price ? "↑ up" : "↓ down";
+                    sb.AppendLine($"  → Price moved {priceMove} ({previous.Price} → {current.Price})");
 
-                    // Trend changes
+                    // === Trend Level Changes ===
                     if (previous.TrendLevel1 != current.TrendLevel1)
-                        sb.AppendLine($"  → Level1 trend changed from {previous.TrendLevel1} to {current.TrendLevel1}");
-
+                        sb.AppendLine($"  → Level1 Structure: {previous.TrendLevel1} → {current.TrendLevel1}");
                     if (previous.TrendLevel2 != current.TrendLevel2)
-                        sb.AppendLine($"  → Level2 trend changed from {previous.TrendLevel2} to {current.TrendLevel2}");
+                        sb.AppendLine($"  → Level2 Structure: {previous.TrendLevel2} → {current.TrendLevel2}");
+                    if (previous.TrendLevel3 != current.TrendLevel3)
+                        sb.AppendLine($"  → Level3 Structure: {previous.TrendLevel3} → {current.TrendLevel3}");
 
-                    // ScoreZ trend
-                    sb.AppendLine($"  → ScoreZ: L1={current.ScoreZLevel1:F3}, L2={current.ScoreZLevel2:F3}, L3={current.ScoreZLevel3:F3}");
+                    // === ScoreZ Trend Analysis ===
+                    string scoreZTrend = GetTrendDescription(previous.ScoreZLevel2, current.ScoreZLevel2, "ScoreZ (Level2)");
+                    sb.AppendLine($"  → {scoreZTrend}");
 
-                    // Momentum trend
-                    sb.AppendLine($"  → Momentum: L1={current.MomentumLevel1:F4}, L2={current.MomentumLevel2:F4}");
+                    // === Momentum Trend Analysis ===
+                    string momentumTrend = GetTrendDescription(previous.MomentumLevel2, current.MomentumLevel2, "Momentum (Level2)");
+                    sb.AppendLine($"  → {momentumTrend}");
 
-                    // Persistence trend (highlight Level2 as it's important)
-                    sb.AppendLine($"  → Persistence L2: {current.PersistenceLevel2:F2}");
+                    // === Persistence Trend (Important for trend strength) ===
+                    string persistenceTrend = GetTrendDescription(previous.PersistenceLevel2, current.PersistenceLevel2, "Persistence (Level2)");
+                    sb.AppendLine($"  → {persistenceTrend}");
                 }
             }
 
+            // === Overall Regime Observation ===
+            sb.AppendLine();
+            sb.AppendLine("Overall Recent Regime:");
+
+            var latest = history.Last();
+            var oldest = history.First();
+
+            // Higher timeframe structure assessment
+            if (latest.TrendLevel2 == "Bullish" && latest.TrendLevel3 == "Bullish")
+            {
+                sb.AppendLine("- Higher timeframe structure (Level2 & Level3) remains **Bullish**.");
+            }
+            else if (latest.TrendLevel2 == "Bearish" && latest.TrendLevel3 == "Bearish")
+            {
+                sb.AppendLine("- Higher timeframe structure (Level2 & Level3) is **Bearish**.");
+            }
+            else
+            {
+                sb.AppendLine("- Higher timeframe structure is **mixed** between Level2 and Level3.");
+            }
+
+            // Recent momentum & persistence strength
+            if (latest.PersistenceLevel2 > 4.0)
+            {
+                sb.AppendLine("- Strong persistence on Level2 suggests the current trend has good durability.");
+            }
+            else if (latest.PersistenceLevel2 < 1.0)
+            {
+                sb.AppendLine("- Weak persistence on Level2 indicates the recent move lacks strong follow-through.");
+            }
+
             return sb.ToString().TrimEnd();
+        }
+
+        /// <summary>
+        /// Helper method to describe trend strength between two values
+        /// </summary>
+        private static string GetTrendDescription(double previousValue, double currentValue, string metricName)
+        {
+            double change = currentValue - previousValue;
+            double absChange = Math.Abs(change);
+
+            string direction = change > 0 ? "improving" : "weakening";
+            string strength = absChange switch
+            {
+                > 0.08 => "strongly",
+                > 0.03 => "moderately",
+                > 0.01 => "slightly",
+                _ => "minimally"
+            };
+
+            return $"{metricName} is {strength} {direction} ({previousValue:F3} → {currentValue:F3})";
         }
     }
 }

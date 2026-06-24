@@ -15,11 +15,11 @@ namespace KinetixFlowEngine.Core.Gpt.Models
         // Changed from decimal to int to perfectly map to your normalization clamp loop
         public double Score { get; init; }
 
-        public int TrendQuality { get; init; }
+        public double TrendQuality { get; set; }
 
-        public int FlowQuality { get; init; }
+        public double FlowQuality { get; set; }
 
-        public int RegimeQuality { get; init; }
+        public double RegimeQuality { get; set; }
 
         public string RiskLevel { get; init; } = string.Empty;
 

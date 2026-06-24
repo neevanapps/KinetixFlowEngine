@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using Microsoft.EntityFrameworkCore;
+
 
 namespace KinetixFlowEngine.Core.Database.Repositories
 {
@@ -9,6 +11,10 @@ namespace KinetixFlowEngine.Core.Database.Repositories
         Task<long> SaveAsync(
             ModelReviewEntity review,
             CancellationToken ct = default);
+
+        Task<List<ModelReviewEntity>> GetRecentReviewsAsync(
+        int countPerModel,
+        CancellationToken ct = default);
     }
 
     public sealed class ModelReviewRepository
@@ -31,6 +37,23 @@ namespace KinetixFlowEngine.Core.Database.Repositories
             await _db.SaveChangesAsync(ct);
 
             return review.Id;
+        }
+
+        public async Task<List<ModelReviewEntity>> GetRecentReviewsAsync(
+    int countPerModel,
+    CancellationToken ct = default)
+        {
+            var allReviews =
+                await _db.ModelReviews
+                    .OrderByDescending(x => x.Sequence)
+                    .ToListAsync(ct);
+
+            return allReviews
+                .GroupBy(x => x.ModelName)
+                .SelectMany(x =>
+                    x.OrderByDescending(y => y.Sequence)
+                     .Take(countPerModel))
+                .ToList();
         }
     }
 }

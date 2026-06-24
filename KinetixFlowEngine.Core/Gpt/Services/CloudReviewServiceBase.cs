@@ -68,7 +68,12 @@ public abstract class CloudReviewServiceBase
         var rawResponse = string.Empty;
         try
         {
-            var completion = await _chatClient.CompleteChatAsync(messages, cancellationToken: ct);
+            var options = new ChatCompletionOptions
+            {
+                Temperature = 0,
+                ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
+            };
+            var completion = await _chatClient.CompleteChatAsync(messages, options, cancellationToken: ct);
             rawResponse = completion?.Value.Content[0].Text;
         }
         catch (ClientResultException ex)
