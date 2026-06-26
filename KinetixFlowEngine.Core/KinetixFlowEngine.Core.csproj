@@ -15,6 +15,10 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+	  <Compile Remove="Database\Repositories\MarketPriceRepository.cs" />
+	  <Compile Remove="Database\Repositories\ModelReviewRepository.cs" />
+	  <Compile Remove="Database\Repositories\SnapshotRepository.cs" />
+	  <Compile Remove="Flow\Builders\MetricSeriesBuilder.cs" />
 	  <Compile Remove="Persistence\EngineSnapshot.cs" />
 	</ItemGroup>
 

@@ -1,4 +1,5 @@
 ﻿using KinetixFlowEngine.Core.Data;
+using KinetixFlowEngine.Core.Domain.Liquidity;
 
 namespace KinetixFlowEngine.Core.Depth;
 

@@ -10,18 +10,16 @@ namespace KinetixFlowEngine.Core.Gpt.Services;
 public sealed class GptMarketSnapshotV2Builder
 {
     private readonly GptMultiTimeframeAggregator _aggregator;
-    private readonly DepthFeatureManager _depthFeatureManager;
 
-    public GptMarketSnapshotV2Builder(GptMultiTimeframeAggregator aggregator, DepthFeatureManager depthFeatureManager)
+    public GptMarketSnapshotV2Builder(GptMultiTimeframeAggregator aggregator)
     {
         _aggregator = aggregator;
-        _depthFeatureManager = depthFeatureManager;
     }
 
     public async Task<GptMarketSnapshotV2> Build(int sequence, string engineVersion, KinetixEngineResult result, MarketStructureSnapshot structure, List<HistoricalSnapshotSummary> history)
     {
         var mtf = _aggregator.Build();
-        var depthMtf = new DepthMtfAggregator(_depthFeatureManager.Rows).Build();
+        //var depthMtf = new DepthMtfAggregator(_depthFeatureManager.Rows).Build();
         //var snapshots = await _snapshotRepository.GetRecentSnapshotsAsync(3);
         //var history = snapshots.OrderBy(x => x.Sequence).Select(HistoricalSnapshotMapper.Map).ToList();
 
@@ -68,18 +66,18 @@ public sealed class GptMarketSnapshotV2Builder
             ER5 = mtf.ER5,
 
             ER30 = mtf.ER30,
-            Depth = new GptDepthSnapshot
-            {
-                DepthImbalance = depthMtf.Imbalance,
-                DepthBullPct = depthMtf.BullishPercent,
-                BidWallAge = depthMtf.BidWallAge,
-                AskWallAge = depthMtf.AskWallAge,
-                BidWallQty = depthMtf.BidWallQty,
-                AskWallQty = depthMtf.AskWallQty,
-                BidConsumption = depthMtf.BidConsumption,
-                BullishPersistence = depthMtf.BullishPersistence,
-                AskConsumption = depthMtf.AskConsumption
-            },
+            //Depth = new GptDepthSnapshot
+            //{
+            //    DepthImbalance = depthMtf.Imbalance,
+            //    DepthBullPct = depthMtf.BullishPercent,
+            //    BidWallAge = depthMtf.BidWallAge,
+            //    AskWallAge = depthMtf.AskWallAge,
+            //    BidWallQty = depthMtf.BidWallQty,
+            //    AskWallQty = depthMtf.AskWallQty,
+            //    BidConsumption = depthMtf.BidConsumption,
+            //    BullishPersistence = depthMtf.BullishPersistence,
+            //    AskConsumption = depthMtf.AskConsumption
+            //},
             TrendLevel1 = structure.Trend10m,
             TrendLevel2 = structure.Trend30m,
             TrendLevel3 = structure.Trend60m,

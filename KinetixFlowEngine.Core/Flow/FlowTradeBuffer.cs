@@ -5,7 +5,7 @@ namespace KinetixFlowEngine.Core.Flow
 {
     public class FlowTradeBuffer
     {
-        private readonly ConcurrentQueue<FlowTrade> _trades = new();
+        private readonly Queue<FlowTrade> _trades = new();
 
         private readonly int _retentionSeconds;
 
@@ -31,12 +31,14 @@ namespace KinetixFlowEngine.Core.Flow
                 .AddSeconds(-_retentionSeconds)
                 .ToUnixTimeMilliseconds();
 
-            while (_trades.TryPeek(out var oldTrade))
+            while (_trades.Count > 0)
             {
+                var oldTrade = _trades.Peek();
+
                 if (oldTrade.Timestamp >= cutoff)
                     break;
 
-                _trades.TryDequeue(out _);
+                _trades.Dequeue();
             }
         }
 

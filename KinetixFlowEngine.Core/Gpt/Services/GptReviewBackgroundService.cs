@@ -47,10 +47,10 @@ public sealed class GptReviewBackgroundService
                     snapshot.Sequence);
 
                 using var scope = _scopeFactory.CreateScope();
-                var repository = scope.ServiceProvider.GetRequiredService<ISnapshotRepository>();
+                //var repository = scope.ServiceProvider.GetRequiredService<ISnapshotRepository>();
                 var snapshotEntity = SnapshotMapper.Map(snapshot);
-                long snapshotId = await repository.SaveSnapshotAsync(snapshotEntity, stoppingToken);
-                _logger.LogInformation("Snapshot Saved | Seq:{Seq} | DbId:{Id}", snapshot.Sequence, snapshotId);
+                //long snapshotId = await repository.SaveSnapshotAsync(snapshotEntity, stoppingToken);
+                //_logger.LogInformation("Snapshot Saved | Seq:{Seq} | DbId:{Id}", snapshot.Sequence, snapshotId);
 
                 var stopwatch = Stopwatch.StartNew();
                 var reviews =
@@ -74,13 +74,13 @@ public sealed class GptReviewBackgroundService
                             snapshot.Price,
                             stopwatch.Elapsed));
                 }
-                using var reviewScope = _scopeFactory.CreateScope();
-                var reviewRepo = reviewScope.ServiceProvider.GetRequiredService<IModelReviewRepository>();
-                foreach (var review in reviews)
-                {
-                    var entity = ReviewMapper.Map(snapshotId, review);
-                    await reviewRepo.SaveAsync(entity, stoppingToken);
-                }
+                //using var reviewScope = _scopeFactory.CreateScope();
+                //var reviewRepo = reviewScope.ServiceProvider.GetRequiredService<IModelReviewRepository>();
+                //foreach (var review in reviews)
+                //{
+                //    var entity = ReviewMapper.Map(snapshotId, review);
+                //    await reviewRepo.SaveAsync(entity, stoppingToken);
+                //}
 
                 _logger.LogInformation(
                     "GPT Review Completed | Seq:{Seq}",

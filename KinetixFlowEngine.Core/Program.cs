@@ -5,10 +5,19 @@ using KinetixFlowEngine.Core.Context;
 using KinetixFlowEngine.Core.Data;
 using KinetixFlowEngine.Core.Database;
 using KinetixFlowEngine.Core.Database.Repositories;
+using KinetixFlowEngine.Core.Database.Serialization;
 using KinetixFlowEngine.Core.Depth;
+using KinetixFlowEngine.Core.Domain.Common;
+using KinetixFlowEngine.Core.Domain.FundingRate;
+using KinetixFlowEngine.Core.Domain.Liquidity;
+using KinetixFlowEngine.Core.Domain.Market;
+using KinetixFlowEngine.Core.Domain.OI;
+using KinetixFlowEngine.Core.Domain.Pricing;
+using KinetixFlowEngine.Core.Domain.Trading;
 using KinetixFlowEngine.Core.Engine;
 using KinetixFlowEngine.Core.Execution;
 using KinetixFlowEngine.Core.Flow;
+using KinetixFlowEngine.Core.Flow.Features;
 using KinetixFlowEngine.Core.Flow.Probability;
 using KinetixFlowEngine.Core.Flow.State;
 using KinetixFlowEngine.Core.Gpt.Configuration;
@@ -82,9 +91,9 @@ namespace KinetixFlowEngine.Core
                     client.Timeout = TimeSpan.FromSeconds(10);
                 });
 
-                builder.Services.AddScoped<ISnapshotRepository, SnapshotRepository>();
-                builder.Services.AddScoped<IModelReviewRepository, ModelReviewRepository>();
-                builder.Services.AddScoped<IMarketPriceRepository, MarketPriceRepository>();
+                //builder.Services.AddScoped<ISnapshotRepository, SnapshotRepository>();
+                //builder.Services.AddScoped<IModelReviewRepository, ModelReviewRepository>();
+                //builder.Services.AddScoped<IMarketPriceRepository, MarketPriceRepository>();
 
                 builder.Services.AddSingleton<FundingRateEngine>();
                 builder.Services.AddSingleton<PropAccountRuntimeFactory>();
@@ -93,9 +102,62 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<ExecutionGuard>();
                 builder.Services.AddSingleton<BinanceDepthStreamClient>();
                 builder.Services.AddSingleton<DepthFeatureEngine>();
-                builder.Services.AddSingleton<DepthMinuteAggregator>();
                 builder.Services.AddSingleton<DepthWallTracker>();
-                builder.Services.AddSingleton<DepthFeatureManager>();
+
+                builder.Services.AddSingleton<MarketMinuteFeatureManager>();
+                builder.Services.AddSingleton<MinuteCandleBuilder>();
+                builder.Services.AddSingleton<MinuteFeaturePipeline>();
+
+                // Common
+                builder.Services.AddSingleton<MetricSeriesBuilder>();
+
+                //builder.Services.AddSingleton(sp =>
+                //new MarketDomainServices
+                //{
+                //    Price = sp.GetRequiredService<PriceFactory>(),
+                //    Trade = sp.GetRequiredService<TradeBuilder>(),
+                //    Depth = sp.GetRequiredService<DepthBuilder>(),
+                //    Funding = sp.GetRequiredService<FundingBuilder>(),
+                //    OpenInterest = sp.GetRequiredService<OIBuilder>()
+                //});
+
+                builder.Services.AddSingleton<IJsonSerializer<MarketState>, MarketStateSerializer>();
+
+                // Market
+                builder.Services.AddSingleton<MarketBuildRequestFactory>();
+                builder.Services.AddSingleton<MarketStateFactory>();
+                builder.Services.AddSingleton<IMarketStatePipeline, MarketStatePipeline>();
+                builder.Services.AddSingleton<IMinuteMarketStateProvider, MinuteMarketStateProvider>();
+
+                builder.Services.AddScoped<IMarketStateRepository, MarketStateRepository>();
+
+                builder.Services.AddSingleton<DepthMinuteBuilder>();
+
+                builder.Services.AddSingleton<PriceBuilder>();
+                builder.Services.AddSingleton<PriceSummaryBuilder>();
+                builder.Services.AddSingleton<PriceEventBuilder>();
+                builder.Services.AddSingleton<PriceFactory>();
+
+                builder.Services.AddSingleton<TradeBuilder>();
+                builder.Services.AddSingleton<TradeSummaryBuilder>();
+                builder.Services.AddSingleton<TradeEventBuilder>();
+                builder.Services.AddSingleton<TradeFactory>();
+
+                builder.Services.AddSingleton<FundingBuilder>();
+                builder.Services.AddSingleton<FundingSummaryBuilder>();
+                builder.Services.AddSingleton<FundingEventBuilder>();
+                builder.Services.AddSingleton<FundingFactory>();
+
+                builder.Services.AddSingleton<OIBuilder>();
+                builder.Services.AddSingleton<OISummaryBuilder>();
+                builder.Services.AddSingleton<OIEventBuilder>();
+                builder.Services.AddSingleton<OIFactory>();
+
+                builder.Services.AddSingleton<MarketEventBuilder>();
+                builder.Services.AddSingleton<MarketQualityBuilder>();
+                builder.Services.AddSingleton<MarketRegimeBuilder>();
+                builder.Services.AddSingleton<MarketSummaryBuilder>();
+                builder.Services.AddSingleton<MarketConsensusBuilder>();
 
                 builder.Services.AddSingleton<ExecutionSyncService>();
                 builder.Services.AddSingleton<ScoreNormalizer>();
@@ -119,13 +181,8 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<MarketStructureEngine>();
 
                 builder.Services.AddSingleton<FlowTradeBuffer>();
-                builder.Services.AddSingleton<FlowAggregationWindow>();
                 builder.Services.AddSingleton<FlowFeatureEngine>();
-                builder.Services.AddSingleton<FlowCompositeEngine>();
-                builder.Services.AddSingleton<FlowScoreEngine>();
-                builder.Services.AddSingleton<FlowRegimeEngine>();
                 builder.Services.AddSingleton<FlowDivergenceEngine>();
-                builder.Services.AddSingleton<FlowProbabilityEngine>();
                 builder.Services.AddSingleton<LiquidityPressureEngine>();
                 builder.Services.AddSingleton<VwapAbsorptionEngine>();
                 builder.Services.AddSingleton<WhaleClusterEngine>();
@@ -140,14 +197,10 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<AtrEngine>();
                 builder.Services.AddSingleton<Atr15mEngine>();
                 builder.Services.AddSingleton<OpenInterestEngine>();
-                builder.Services.AddSingleton<ContextScoreEngine>();
                 builder.Services.AddSingleton<FlowMetricsRecorder>();
                 builder.Services.AddSingleton<SignalStabilityEngine>();
                 builder.Services.AddSingleton<PriceTrendEngine>();
-                builder.Services.AddSingleton<ScoreTrendEngine>();
-                builder.Services.AddSingleton<FlowStateEngine>();
                 builder.Services.AddSingleton<KinetixEngineProcessor>();
-                builder.Services.AddSingleton<ProbabilityTrendEngine>();
                 //builder.Services.AddSingleton<IKinetixStrategy, FastScoreStrategy>();
                 //builder.Services.AddSingleton<IKinetixStrategy, MediumScoreStrategy>();
                 //builder.Services.AddSingleton<IKinetixStrategy, SlowScoreStrategy>();

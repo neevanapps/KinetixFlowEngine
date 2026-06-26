@@ -28,26 +28,26 @@ public sealed class ReviewMemoryWarmupService
         using var scope =
             _scopeFactory.CreateScope();
 
-        var repository =
-            scope.ServiceProvider
-                 .GetRequiredService<IModelReviewRepository>();
+        //var repository =
+        //    scope.ServiceProvider
+        //         .GetRequiredService<IModelReviewRepository>();
 
-        var reviews =
-            await repository.GetRecentReviewsAsync(
-                3,
-                cancellationToken);
+        //var reviews =
+        //    await repository.GetRecentReviewsAsync(
+        //        3,
+        //        cancellationToken);
 
-        foreach (var entity in reviews)
-        {
-            var review =
-                ReviewEntityMapper.ToReview(entity);
+        //foreach (var entity in reviews)
+        //{
+        //    var review =
+        //        ReviewEntityMapper.ToReview(entity);
 
-            _memory.Update(review);
-        }
+        //    _memory.Update(review);
+        //}
 
-        _logger.LogInformation(
-            "Review Memory Warmed Up | Reviews:{Count}",
-            reviews.Count);
+        //_logger.LogInformation(
+        //    "Review Memory Warmed Up | Reviews:{Count}",
+        //    reviews.Count);
     }
 
     public Task StopAsync(

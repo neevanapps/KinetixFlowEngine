@@ -19,6 +19,7 @@ using KinetixFlowEngine.Core.Trend;
 using KinetixFlowEngine.Core.Utils;
 using Microsoft.Extensions.Options;
 using Serilog;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 
@@ -34,16 +35,11 @@ namespace KinetixFlowEngine.Core
         private readonly KinetixEngineProcessor _engineProcessor;
         private readonly EngineWarmupManager _warmup;
         private readonly PriceTrendEngine _priceEngine;
-        private readonly ScoreTrendEngine _scoreEngine;
-        private readonly ProbabilityTrendEngine _probEngine;
         private readonly EngineBootstrapService _bootstrap;
         private readonly INotificationService _notificationService;
         private readonly ExceptionAlertAggregator _exceptionAggregator;
-        private readonly FlowAggregationWindow _flowAggregationWindow;
-        private readonly DepthFeatureEngine _depthFeatureEngine;
-        private readonly DepthMinuteAggregator _depthMinuteAggregator;
-        private readonly DepthWallTracker _depthWallTracker;
-        private readonly DepthFeatureManager _depthFeatureManager;
+
+        private readonly MinuteFeaturePipeline _minutePipeline;
 
         private readonly ScoreNormalizer _scoreNorm;
         private readonly VelocityNormalizer _velNorm;
@@ -114,16 +110,16 @@ namespace KinetixFlowEngine.Core
 
         public Worker(FlowTradeBuffer flowTradeBuffer, TradeStreamClient tradeStreamClient, ILogger<Worker> logger, KinetixEngineProcessor engineProcessor, ScoreNormalizer scoreNorm, EngineBootstrapService bootstrap,
                     VelocityNormalizer velNorm, ImbalanceNormalizer imbNorm, ExhaustionNormalizer exhNorm, CompressionNormalizer cmpNorm, MarketStateManager snapshotManager, PositionManager positionManager,
-                    EngineWarmupManager warmup, PriceTrendEngine priceEngine, ScoreTrendEngine scoreEngine, OpenInterestClient openInterestClient, FlowMetricsRecorder recorder, StrategyEngine strategyEngine,
+                    EngineWarmupManager warmup, PriceTrendEngine priceEngine, OpenInterestClient openInterestClient, FlowMetricsRecorder recorder, StrategyEngine strategyEngine,
                     StrategyAggregator strategyAggregator, INotificationService notificationService, IOptions<FlowEngineOptions> options, TradeJournalRecorder tradeJournal, ExceptionAlertAggregator exceptionAggregator,
-                    ProbabilityTrendEngine probEngine, FlowAggregationWindow flowAggregationWindow, FlowMomentumRun momentumRun, TradeMemoryManager tradeMemory, VolumeEngine volumeEngine, FairPriceEngine fairPriceEngine,
+                    FlowMomentumRun momentumRun, TradeMemoryManager tradeMemory, VolumeEngine volumeEngine, FairPriceEngine fairPriceEngine,
                     PropAccountRuntimeManager accounts, PropAlertService alerts, PropAccountStatePersistence accountStatePersistence, PositionPersistence positionPersistence, BybitClientFactory factory,
                     StrategyConfigLoader strategyConfigLoader, IExecutionRouter executionRouter, IEquityEngine equityEngine, ExecutionSyncService executionSync, ITradeExecutor executor, BybitDepthStreamClient depthClient,
                     AdjustedScoreNormalizer adjustmentNorm, FundingRateClient fundingRateClient, FundingRateEngine fundingRateEngine, AtrNormalizer atrNormalizer, EmaStability ema, SignalStrengthEngine strengthEngine,
                     GptSnapshotBuilder gptSnapshotBuilder, GptSnapshotStore gptSnapshotStore, IGptSessionManager gptSessionManager, IGptPromptBuilder gptPromptBuilder, CompositeReviewService gptReviewService,
                     GptMarketStateManager gptMarketStateManager, GptMultiTimeframeAggregator mtfAggregator, GptMarketSnapshotV2Builder snapshotV2Builder, IGptReviewQueue gptReviewQueue, BinanceDepthStreamClient depthStreamClient,
-                    DepthFeatureEngine depthFeatureEngine, DepthMinuteAggregator depthMinuteAggregator, DepthWallTracker depthWallTracker, DepthFeatureManager depthFeatureManager, FlowImpactNormalizer flowImpactNormalizer,
-                    IServiceScopeFactory scopeFactory, MarketStructureEngine marketStructureEngine)
+                    FlowImpactNormalizer flowImpactNormalizer,
+                    IServiceScopeFactory scopeFactory, MarketStructureEngine marketStructureEngine, MinuteFeaturePipeline minutePipeline)
         {
             _logger = logger;
             _bootstrap = bootstrap;
@@ -142,16 +138,13 @@ namespace KinetixFlowEngine.Core
             _tradeMemory = tradeMemory;
             _marketStateManager = snapshotManager;
             _priceEngine = priceEngine;
-            _scoreEngine = scoreEngine;
             _strategyEngine = strategyEngine;
             _strategyAggregator = strategyAggregator;
             _positionManager = positionManager;
             _openInterestClient = openInterestClient;
             _recorder = recorder;
-            _flowAggregationWindow = flowAggregationWindow;
             _tradeJournal = tradeJournal;
             _exceptionAggregator = exceptionAggregator;
-            _probEngine = probEngine;
             _momentumRun = momentumRun;
             _volumeEngine = volumeEngine;
             _fairPriceEngine = fairPriceEngine;
@@ -182,16 +175,16 @@ namespace KinetixFlowEngine.Core
             _snapshotV2Builder = snapshotV2Builder;
             _gptReviewQueue = gptReviewQueue;
             _depthStreamClient = depthStreamClient;
-            _depthFeatureEngine = depthFeatureEngine;
-            _depthMinuteAggregator = depthMinuteAggregator;
-            _depthWallTracker = depthWallTracker;
-            _depthFeatureManager = depthFeatureManager;
             _marketStructureEngine = marketStructureEngine;
+            _minutePipeline = minutePipeline;
 
-            _tradeStreamClient.OnTrade += trade =>
+            //_minutePipeline.MinuteCompleted += _marketMinuteFeatureManager.Add;
+            //_minutePipeline.MarketStateAvailable += OnMarketStateAvailableAsync;
+
+            _tradeStreamClient.OnTrade += async trade =>
             {
                 _flowTradeBuffer.AddTrade(trade);
-                _flowAggregationWindow.AddTrade(trade);
+                _ = _minutePipeline.ProcessTradeAsync(trade);
             };
 
             _positionManager.Target1Reached += async trade =>
@@ -433,8 +426,8 @@ namespace KinetixFlowEngine.Core
             await _depthClient.StartAsync(stoppingToken);
             await _tradeStreamClient.StartAsync(stoppingToken);
             await _depthStreamClient.StartAsync(stoppingToken);
-            await _depthFeatureManager.LoadAsync(stoppingToken);
-            _logger.LogInformation("Depth Features Loaded | Rows:{Rows}", _depthFeatureManager.Rows.Count);
+            //await _depthFeatureManager.LoadAsync(stoppingToken);
+            //_logger.LogInformation("Depth Features Loaded | Rows:{Rows}", _depthFeatureManager.Rows.Count);
 
             var persisted = _positionPersistence.Load();
             if (persisted.Any())
@@ -483,8 +476,6 @@ namespace KinetixFlowEngine.Core
                     _momentumRun.Restore(snapshot.MomentumRun);
 
                 _priceEngine.Restore(snapshot.PriceFastEma, snapshot.PriceSlowEma);
-                _scoreEngine.Restore(snapshot.ScoreFastEma, snapshot.ScoreSlowEma, snapshot.ScoreMediumEma);
-                _probEngine.Restore(snapshot.ProbFastEma, snapshot.ProbSlowEma, snapshot.ProbMediumEma);
                 if (snapshot.VolumeEngineState != null)
                 {
                     _volumeEngine.Restore(snapshot.VolumeEngineState);
@@ -502,8 +493,6 @@ namespace KinetixFlowEngine.Core
 
             while (!stoppingToken.IsCancellationRequested)
             {
-
-
                 if (!_flowTradeBuffer.TryGetLast(out var lastTrade))
                 {
                     await Task.Delay(1000, stoppingToken);
@@ -512,42 +501,6 @@ namespace KinetixFlowEngine.Core
                 double price = (double)lastTrade.Price;
                 _currentMarketPrice = (decimal)price;
 
-                var depth = _depthStreamClient.CurrentSnapshot;
-                var feature = _depthFeatureEngine.Calculate(depth);
-                _depthMinuteAggregator.Add(feature);
-                _depthWallTracker.Update(depth);
-
-                if (_depthMinuteAggregator.IsReady() && DateTime.UtcNow - _lastDepthLogUtc >= TimeSpan.FromMinutes(1))
-                {
-                    var minute = _depthMinuteAggregator.Build();
-                    var topBidWalls = _depthWallTracker.GetTopBidWalls();
-                    var topAskWalls = _depthWallTracker.GetTopAskWalls();
-
-                    var depthFeature = new DepthMinuteFeature
-                    {
-                        TimestampUtc = DateTime.UtcNow,
-                        Price = (decimal)price,
-                        PriceChange1m = minute.PriceChange1m,
-                        AvgImbalance10 = minute.AverageImbalanceTop10,
-                        BullishPercent = minute.BullishBookPercent,
-                        BearishPercent = minute.BearishBookPercent,
-                        BullishPersistenceSeconds = minute.BullishPersistenceSeconds,
-                        BearishPersistenceSeconds = minute.BearishPersistenceSeconds,
-                        LargestBidWallAgeSec = topBidWalls.Any() ? topBidWalls.Max(x => (x.LastSeenUtc - x.FirstSeenUtc).TotalSeconds) : 0,
-                        LargestAskWallAgeSec = topAskWalls.Any() ? topAskWalls.Max(x => (x.LastSeenUtc - x.FirstSeenUtc).TotalSeconds) : 0,
-                        LargestBidWallQty = topBidWalls.Any() ? topBidWalls.Max(x => x.MaxQuantitySeen) : 0,
-                        LargestAskWallQty = topAskWalls.Any() ? topAskWalls.Max(x => x.MaxQuantitySeen) : 0,
-                        ConsumedBidWallCount = topBidWalls.Count(x => x.IsConsumed),
-                        ConsumedAskWallCount = topAskWalls.Count(x => x.IsConsumed),
-                        AvgBidQuantityChangePct = topBidWalls.Any() ? topBidWalls.Average(x => x.QuantityChangePercent) : 0,
-                        AvgAskQuantityChangePct = topAskWalls.Any() ? topAskWalls.Average(x => x.QuantityChangePercent) : 0
-                    };
-
-                    _depthFeatureManager.Add(depthFeature);
-                    await _depthFeatureManager.SaveAsync(stoppingToken);
-                    var mtf = new DepthMtfAggregator(_depthFeatureManager.Rows).Build();
-                    _lastDepthLogUtc = DateTime.UtcNow;
-                }
                 if ((DateTime.UtcNow - _lastOiFetch).TotalSeconds > 120)
                 {
                     _lastOiValue = await _openInterestClient.GetOpenInterestAsync();
@@ -557,8 +510,12 @@ namespace KinetixFlowEngine.Core
                 double currentFundingRate = 0;
                 if ((DateTime.UtcNow.Second % 30) == 0) // every 30 seconds
                 {
-                    currentFundingRate = await _fundingRateClient.GetCurrentFundingRateAsync();
-                    _fundingRateEngine.Update(currentFundingRate);
+                    var fundingObservation = await _fundingRateClient.GetCurrentAsync();
+                    if (fundingObservation != null)
+                    {
+                        currentFundingRate = (double)fundingObservation.Rate;
+                        _fundingRateEngine.Update(currentFundingRate);
+                    }
                 }
                 if ((DateTime.UtcNow - _lastEngineCycle).TotalSeconds < _options.EngineCycleSeconds)
                 {
@@ -572,6 +529,7 @@ namespace KinetixFlowEngine.Core
                 try
                 {
                     result = _engineProcessor.Process(price, lastTrade.Quantity, lastTrade.Timestamp, _lastOiValue, _fundingRateEngine.CurrentRate, _fundingRateEngine.FundingPressure);
+                    _minutePipeline.UpdateEngine(result);
                     _strengthEngine.Update(result);
 
                     if (DateTime.UtcNow - _lastMarketStateSaveUtc >= TimeSpan.FromMinutes(1))
@@ -582,29 +540,29 @@ namespace KinetixFlowEngine.Core
                     }
                     if (DateTime.UtcNow - _lastPriceSaveUtc >= TimeSpan.FromMinutes(1))
                     {
-                        using var scope = _scopeFactory.CreateScope();
-                        var repository = scope.ServiceProvider.GetRequiredService<IMarketPriceRepository>();
-                        await repository.SaveAsync(new MarketPriceEntity { TimestampUtc = DateTime.UtcNow, Price = (decimal)result.Price }, stoppingToken);
+                        //using var scope = _scopeFactory.CreateScope();
+                        //var repository = scope.ServiceProvider.GetRequiredService<IMarketPriceRepository>();
+                        //await repository.SaveAsync(new MarketPriceEntity { TimestampUtc = DateTime.UtcNow, Price = (decimal)result.Price }, stoppingToken);
 
                         _lastPriceSaveUtc = DateTime.UtcNow;
                     }
 
-                    if (DateTime.UtcNow - _lastGptReviewUtc >= TimeSpan.FromMinutes(10) && _gptMarketStateManager.Rows.Count >= KinetixConstants.MaxDepthCount && _depthFeatureManager.Rows.Count >= KinetixConstants.MaxDepthCount)
+                    if (DateTime.UtcNow - _lastGptReviewUtc >= TimeSpan.FromMinutes(10) && _gptMarketStateManager.Rows.Count >= KinetixConstants.MaxDepthCount)
                     {
-                        _logger.LogInformation("depth count: {DepthCount}", _depthFeatureManager.Rows.Count);
+                        //_logger.LogInformation("depth count: {DepthCount}", _depthFeatureManager.Rows.Count);
                         var sequence = _gptSessionManager.GetNextSequence();
                         using var scope = _scopeFactory.CreateScope();
-                        var priceRepository = scope.ServiceProvider.GetRequiredService<IMarketPriceRepository>();
+                        //var priceRepository = scope.ServiceProvider.GetRequiredService<IMarketPriceRepository>();
 
-                        var prices = await priceRepository.GetRecentAsync(KinetixConstants.MaxDepthCount, stoppingToken);
-                        var structure = _marketStructureEngine.Build(prices, (decimal)result.Price, (decimal)result.VWAP);
+                        //var prices = await priceRepository.GetRecentAsync(KinetixConstants.MaxDepthCount, stoppingToken);
+                        //var structure = _marketStructureEngine.Build(prices, (decimal)result.Price, (decimal)result.VWAP);
 
-                        var snapshotRepository = scope.ServiceProvider.GetRequiredService<ISnapshotRepository>();
-                        var snapshots = await snapshotRepository.GetRecentSnapshotsAsync(3);
-                        var history = snapshots.OrderBy(x => x.Sequence).Select(HistoricalSnapshotMapper.Map).ToList();
-                        var snapshotV2 = await _snapshotV2Builder.Build(sequence, EngineVersion.Version, result, structure, history);
+                        //var snapshotRepository = scope.ServiceProvider.GetRequiredService<ISnapshotRepository>();
+                        //var snapshots = await snapshotRepository.GetRecentSnapshotsAsync(3);
+                        //var history = snapshots.OrderBy(x => x.Sequence).Select(HistoricalSnapshotMapper.Map).ToList();
+                        //var snapshotV2 = await _snapshotV2Builder.Build(sequence, EngineVersion.Version, result, structure, history);
 
-                        await _gptReviewQueue.EnqueueAsync(snapshotV2);
+                        //await _gptReviewQueue.EnqueueAsync(snapshotV2);
                         _lastGptReviewUtc = DateTime.UtcNow;
                         _logger.LogInformation("GPT Review Queued | Seq:{Seq}", sequence);
                     }
@@ -785,13 +743,13 @@ namespace KinetixFlowEngine.Core
                         PriceFastEma = _priceEngine.Fast,
                         PriceSlowEma = _priceEngine.Slow,
 
-                        ScoreFastEma = _scoreEngine.Fast,
-                        ScoreSlowEma = _scoreEngine.Slow,
-                        ScoreMediumEma = _scoreEngine.Medium,
+                        //ScoreFastEma = _scoreEngine.Fast,
+                        //ScoreSlowEma = _scoreEngine.Slow,
+                        //ScoreMediumEma = _scoreEngine.Medium,
 
-                        ProbFastEma = _probEngine.Fast,
-                        ProbSlowEma = _probEngine.Slow,
-                        ProbMediumEma = _probEngine.Medium,
+                        //ProbFastEma = _probEngine.Fast,
+                        //ProbSlowEma = _probEngine.Slow,
+                        //ProbMediumEma = _probEngine.Medium,
                         MomentumRun = _momentumRun.Run,
 
                         ScoreNormalizer = _scoreNorm.GetState(),

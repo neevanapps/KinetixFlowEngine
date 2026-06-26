@@ -1,4 +1,5 @@
-﻿using KinetixFlowEngine.Core.Utils;
+﻿using KinetixFlowEngine.Core.Domain.Liquidity;
+using KinetixFlowEngine.Core.Utils;
 using System.Globalization;
 using System.Net.WebSockets;
 using System.Text;

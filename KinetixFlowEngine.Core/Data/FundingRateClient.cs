@@ -1,47 +1,62 @@
 ﻿using System.Globalization;
 using System.Text.Json;
+using KinetixFlowEngine.Core.Domain.FundingRate;
 
-namespace KinetixFlowEngine.Core.Data
+namespace KinetixFlowEngine.Core.Data;
+
+public sealed class FundingRateClient
 {
-    public class FundingRateClient
+    private readonly HttpClient _http;
+
+    public FundingRateClient(HttpClient http)
     {
-        private readonly HttpClient _http;
+        _http = http;
+        _http.BaseAddress = new Uri("https://api.bybit.com");
+    }
 
-        public FundingRateClient(HttpClient http)
+    public async Task<FundingObservation?> GetCurrentAsync(
+        string symbol = "BTCUSDT")
+    {
+        try
         {
-            _http = http;
-            _http.BaseAddress = new Uri("https://api.bybit.com");
-        }
+            var response =
+                await _http.GetAsync(
+                    $"/v5/market/tickers?category=linear&symbol={symbol}");
 
-        public async Task<double> GetCurrentFundingRateAsync(string symbol = "BTCUSDT")
-        {
-            try
-            {
-                var resp = await _http.GetAsync($"/v5/market/tickers?category=linear&symbol={symbol}");
+            if (!response.IsSuccessStatusCode)
+                return null;
 
-                if (!resp.IsSuccessStatusCode)
-                    return 0.0;
+            using var stream =
+                await response.Content.ReadAsStreamAsync();
 
-                using var stream = await resp.Content.ReadAsStreamAsync();
-                using var doc = await JsonDocument.ParseAsync(stream);
+            using var doc =
+                await JsonDocument.ParseAsync(stream);
 
-                var list = doc.RootElement
+            var list =
+                doc.RootElement
                     .GetProperty("result")
                     .GetProperty("list");
 
-                if (list.GetArrayLength() == 0)
-                    return 0.0;
+            if (list.GetArrayLength() == 0)
+                return null;
 
-                var ticker = list[0];
+            var ticker = list[0];
 
-                var fundingRateStr = ticker.GetProperty("fundingRate").GetString() ?? "0";
+            var rate =
+                decimal.Parse(
+                    ticker.GetProperty("fundingRate").GetString()!,
+                    CultureInfo.InvariantCulture);
 
-                return double.Parse(fundingRateStr, CultureInfo.InvariantCulture);
-            }
-            catch
+            return new FundingObservation
             {
-                return 0.0;
-            }
+                TimestampUtc = DateTime.UtcNow,
+
+                Rate = rate
+            };
+        }
+        catch
+        {
+            return null;
         }
     }
 }
