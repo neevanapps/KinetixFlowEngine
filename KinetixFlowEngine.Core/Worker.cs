@@ -7,6 +7,7 @@ using KinetixFlowEngine.Core.Database.Repositories;
 using KinetixFlowEngine.Core.Depth;
 using KinetixFlowEngine.Core.Engine;
 using KinetixFlowEngine.Core.Execution;
+using KinetixFlowEngine.Core.Export;
 using KinetixFlowEngine.Core.Flow;
 using KinetixFlowEngine.Core.Gpt.Models;
 using KinetixFlowEngine.Core.Gpt.Persistence;
@@ -112,6 +113,10 @@ namespace KinetixFlowEngine.Core
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly MarketStructureEngine _marketStructureEngine;
 
+        private readonly FlowEngineMarketFeatureComposer _flowFeatureComposer;
+        private readonly IFlowEngineMarketFeatureExportQueue _flowFeatureExportQueue;
+        private DepthMinuteFeature? _latestDepthMinuteFeatureForExport;
+
         public Worker(FlowTradeBuffer flowTradeBuffer, TradeStreamClient tradeStreamClient, ILogger<Worker> logger, KinetixEngineProcessor engineProcessor, ScoreNormalizer scoreNorm, EngineBootstrapService bootstrap,
                     VelocityNormalizer velNorm, ImbalanceNormalizer imbNorm, ExhaustionNormalizer exhNorm, CompressionNormalizer cmpNorm, MarketStateManager snapshotManager, PositionManager positionManager,
                     EngineWarmupManager warmup, PriceTrendEngine priceEngine, ScoreTrendEngine scoreEngine, OpenInterestClient openInterestClient, FlowMetricsRecorder recorder, StrategyEngine strategyEngine,
@@ -123,7 +128,7 @@ namespace KinetixFlowEngine.Core
                     GptSnapshotBuilder gptSnapshotBuilder, GptSnapshotStore gptSnapshotStore, IGptSessionManager gptSessionManager, IGptPromptBuilder gptPromptBuilder, CompositeReviewService gptReviewService,
                     GptMarketStateManager gptMarketStateManager, GptMultiTimeframeAggregator mtfAggregator, GptMarketSnapshotV2Builder snapshotV2Builder, IGptReviewQueue gptReviewQueue, BinanceDepthStreamClient depthStreamClient,
                     DepthFeatureEngine depthFeatureEngine, DepthMinuteAggregator depthMinuteAggregator, DepthWallTracker depthWallTracker, DepthFeatureManager depthFeatureManager, FlowImpactNormalizer flowImpactNormalizer,
-                    IServiceScopeFactory scopeFactory, MarketStructureEngine marketStructureEngine)
+                    IServiceScopeFactory scopeFactory, MarketStructureEngine marketStructureEngine, FlowEngineMarketFeatureComposer flowFeatureComposer, IFlowEngineMarketFeatureExportQueue flowFeatureExportQueue)
         {
             _logger = logger;
             _bootstrap = bootstrap;
@@ -187,6 +192,8 @@ namespace KinetixFlowEngine.Core
             _depthWallTracker = depthWallTracker;
             _depthFeatureManager = depthFeatureManager;
             _marketStructureEngine = marketStructureEngine;
+            _flowFeatureComposer = flowFeatureComposer;
+            _flowFeatureExportQueue = flowFeatureExportQueue;
 
             _tradeStreamClient.OnTrade += trade =>
             {
@@ -544,6 +551,7 @@ namespace KinetixFlowEngine.Core
                     };
 
                     _depthFeatureManager.Add(depthFeature);
+                    _latestDepthMinuteFeatureForExport = depthFeature;
                     await _depthFeatureManager.SaveAsync(stoppingToken);
                     var mtf = new DepthMtfAggregator(_depthFeatureManager.Rows).Build();
                     _lastDepthLogUtc = DateTime.UtcNow;
@@ -574,6 +582,8 @@ namespace KinetixFlowEngine.Core
                     result = _engineProcessor.Process(price, lastTrade.Quantity, lastTrade.Timestamp, _lastOiValue, _fundingRateEngine.CurrentRate, _fundingRateEngine.FundingPressure);
                     _strengthEngine.Update(result);
 
+                    TryQueueFlowFeatureExport(result, _depthStreamClient.CurrentSnapshot);
+
                     if (DateTime.UtcNow - _lastMarketStateSaveUtc >= TimeSpan.FromMinutes(1))
                     {
                         _gptMarketStateManager.Add(CreateMarketStateRow(result));
@@ -589,25 +599,25 @@ namespace KinetixFlowEngine.Core
                         _lastPriceSaveUtc = DateTime.UtcNow;
                     }
 
-                    if (DateTime.UtcNow - _lastGptReviewUtc >= TimeSpan.FromMinutes(10) && _gptMarketStateManager.Rows.Count >= KinetixConstants.MaxDepthCount && _depthFeatureManager.Rows.Count >= KinetixConstants.MaxDepthCount)
-                    {
-                        _logger.LogInformation("depth count: {DepthCount}", _depthFeatureManager.Rows.Count);
-                        var sequence = _gptSessionManager.GetNextSequence();
-                        using var scope = _scopeFactory.CreateScope();
-                        var priceRepository = scope.ServiceProvider.GetRequiredService<IMarketPriceRepository>();
+                    //if (DateTime.UtcNow - _lastGptReviewUtc >= TimeSpan.FromMinutes(10) && _gptMarketStateManager.Rows.Count >= KinetixConstants.MaxDepthCount && _depthFeatureManager.Rows.Count >= KinetixConstants.MaxDepthCount)
+                    //{
+                    //    _logger.LogInformation("depth count: {DepthCount}", _depthFeatureManager.Rows.Count);
+                    //    var sequence = _gptSessionManager.GetNextSequence();
+                    //    using var scope = _scopeFactory.CreateScope();
+                    //    var priceRepository = scope.ServiceProvider.GetRequiredService<IMarketPriceRepository>();
 
-                        var prices = await priceRepository.GetRecentAsync(KinetixConstants.MaxDepthCount, stoppingToken);
-                        var structure = _marketStructureEngine.Build(prices, (decimal)result.Price, (decimal)result.VWAP);
+                    //    var prices = await priceRepository.GetRecentAsync(KinetixConstants.MaxDepthCount, stoppingToken);
+                    //    var structure = _marketStructureEngine.Build(prices, (decimal)result.Price, (decimal)result.VWAP);
 
-                        var snapshotRepository = scope.ServiceProvider.GetRequiredService<ISnapshotRepository>();
-                        var snapshots = await snapshotRepository.GetRecentSnapshotsAsync(3);
-                        var history = snapshots.OrderBy(x => x.Sequence).Select(HistoricalSnapshotMapper.Map).ToList();
-                        var snapshotV2 = await _snapshotV2Builder.Build(sequence, EngineVersion.Version, result, structure, history);
+                    //    var snapshotRepository = scope.ServiceProvider.GetRequiredService<ISnapshotRepository>();
+                    //    var snapshots = await snapshotRepository.GetRecentSnapshotsAsync(3);
+                    //    var history = snapshots.OrderBy(x => x.Sequence).Select(HistoricalSnapshotMapper.Map).ToList();
+                    //    var snapshotV2 = await _snapshotV2Builder.Build(sequence, EngineVersion.Version, result, structure, history);
 
-                        await _gptReviewQueue.EnqueueAsync(snapshotV2);
-                        _lastGptReviewUtc = DateTime.UtcNow;
-                        _logger.LogInformation("GPT Review Queued | Seq:{Seq}", sequence);
-                    }
+                    //    await _gptReviewQueue.EnqueueAsync(snapshotV2);
+                    //    _lastGptReviewUtc = DateTime.UtcNow;
+                    //    _logger.LogInformation("GPT Review Queued | Seq:{Seq}", sequence);
+                    //}
                 }
                 catch (Exception ex)
                 {
@@ -810,6 +820,40 @@ namespace KinetixFlowEngine.Core
                     _lastSnapshot = DateTime.UtcNow;
                 }
                 await Task.Delay(1000, stoppingToken);
+            }
+        }
+
+        private void TryQueueFlowFeatureExport(
+    KinetixEngineResult result,
+    DepthSnapshot depthSnapshot)
+        {
+            var depthMinute = _latestDepthMinuteFeatureForExport;
+
+            if (depthMinute == null)
+                return;
+
+            try
+            {
+                var feature = _flowFeatureComposer.Compose(
+                    result,
+                    depthMinute,
+                    depthSnapshot);
+
+                if (_flowFeatureExportQueue.TryEnqueue(feature))
+                {
+                    _latestDepthMinuteFeatureForExport = null;
+                }
+                else
+                {
+                    _logger.LogWarning(
+                        "Flow feature export queue full. Dropped feature Timestamp={Timestamp}",
+                        depthMinute.TimestampUtc);
+                }
+            }
+            catch (Exception ex)
+            {
+                _exceptionAggregator.Capture(ex);
+                _logger.LogError(ex, "Failed to compose Flow feature export row");
             }
         }
 

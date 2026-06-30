@@ -35,27 +35,27 @@ public sealed class CompositeReviewService
         // Start cloud immediately
         //
 
-        var cloudTasks =
-        _cloudReviewers
-            .Select(async reviewer =>
-            {
-                try
-                {
-                    return await reviewer.ReviewAsync(
-                        snapshot,
-                        ct);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(
-                        ex,
-                        "Cloud reviewer failed: {Reviewer}",
-                        reviewer.Name);
+        //var cloudTasks =
+        //_cloudReviewers
+        //    .Select(async reviewer =>
+        //    {
+        //        try
+        //        {
+        //            return await reviewer.ReviewAsync(
+        //                snapshot,
+        //                ct);
+        //        }
+        //        catch (Exception ex)
+        //        {
+        //            _logger.LogError(
+        //                ex,
+        //                "Cloud reviewer failed: {Reviewer}",
+        //                reviewer.Name);
 
-                    return null;
-                }
-            })
-            .ToList();
+        //            return null;
+        //        }
+        //    })
+        //    .ToList();
 
         //
         // Run local sequentially
@@ -88,10 +88,10 @@ public sealed class CompositeReviewService
         // Await cloud completion
         //
 
-        var cloudResults =
-            await Task.WhenAll(cloudTasks);
+        //var cloudResults =
+        //    await Task.WhenAll(cloudTasks);
 
-        results.AddRange(cloudResults.Where(x => x != null)!);
+        //results.AddRange(cloudResults.Where(x => x != null)!);
 
         return results;
     }

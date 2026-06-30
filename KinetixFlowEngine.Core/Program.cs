@@ -8,6 +8,7 @@ using KinetixFlowEngine.Core.Database.Repositories;
 using KinetixFlowEngine.Core.Depth;
 using KinetixFlowEngine.Core.Engine;
 using KinetixFlowEngine.Core.Execution;
+using KinetixFlowEngine.Core.Export;
 using KinetixFlowEngine.Core.Flow;
 using KinetixFlowEngine.Core.Flow.Probability;
 using KinetixFlowEngine.Core.Flow.State;
@@ -67,6 +68,7 @@ namespace KinetixFlowEngine.Core
                 builder.Services.Configure<PropAccountsOptions>(builder.Configuration.GetSection("PropAccounts"));
                 builder.Services.Configure<GptSettings>(builder.Configuration.GetSection("OpenAI"));
                 builder.Services.Configure<CloudAiSettings>(builder.Configuration.GetSection("CloudAI"));
+                builder.Services.Configure<FlowEngineQuantExportOptions>(builder.Configuration.GetSection("FlowEngineQuantExport"));
                 builder.Services.AddDbContextFactory<KinetixDbContext>(options =>
                 {
                     options.UseNpgsql(builder.Configuration.GetConnectionString("KinetixDb"));
@@ -96,6 +98,10 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<DepthMinuteAggregator>();
                 builder.Services.AddSingleton<DepthWallTracker>();
                 builder.Services.AddSingleton<DepthFeatureManager>();
+
+                builder.Services.AddSingleton<FlowEngineMarketFeatureComposer>();
+                builder.Services.AddSingleton<IFlowEngineMarketFeatureExportQueue, FlowEngineMarketFeatureExportQueue>();
+                builder.Services.AddHostedService<FlowEngineMarketFeaturePostgresWriter>();
 
                 builder.Services.AddSingleton<ExecutionSyncService>();
                 builder.Services.AddSingleton<ScoreNormalizer>();
@@ -159,11 +165,11 @@ namespace KinetixFlowEngine.Core
                 //builder.Services.AddSingleton<IKinetixStrategy, SlowScorePrice>();
                 //builder.Services.AddSingleton<IKinetixStrategy, SlowScoreStrengthStrategy>();
                 builder.Services.AddSingleton<StrategyHelper>();
-                builder.Services.AddSingleton<IKinetixStrategy, ConsensusStrategy>();
+                //builder.Services.AddSingleton<IKinetixStrategy, ConsensusStrategy>();
                 builder.Services.AddSingleton<IKinetixStrategy, QwenStrategy>();
                 builder.Services.AddSingleton<IKinetixStrategy, MistralStrategy>();
-                builder.Services.AddSingleton<IKinetixStrategy, GptOssStrategy>();
-                builder.Services.AddSingleton<IKinetixStrategy, GlmStrategy>();
+                //builder.Services.AddSingleton<IKinetixStrategy, GptOssStrategy>();
+                //builder.Services.AddSingleton<IKinetixStrategy, GlmStrategy>();
 
                 builder.Services.AddSingleton<StrategyEngine>();
                 builder.Services.AddSingleton<StrategyAggregator>();
@@ -193,12 +199,12 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<IGptSessionManager, GptSessionManager>();
                 builder.Services.AddSingleton<IGptPromptBuilder, GptPromptBuilder>();
                 builder.Services.AddSingleton<GptMarketSnapshotV2Builder>();
-                
+
                 builder.Services.AddSingleton<IGptReviewStore, GptReviewStore>();
                 builder.Services.AddSingleton<ILocalModelReviewer, QwenReviewService>();
                 builder.Services.AddSingleton<ILocalModelReviewer, MistralReviewService>();
-                builder.Services.AddSingleton<ICloudModelReviewer, GptOssReviewService>();
-                builder.Services.AddSingleton<ICloudModelReviewer, GlmResvireService>();
+                //builder.Services.AddSingleton<ICloudModelReviewer, GptOssReviewService>();
+                //builder.Services.AddSingleton<ICloudModelReviewer, GlmResvireService>();
                 //builder.Services.AddSingleton<ICloudModelReviewer, DeepSeekReviewService>();
                 //builder.Services.AddSingleton<ICloudModelReviewer, NemotronReviewService>();
 
