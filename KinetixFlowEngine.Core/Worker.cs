@@ -14,6 +14,7 @@ using KinetixFlowEngine.Core.Gpt.Persistence;
 using KinetixFlowEngine.Core.Gpt.Services;
 using KinetixFlowEngine.Core.Persistence;
 using KinetixFlowEngine.Core.Prop;
+using KinetixFlowEngine.Core.Quant;
 using KinetixFlowEngine.Core.Strategy;
 using KinetixFlowEngine.Core.Trading;
 using KinetixFlowEngine.Core.Trend;
@@ -446,7 +447,7 @@ namespace KinetixFlowEngine.Core
             var persisted = _positionPersistence.Load();
             if (persisted.Any())
             {
-                _positionManager.Restore(persisted);
+               await _positionManager.Restore(persisted);
                 _logger.LogInformation("Restored {count} open positions", persisted.Count);
             }
 
@@ -509,8 +510,6 @@ namespace KinetixFlowEngine.Core
 
             while (!stoppingToken.IsCancellationRequested)
             {
-
-
                 if (!_flowTradeBuffer.TryGetLast(out var lastTrade))
                 {
                     await Task.Delay(1000, stoppingToken);

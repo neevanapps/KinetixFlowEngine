@@ -18,6 +18,7 @@ using KinetixFlowEngine.Core.Gpt.Persistence;
 using KinetixFlowEngine.Core.Gpt.Services;
 using KinetixFlowEngine.Core.Persistence;
 using KinetixFlowEngine.Core.Prop;
+using KinetixFlowEngine.Core.Quant;
 using KinetixFlowEngine.Core.Signal;
 using KinetixFlowEngine.Core.Strategy;
 using KinetixFlowEngine.Core.Strategy.Strategies;
@@ -103,6 +104,20 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<IFlowEngineMarketFeatureExportQueue, FlowEngineMarketFeatureExportQueue>();
                 builder.Services.AddHostedService<FlowEngineMarketFeaturePostgresWriter>();
 
+                builder.Services.Configure<QuantDecisionReaderOptions>(builder.Configuration.GetSection("QuantDecisionReader"));
+                builder.Services.AddSingleton<IQuantModelDecisionReader, QuantModelDecisionReader>();
+
+                builder.Services.Configure<QuantModelConsensusOptions>(builder.Configuration.GetSection("QuantModelConsensus"));
+                builder.Services.AddSingleton<IQuantModelConsensusService, QuantModelConsensusService>();
+
+                builder.Services.Configure<QuantModelConsensusCacheOptions>(builder.Configuration.GetSection("QuantModelConsensusCache"));
+                builder.Services.Configure<QuantModelConsensusStrategyOptions>(builder.Configuration.GetSection("QuantModelConsensusStrategy"));
+
+
+                builder.Services.AddSingleton<QuantModelConsensusCache>();
+                builder.Services.AddSingleton<IQuantModelConsensusProvider>(sp => sp.GetRequiredService<QuantModelConsensusCache>());
+                builder.Services.AddHostedService(sp => sp.GetRequiredService<QuantModelConsensusCache>());
+
                 builder.Services.AddSingleton<ExecutionSyncService>();
                 builder.Services.AddSingleton<ScoreNormalizer>();
                 builder.Services.AddSingleton<VelocityNormalizer>();
@@ -165,9 +180,9 @@ namespace KinetixFlowEngine.Core
                 //builder.Services.AddSingleton<IKinetixStrategy, SlowScorePrice>();
                 //builder.Services.AddSingleton<IKinetixStrategy, SlowScoreStrengthStrategy>();
                 builder.Services.AddSingleton<StrategyHelper>();
-                //builder.Services.AddSingleton<IKinetixStrategy, ConsensusStrategy>();
-                builder.Services.AddSingleton<IKinetixStrategy, QwenStrategy>();
-                builder.Services.AddSingleton<IKinetixStrategy, MistralStrategy>();
+                builder.Services.AddSingleton<IKinetixStrategy, QuantModelConsensusStrategy>();
+                //builder.Services.AddSingleton<IKinetixStrategy, QwenStrategy>();
+                //builder.Services.AddSingleton<IKinetixStrategy, MistralStrategy>();
                 //builder.Services.AddSingleton<IKinetixStrategy, GptOssStrategy>();
                 //builder.Services.AddSingleton<IKinetixStrategy, GlmStrategy>();
 
