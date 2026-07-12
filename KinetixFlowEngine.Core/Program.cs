@@ -180,7 +180,9 @@ namespace KinetixFlowEngine.Core
                 //builder.Services.AddSingleton<IKinetixStrategy, SlowScorePrice>();
                 //builder.Services.AddSingleton<IKinetixStrategy, SlowScoreStrengthStrategy>();
                 builder.Services.AddSingleton<StrategyHelper>();
-                builder.Services.AddSingleton<IKinetixStrategy, QuantModelConsensusStrategy>();
+                builder.Services.AddSingleton<IKinetixStrategy, QuantConsensus1ReviewStrategy>();
+                builder.Services.AddSingleton<IKinetixStrategy, QuantConsensus2ReviewStrategy>();
+                builder.Services.AddSingleton<IKinetixStrategy, QuantConsensus3ReviewStrategy>();
                 //builder.Services.AddSingleton<IKinetixStrategy, QwenStrategy>();
                 //builder.Services.AddSingleton<IKinetixStrategy, MistralStrategy>();
                 //builder.Services.AddSingleton<IKinetixStrategy, GptOssStrategy>();

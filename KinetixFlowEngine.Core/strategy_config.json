@@ -1,9 +1,43 @@
 [
   {
-    "StrategyName": "QuantModelConsensus",
+    "StrategyName": "QuantConsensus1Review",
     "Enabled": true,
     "EnterOnlyAtFairPrice": true,
-    "NotifyThroughTelegram": true,
+    "NotifyThroughTelegram": false,
+    "MinConfidence": 35,
+    "CooldownSeconds": 180,
+    "PositionSize": 1,
+    "Target1Atr": 1.5,
+    "Target1SizePercent": 50,
+    "Target2Atr": 3,
+    "Target2SizePercent": 50,
+    "StopLossAtr": 1,
+    "TrailingStopAtr": 1,
+    "VolumeBased": false,
+    "AccountIds": []
+  },
+  {
+    "StrategyName": "QuantConsensus2Review",
+    "Enabled": true,
+    "EnterOnlyAtFairPrice": true,
+    "NotifyThroughTelegram": false,
+    "MinConfidence": 30,
+    "CooldownSeconds": 180,
+    "PositionSize": 1,
+    "Target1Atr": 1.5,
+    "Target1SizePercent": 50,
+    "Target2Atr": 3,
+    "Target2SizePercent": 50,
+    "StopLossAtr": 1,
+    "TrailingStopAtr": 1,
+    "VolumeBased": false,
+    "AccountIds": []
+  },
+  {
+    "StrategyName": "QuantConsensus3Review",
+    "Enabled": true,
+    "EnterOnlyAtFairPrice": true,
+    "NotifyThroughTelegram": false,
     "MinConfidence": 25,
     "CooldownSeconds": 180,
     "PositionSize": 1,
@@ -14,6 +48,6 @@
     "StopLossAtr": 1,
     "TrailingStopAtr": 1,
     "VolumeBased": false,
-    "AccountIds": [ "Demo10k" ]
+    "AccountIds": []
   }
 ]
