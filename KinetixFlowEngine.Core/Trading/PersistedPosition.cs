@@ -11,6 +11,8 @@ namespace KinetixFlowEngine.Core.Trading
         public decimal EntryPrice { get; set; }
         public decimal StopLoss { get; set; }
         public decimal Target1 { get; set; }
+        public decimal Target1SizePercent { get; set; }
+        public decimal ConfiguredLeverage { get; set; } = 1m;
         public decimal Size { get; set; }
         public long EntryTimeMs { get; set; }
         public bool Target1Hit { get; set; }

@@ -267,6 +267,11 @@ namespace KinetixFlowEngine.Core
                     fee = breakdown.fee;
                     pnl = breakdown.net;
                 }
+                decimal leverage = trade.ConfiguredLeverage > 0m ? trade.ConfiguredLeverage : 1m;
+                decimal leveragedGross = gross * leverage;
+                decimal leveragedFee = fee * leverage;
+                decimal leveragedPnl = pnl * leverage;
+
                 // -------------------------------
                 // JOURNAL
                 // -------------------------------
@@ -336,7 +341,11 @@ namespace KinetixFlowEngine.Core
                     FairPriceAtEntry = trade.FairPriceAtEntry,
                     EntryDelaySeconds = trade.EntryDelaySeconds,
                     IntentExpiryReason = trade.IntentExpiryReason,
-                    ExitReason = trade.ExitReason
+                    ExitReason = trade.ExitReason,
+                    ConfiguredLeverage = leverage,
+                    LeveragedGrossPnlUsd = leveragedGross,
+                    LeveragedFeeUsd = leveragedFee,
+                    LeveragedPnlUsd = leveragedPnl
                 });
 
                 // -------------------------------
@@ -349,6 +358,7 @@ namespace KinetixFlowEngine.Core
                     EntryPrice = trade.EntryPrice,
                     ExitPrice = exitPrice,
                     ExitReason = trade.ExitReason,
+                    Target1Hit = trade.Target1Hit,
                     ExitTime = DateTime.UtcNow,
                     CurrentPayloadId = trade.CurrentPayloadId,
                     QuantIntentId = trade.QuantIntentId
@@ -670,7 +680,12 @@ namespace KinetixFlowEngine.Core
 
                 if (IsStabilizationPeriodOver())
                 {
-                    // ---------- EXIT FIRST ----------
+                    // ---------- PRICE-BASED POSITION MANAGEMENT FIRST ----------
+                    // This lets TP1_FULL/SL close before a model SignalFlip can take precedence
+                    // on the same engine cycle.
+                    await _positionManager.Update((decimal)price);
+
+                    // ---------- EXIT SECOND ----------
                     foreach (var trade in _positionManager.GetAllPositions().ToList())
                     {
                         var exitSignal = _strategyEngine.EvaluateExit(result, trade);
@@ -741,7 +756,6 @@ namespace KinetixFlowEngine.Core
                             }
                         }
                     }
-                    await _positionManager.Update((decimal)price);
                     _equityEngine.UpdateAll((decimal)price);
                 }
 
@@ -918,8 +932,10 @@ namespace KinetixFlowEngine.Core
 
         private bool IsReentryAllowed(StrategySignal signal, KinetixEngineResult r, decimal price, bool isFairPrice, bool isVolumeExpansion)
         {
-            //Naveen need to make it account wise
-            // No previous trade → allow
+            var config = _strategyConfigLoader.Get(signal.StrategyName);
+
+            // NaveenImp: trade memory is still strategy-wise in this minimal phase.
+            // We are not changing it to account-wise/profile-wise yet.
             var last = _tradeMemory.Get(signal.StrategyName);
             if (last == null)
                 return true;
@@ -931,25 +947,65 @@ namespace KinetixFlowEngine.Core
                 return false;
             }
 
-            if ((DateTime.UtcNow - last.ExitTime).TotalMinutes < 2)
+            var cooldownSeconds = config.CooldownSeconds > 0
+                ? config.CooldownSeconds
+                : 120;
+
+            if ((DateTime.UtcNow - last.ExitTime).TotalSeconds < cooldownSeconds)
                 return false;
 
-            // Only restrict SAME direction after SL / TSL
             if (last.Direction != signal.Direction)
                 return true;
 
+            if (config.CanReenterSameDirection)
+            {
+                if (config.ReEntryOnlyAfterProfit && !WasPreviousTradeProfitable(last))
+                {
+                    _logger.LogDebug(
+                        "Same-direction re-entry blocked for {Strategy}: previous trade was not profitable. Entry={Entry}, Exit={Exit}, Direction={Direction}, Reason={Reason}",
+                        signal.StrategyName,
+                        last.EntryPrice,
+                        last.ExitPrice,
+                        last.Direction,
+                        last.ExitReason);
+                    return false;
+                }
+
+                if (config.ReEntryOnlyAfterTargetHit &&
+                    !last.Target1Hit &&
+                    !last.ExitReason.Equals("TP1_FULL", StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogDebug(
+                        "Same-direction re-entry blocked for {Strategy}: previous trade did not hit TP1. ExitReason={Reason}",
+                        signal.StrategyName,
+                        last.ExitReason);
+                    return false;
+                }
+
+                if (!IsWithinReEntryRange(price, last.EntryPrice, config.ReEntryRangePercent))
+                {
+                    _logger.LogDebug(
+                        "Same-direction re-entry blocked for {Strategy}: price outside range. Price={Price}, PreviousEntry={Entry}, RangePercent={RangePercent}",
+                        signal.StrategyName,
+                        price,
+                        last.EntryPrice,
+                        config.ReEntryRangePercent);
+                    return false;
+                }
+
+                return true;
+            }
+
+            // Existing fallback behaviour retained when CanReenterSameDirection=false.
+            // Only restrict SAME direction after SL / TSL.
             if (last.ExitReason != "SL" && last.ExitReason != "TSL")
                 return true;
 
-            // -------------------------------
             // Path A: Pullback entry
-            // -------------------------------
             if (isFairPrice && isVolumeExpansion)
                 return true;
 
-            // -------------------------------
             // Path B: Breakout entry
-            // -------------------------------
             if (signal.Direction == SignalDirection.Long && (decimal)r.ProbMediumEma >= 0.60m && isVolumeExpansion)
                 return true;
 
@@ -957,6 +1013,31 @@ namespace KinetixFlowEngine.Core
                 return true;
 
             return false;
+        }
+
+        private static bool WasPreviousTradeProfitable(TradeMemory trade)
+        {
+            return trade.Direction switch
+            {
+                SignalDirection.Long => trade.ExitPrice > trade.EntryPrice,
+                SignalDirection.Short => trade.ExitPrice < trade.EntryPrice,
+                _ => false
+            };
+        }
+
+        private static bool IsWithinReEntryRange(decimal currentPrice, decimal previousEntryPrice, decimal rangePercent)
+        {
+            if (previousEntryPrice <= 0m)
+                return false;
+
+            if (rangePercent <= 0m)
+                return false;
+
+            var range = previousEntryPrice * rangePercent / 100m;
+            var lower = previousEntryPrice - range;
+            var upper = previousEntryPrice + range;
+
+            return currentPrice >= lower && currentPrice <= upper;
         }
 
         private bool IsStabilizationPeriodOver()

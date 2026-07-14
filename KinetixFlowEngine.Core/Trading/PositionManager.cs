@@ -66,8 +66,25 @@ namespace KinetixFlowEngine.Core.Trading
             if (_activeTrades.ContainsKey(key))
                 return;
 
-            decimal atrValue = (decimal)atr;
-            decimal stopDistance = Math.Min(price * 0.01m, atrValue * 3);
+            var config = _strategyConfigLoader.Get(signal.StrategyName);
+            decimal atrValue = Math.Max(0m, (decimal)atr);
+            decimal stopDistance = CalculateDistance(
+                price,
+                atrValue,
+                config.StopLossAtr,
+                config.StopLossPercent,
+                price * 0.01m);
+
+            decimal target1Distance = CalculateDistance(
+                price,
+                atrValue,
+                config.Target1Atr,
+                config.Target1Percent,
+                stopDistance);
+
+            decimal target1SizePercent = SanitizePercent(config.Target1SizePercent);
+            decimal configuredLeverage = config.Leverage > 0m ? config.Leverage : 1m;
+
             var entryUtc = DateTimeOffset.UtcNow;
             var fairPriceAtEntry = signal.Direction == SignalDirection.Long
                 ? _fairPriceEngine.GetFairLongPrice(r.VWAP, r.ATR)
@@ -84,9 +101,11 @@ namespace KinetixFlowEngine.Core.Trading
                     : price + stopDistance,
 
                 Target1 = signal.Direction == SignalDirection.Long
-                    ? price + stopDistance
-                    : price - stopDistance,
+                    ? price + target1Distance
+                    : price - target1Distance,
 
+                Target1SizePercent = target1SizePercent,
+                ConfiguredLeverage = configuredLeverage,
                 TrailingStop = stopDistance,
                 InitialSize = size,
                 RemainingSize = size,
@@ -171,16 +190,44 @@ namespace KinetixFlowEngine.Core.Trading
                     if (hit)
                     {
                         trade.Target1Hit = true;
+                        Target1Reached?.Invoke(trade);
 
-                        //var reduceQty = trade.InitialSize * 0.7m;
-                        var config = _strategyConfigLoader.Get(trade.StrategyName);
-                        decimal sanitizedQty = Math.Round(trade.InitialSize - (trade.InitialSize * config.Target1SizePercent / 100), 3, MidpointRounding.ToZero);
-                        trade.RemainingSize =sanitizedQty;
+                        decimal target1ExitPercent = trade.Target1SizePercent > 0m
+                            ? SanitizePercent(trade.Target1SizePercent)
+                            : SanitizePercent(_strategyConfigLoader.Get(trade.StrategyName).Target1SizePercent);
 
-                        _logger.LogInformation("NaveenImp: Trade {Strategy} on account {AccountId} hit Target 1. Remaining size: {RemainingSize}",
-                            trade.StrategyName, trade.AccountId, trade.RemainingSize);
+                        if (target1ExitPercent >= 100m)
+                        {
+                            _logger.LogInformation(
+                                "Trade {Strategy} on account {AccountId} hit Target 1 FULL close. Price={Price} Target1={Target1}",
+                                trade.StrategyName,
+                                trade.AccountId,
+                                price,
+                                trade.Target1);
 
-                        // 🔥 EVENT instead of direct execution
+                            await CloseTrade(
+                                trade.StrategyName,
+                                trade.AccountId,
+                                price,
+                                "TP1_FULL");
+
+                            continue;
+                        }
+
+                        decimal sanitizedQty = Math.Round(
+                            trade.InitialSize - (trade.InitialSize * target1ExitPercent / 100m),
+                            3,
+                            MidpointRounding.ToZero);
+
+                        trade.RemainingSize = Math.Max(0m, sanitizedQty);
+
+                        _logger.LogInformation(
+                            "Trade {Strategy} on account {AccountId} hit Target 1 PARTIAL. ExitPercent={ExitPercent} RemainingSize={RemainingSize}",
+                            trade.StrategyName,
+                            trade.AccountId,
+                            target1ExitPercent,
+                            trade.RemainingSize);
+
                         PartialCloseRequested?.Invoke(trade);
 
                         if (!trade.MovedToBreakeven)
@@ -193,22 +240,19 @@ namespace KinetixFlowEngine.Core.Trading
 
                             trade.MovedToBreakeven = true;
 
-                            // 🔥 EVENT instead of executor call
                             StopLossUpdateRequested?.Invoke(trade);
                         }
-
-                        Target1Reached?.Invoke(trade);
                     }
                 }
 
                 if (trade.Direction == SignalDirection.Long && price <= trade.StopLoss)
                 {
-                    CloseTrade(trade.StrategyName, trade.AccountId, price, trade.Target1Hit ? "TSL" : "SL");
+                    await CloseTrade(trade.StrategyName, trade.AccountId, price, trade.Target1Hit ? "TSL" : "SL");
                 }
 
                 if (trade.Direction == SignalDirection.Short && price >= trade.StopLoss)
                 {
-                    CloseTrade(trade.StrategyName, trade.AccountId, price, trade.Target1Hit ? "TSL" : "SL");
+                    await CloseTrade(trade.StrategyName, trade.AccountId, price, trade.Target1Hit ? "TSL" : "SL");
                 }
             }
 
@@ -236,6 +280,39 @@ namespace KinetixFlowEngine.Core.Trading
             TradeClosed?.Invoke(trade, exitPrice);
         }
 
+
+        private static decimal CalculateDistance(
+            decimal entryPrice,
+            decimal atr,
+            decimal atrMultiple,
+            decimal percent,
+            decimal fallback)
+        {
+            var distances = new List<decimal>();
+
+            if (atr > 0m && atrMultiple > 0m)
+                distances.Add(atr * atrMultiple);
+
+            if (entryPrice > 0m && percent > 0m)
+                distances.Add(entryPrice * percent / 100m);
+
+            if (distances.Count == 0)
+                return Math.Max(0m, fallback);
+
+            return distances.Min();
+        }
+
+        private static decimal SanitizePercent(decimal percent)
+        {
+            if (percent < 0m)
+                return 0m;
+
+            if (percent > 100m)
+                return 100m;
+
+            return percent;
+        }
+
         private async Task SaveThrottled()
         {
             if ((DateTime.UtcNow - _lastSave).TotalSeconds < 5)
@@ -257,6 +334,8 @@ namespace KinetixFlowEngine.Core.Trading
                     EntryPrice = p.EntryPrice,
                     StopLoss = p.StopLoss,
                     Target1 = p.Target1,
+                    Target1SizePercent = p.Target1SizePercent,
+                    ConfiguredLeverage = p.ConfiguredLeverage > 0m ? p.ConfiguredLeverage : 1m,
                     InitialSize = p.Size,
                     RemainingSize = p.RemainingSize,   // ✅ FIX
                     TrailingStop = p.TrailingStop,     // ✅ FIX

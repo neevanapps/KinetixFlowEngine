@@ -9,7 +9,7 @@ namespace KinetixFlowEngine.Core.Strategy.Strategies;
 internal sealed class ConsensusPriceStrategy
     : QuantConsensusReviewStrategyBase
 {
-    public const string StrategyName = "Consensus";
+    public const string StrategyName = "ConsensusPrice";
 
     public ConsensusPriceStrategy(
         IQuantModelConsensusProvider consensusProvider,
@@ -17,7 +17,7 @@ internal sealed class ConsensusPriceStrategy
         IOptions<QuantModelConsensusStrategyOptions> options,
         FairPriceEngine fairPriceEngine,
         QuantConsensusIntentTracker intentTracker,
-        ILogger<ConsensusStrategy> logger)
+        ILogger<ConsensusPriceStrategy> logger)
         : base(
             StrategyName,
             consensusProvider,

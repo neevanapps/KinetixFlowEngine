@@ -185,8 +185,8 @@ namespace KinetixFlowEngine.Core
                 builder.Services.AddSingleton<IKinetixStrategy, QuantConsensus1ReviewStrategy>();
                 builder.Services.AddSingleton<IKinetixStrategy, QuantConsensus2ReviewStrategy>();
                 builder.Services.AddSingleton<IKinetixStrategy, QuantConsensus3ReviewStrategy>();
-                builder.Services.AddSingleton<QuantConsensusReviewStrategyBase, ConsensusPriceStrategy>();
-                builder.Services.AddSingleton<QuantConsensusReviewStrategyBase, ConsensusStrategy>();
+                builder.Services.AddSingleton<IKinetixStrategy, ConsensusPriceStrategy>();
+                builder.Services.AddSingleton<IKinetixStrategy, ConsensusStrategy>();
                 //builder.Services.AddSingleton<IKinetixStrategy, GptOssStrategy>();
                 //builder.Services.AddSingleton<IKinetixStrategy, GlmStrategy>();
 

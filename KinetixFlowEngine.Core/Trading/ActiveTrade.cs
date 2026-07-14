@@ -14,6 +14,10 @@ namespace KinetixFlowEngine.Core.Trading
 
         public decimal Target1 { get; set; }
 
+        public decimal Target1SizePercent { get; set; }
+
+        public decimal ConfiguredLeverage { get; set; } = 1m;
+
         public decimal TrailingStop { get; set; }
 
         public decimal InitialSize { get; set; }

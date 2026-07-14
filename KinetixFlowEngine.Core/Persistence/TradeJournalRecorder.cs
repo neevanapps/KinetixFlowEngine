@@ -10,7 +10,11 @@ namespace KinetixFlowEngine.Core.Persistence
         private const string ExtendedColumns =
             "trade_id,account_id,order_id,quant_intent_id,current_payload_id,previous_payload_id,third_payload_id,consensus_decision_utc,signal_utc,pending_intent_created_utc,entry_utc,review_count,current_batch_score,temporal_score,executable_votes,directional_agreement,executable_agreement,executable_batch_count,review_span_minutes,market_price_at_signal,fair_price_at_signal,fair_price_at_entry,entry_delay_sec,intent_expiry_reason,exit_reason";
 
-        private static readonly string Header = $"{LegacyHeader},{ExtendedColumns}";
+        private const string LeverageColumns =
+            "configured_leverage,leveraged_gross_pnl_usd,leveraged_fee_usd,leveraged_pnl_usd";
+
+        private static readonly string HeaderBeforeLeverage = $"{LegacyHeader},{ExtendedColumns}";
+        private static readonly string Header = $"{HeaderBeforeLeverage},{LeverageColumns}";
 
         private readonly string _filePath;
         private readonly object _sync = new();
@@ -43,7 +47,8 @@ namespace KinetixFlowEngine.Core.Persistence
             if (lines[0].Equals(Header, StringComparison.Ordinal))
                 return;
 
-            if (lines[0].Equals(LegacyHeader, StringComparison.Ordinal))
+            if (lines[0].Equals(LegacyHeader, StringComparison.Ordinal) ||
+                lines[0].Equals(HeaderBeforeLeverage, StringComparison.Ordinal))
             {
                 lines[0] = Header;
                 File.WriteAllLines(_filePath, lines);
@@ -107,7 +112,11 @@ namespace KinetixFlowEngine.Core.Persistence
                 r.FairPriceAtEntry.ToString(CultureInfo.InvariantCulture),
                 r.EntryDelaySeconds.ToString(CultureInfo.InvariantCulture),
                 r.IntentExpiryReason,
-                r.ExitReason
+                r.ExitReason,
+                r.ConfiguredLeverage.ToString(CultureInfo.InvariantCulture),
+                r.LeveragedGrossPnlUsd.ToString(CultureInfo.InvariantCulture),
+                r.LeveragedFeeUsd.ToString(CultureInfo.InvariantCulture),
+                r.LeveragedPnlUsd.ToString(CultureInfo.InvariantCulture)
             };
 
             var line = string.Join(",", values.Select(EscapeCsv));

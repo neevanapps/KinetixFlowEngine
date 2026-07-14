@@ -23,6 +23,8 @@ namespace KinetixFlowEngine.Core.Trading
                 EntryPrice = t.EntryPrice,
                 StopLoss = t.StopLoss,
                 Target1 = t.Target1,
+                Target1SizePercent = t.Target1SizePercent,
+                ConfiguredLeverage = t.ConfiguredLeverage,
                 Size = t.InitialSize,
                 EntryTimeMs = t.EntryTimeMs,
                 Target1Hit = t.Target1Hit,

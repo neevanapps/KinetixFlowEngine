@@ -11,6 +11,8 @@ public class TradeMemory
 
     public string ExitReason { get; set; } = "";
 
+    public bool Target1Hit { get; set; }
+
     public DateTime ExitTime { get; set; }
 
     public Guid? CurrentPayloadId { get; set; }

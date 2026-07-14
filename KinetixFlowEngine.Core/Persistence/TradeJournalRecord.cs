@@ -58,4 +58,9 @@ public class TradeJournalRecord
     public double EntryDelaySeconds { get; set; }
     public string IntentExpiryReason { get; set; } = string.Empty;
     public string ExitReason { get; set; } = string.Empty;
+
+    public decimal ConfiguredLeverage { get; set; } = 1m;
+    public decimal LeveragedGrossPnlUsd { get; set; }
+    public decimal LeveragedFeeUsd { get; set; }
+    public decimal LeveragedPnlUsd { get; set; }
 }
