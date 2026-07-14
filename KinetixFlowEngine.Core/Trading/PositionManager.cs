@@ -2,6 +2,7 @@
 using KinetixFlowEngine.Core.Execution;
 using KinetixFlowEngine.Core.Flow.State;
 using KinetixFlowEngine.Core.Strategy;
+using KinetixFlowEngine.Core.Utils;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Drawing;
@@ -20,17 +21,26 @@ namespace KinetixFlowEngine.Core.Trading
         public event Action<ActiveTrade>? StopLossUpdateRequested;
         private readonly StrategyConfigLoader _strategyConfigLoader;
         private readonly ILogger<PositionManager> _logger;
+        private readonly FairPriceEngine _fairPriceEngine;
+        private readonly QuantConsensusIntentTracker _intentTracker;
         public event Action<ActiveTrade>? FullCloseRequested;
         private readonly ConcurrentDictionary<string, bool> _closingInProgress = new();
 
         private static string GetKey(string strategy, string accountId)
     => $"{accountId}::{strategy}";
 
-        public PositionManager(PositionPersistence persistence, StrategyConfigLoader strategyConfigLoader, ILogger<PositionManager> logger)
+        public PositionManager(
+            PositionPersistence persistence,
+            StrategyConfigLoader strategyConfigLoader,
+            FairPriceEngine fairPriceEngine,
+            QuantConsensusIntentTracker intentTracker,
+            ILogger<PositionManager> logger)
         {
             _persistence = persistence;
             _activeTrades = new Dictionary<string, ActiveTrade>();
             _strategyConfigLoader = strategyConfigLoader;
+            _fairPriceEngine = fairPriceEngine;
+            _intentTracker = intentTracker;
             _logger = logger;
         }
 
@@ -58,6 +68,10 @@ namespace KinetixFlowEngine.Core.Trading
 
             decimal atrValue = (decimal)atr;
             decimal stopDistance = Math.Min(price * 0.01m, atrValue * 3);
+            var entryUtc = DateTimeOffset.UtcNow;
+            var fairPriceAtEntry = signal.Direction == SignalDirection.Long
+                ? _fairPriceEngine.GetFairLongPrice(r.VWAP, r.ATR)
+                : _fairPriceEngine.GetFairShortPrice(r.VWAP, r.ATR);
 
             var trade = new ActiveTrade
             {
@@ -77,7 +91,8 @@ namespace KinetixFlowEngine.Core.Trading
                 InitialSize = size,
                 RemainingSize = size,
 
-                EntryTimeMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                EntryTimeMs = entryUtc.ToUnixTimeMilliseconds(),
+                EntryUtc = entryUtc,
                 NotifyThroughTelegram = signal.NotifyThroughTelegram,
 
                 MaxPrice = price,
@@ -93,10 +108,40 @@ namespace KinetixFlowEngine.Core.Trading
                 Closed = false,
                 EntryPriceTrend = (double)r.PriceTrend,
                 EntryScoreTrend = (double)r.ScoreTrend,
-                OrderId = orderId
+                OrderId = orderId,
+
+                QuantIntentId = signal.QuantIntentId,
+                CurrentPayloadId = signal.CurrentPayloadId,
+                PreviousPayloadId = signal.PreviousPayloadId,
+                ThirdPayloadId = signal.ThirdPayloadId,
+                ConsensusDecisionUtc = signal.ConsensusDecisionUtc,
+                SignalUtc = signal.SignalUtc,
+                PendingIntentCreatedUtc = signal.PendingIntentCreatedUtc,
+                ReviewCount = signal.ReviewCount,
+                CurrentBatchScore = signal.CurrentBatchScore,
+                TemporalScore = signal.TemporalScore,
+                ExecutableVotes = signal.ExecutableVotes,
+                DirectionalAgreement = signal.DirectionalAgreement,
+                ExecutableAgreement = signal.ExecutableAgreement,
+                ExecutableBatchCount = signal.ExecutableBatchCount,
+                ReviewSpanMinutes = signal.ReviewSpanMinutes,
+                MarketPriceAtSignal = signal.MarketPriceAtSignal,
+                FairPriceAtSignal = signal.FairPriceAtSignal,
+                FairPriceAtEntry = fairPriceAtEntry,
+                EntryDelaySeconds = signal.SignalUtc.HasValue
+                    ? Math.Max(0, (entryUtc - signal.SignalUtc.Value).TotalSeconds)
+                    : 0
             };
 
             _activeTrades[key] = trade;
+
+            _intentTracker.MarkExecuted(
+                signal,
+                accountId,
+                orderId,
+                entryUtc,
+                price,
+                fairPriceAtEntry);
 
             SaveThrottled();
         }
@@ -231,7 +276,32 @@ namespace KinetixFlowEngine.Core.Trading
                     EntryER = p.EntryER,
                     EntryFlowState = p.EntryFlowState,
 
-                    EntryAlertSent = p.EntryAlertSent, // ✅ FIX
+                    EntryAlertSent = p.EntryAlertSent,
+                    EntryPriceTrend = p.EntryPriceTrend,
+                    EntryScoreTrend = p.EntryScoreTrend,
+                    OrderId = p.OrderId,
+
+                    QuantIntentId = p.QuantIntentId,
+                    CurrentPayloadId = p.CurrentPayloadId,
+                    PreviousPayloadId = p.PreviousPayloadId,
+                    ThirdPayloadId = p.ThirdPayloadId,
+                    ConsensusDecisionUtc = p.ConsensusDecisionUtc,
+                    SignalUtc = p.SignalUtc,
+                    PendingIntentCreatedUtc = p.PendingIntentCreatedUtc,
+                    EntryUtc = p.EntryUtc,
+                    ReviewCount = p.ReviewCount,
+                    CurrentBatchScore = p.CurrentBatchScore,
+                    TemporalScore = p.TemporalScore,
+                    ExecutableVotes = p.ExecutableVotes,
+                    DirectionalAgreement = p.DirectionalAgreement,
+                    ExecutableAgreement = p.ExecutableAgreement,
+                    ExecutableBatchCount = p.ExecutableBatchCount,
+                    ReviewSpanMinutes = p.ReviewSpanMinutes,
+                    MarketPriceAtSignal = p.MarketPriceAtSignal,
+                    FairPriceAtSignal = p.FairPriceAtSignal,
+                    FairPriceAtEntry = p.FairPriceAtEntry,
+                    EntryDelaySeconds = p.EntryDelaySeconds,
+                    IntentExpiryReason = p.IntentExpiryReason,
                     Closed = false
                 };
 

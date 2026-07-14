@@ -6,12 +6,12 @@ using Microsoft.Extensions.Options;
 
 namespace KinetixFlowEngine.Core.Strategy.Strategies;
 
-internal sealed class ConsensusStrategy
+internal sealed class ConsensusPriceStrategy
     : QuantConsensusReviewStrategyBase
 {
     public const string StrategyName = "Consensus";
 
-    public ConsensusStrategy(
+    public ConsensusPriceStrategy(
         IQuantModelConsensusProvider consensusProvider,
         StrategyConfigLoader configLoader,
         IOptions<QuantModelConsensusStrategyOptions> options,

@@ -1,4 +1,3 @@
-﻿using System.Diagnostics;
 using System.Text.Json;
 
 namespace KinetixFlowEngine.Core.Trading
@@ -35,12 +34,36 @@ namespace KinetixFlowEngine.Core.Trading
                 EntryCompressionZ = t.EntryCompressionZ,
                 EntryATR = t.EntryATR,
                 EntryER = t.EntryER,
-                EntryFlowState = t.EntryFlowState.ToString(),
+                EntryFlowState = t.EntryFlowState,
                 EntryPriceTrend = t.EntryPriceTrend,
                 EntryScoreTrend = t.EntryScoreTrend,
                 OrderId = t.OrderId,
                 RemainingSize = t.RemainingSize,
-                EntryAlertSent = t.EntryAlertSent
+                EntryAlertSent = t.EntryAlertSent,
+                MovedToBreakeven = t.MovedToBreakeven,
+                TrailingStop = t.TrailingStop,
+
+                QuantIntentId = t.QuantIntentId,
+                CurrentPayloadId = t.CurrentPayloadId,
+                PreviousPayloadId = t.PreviousPayloadId,
+                ThirdPayloadId = t.ThirdPayloadId,
+                ConsensusDecisionUtc = t.ConsensusDecisionUtc,
+                SignalUtc = t.SignalUtc,
+                PendingIntentCreatedUtc = t.PendingIntentCreatedUtc,
+                EntryUtc = t.EntryUtc,
+                ReviewCount = t.ReviewCount,
+                CurrentBatchScore = t.CurrentBatchScore,
+                TemporalScore = t.TemporalScore,
+                ExecutableVotes = t.ExecutableVotes,
+                DirectionalAgreement = t.DirectionalAgreement,
+                ExecutableAgreement = t.ExecutableAgreement,
+                ExecutableBatchCount = t.ExecutableBatchCount,
+                ReviewSpanMinutes = t.ReviewSpanMinutes,
+                MarketPriceAtSignal = t.MarketPriceAtSignal,
+                FairPriceAtSignal = t.FairPriceAtSignal,
+                FairPriceAtEntry = t.FairPriceAtEntry,
+                EntryDelaySeconds = t.EntryDelaySeconds,
+                IntentExpiryReason = t.IntentExpiryReason
             }).ToList();
 
             var json = JsonSerializer.Serialize(data, new JsonSerializerOptions
@@ -49,7 +72,6 @@ namespace KinetixFlowEngine.Core.Trading
             });
 
             var tempFile = _filePath + ".tmp";
-
             File.WriteAllText(tempFile, json);
 
             if (File.Exists(_filePath))

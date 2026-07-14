@@ -1,4 +1,4 @@
-﻿using KinetixFlowEngine.Core.Strategy;
+using KinetixFlowEngine.Core.Strategy;
 
 public class TradeMemory
 {
@@ -9,7 +9,11 @@ public class TradeMemory
     public decimal EntryPrice { get; set; }
     public decimal ExitPrice { get; set; }
 
-    public string ExitReason { get; set; } = ""; // SL / TSL / TP / SignalFlip
+    public string ExitReason { get; set; } = "";
 
     public DateTime ExitTime { get; set; }
+
+    public Guid? CurrentPayloadId { get; set; }
+
+    public Guid? QuantIntentId { get; set; }
 }

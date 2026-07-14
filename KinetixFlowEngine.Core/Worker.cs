@@ -289,6 +289,7 @@ namespace KinetixFlowEngine.Core
                     ExitPrice = exitPrice,
                     StopLoss = trade.StopLoss,
                     Target1 = trade.Target1,
+                    Target1Hit = trade.Target1Hit,
                     Size = trade.InitialSize,
                     DurationSeconds = duration,
                     PnlUsd = pnl,
@@ -308,6 +309,34 @@ namespace KinetixFlowEngine.Core
                     ATR = (decimal)trade.EntryATR,
                     ER = (decimal)trade.EntryER,
                     FlowState = trade.EntryFlowState,
+
+                    TradeId = string.IsNullOrWhiteSpace(trade.OrderId)
+                        ? Guid.NewGuid().ToString()
+                        : trade.OrderId,
+                    AccountId = trade.AccountId,
+                    OrderId = trade.OrderId,
+                    QuantIntentId = trade.QuantIntentId,
+                    CurrentPayloadId = trade.CurrentPayloadId,
+                    PreviousPayloadId = trade.PreviousPayloadId,
+                    ThirdPayloadId = trade.ThirdPayloadId,
+                    ConsensusDecisionUtc = trade.ConsensusDecisionUtc,
+                    SignalUtc = trade.SignalUtc,
+                    PendingIntentCreatedUtc = trade.PendingIntentCreatedUtc,
+                    EntryUtc = trade.EntryUtc,
+                    ReviewCount = trade.ReviewCount,
+                    CurrentBatchScore = trade.CurrentBatchScore,
+                    TemporalScore = trade.TemporalScore,
+                    ExecutableVotes = trade.ExecutableVotes,
+                    DirectionalAgreement = trade.DirectionalAgreement,
+                    ExecutableAgreement = trade.ExecutableAgreement,
+                    ExecutableBatchCount = trade.ExecutableBatchCount,
+                    ReviewSpanMinutes = trade.ReviewSpanMinutes,
+                    MarketPriceAtSignal = trade.MarketPriceAtSignal,
+                    FairPriceAtSignal = trade.FairPriceAtSignal,
+                    FairPriceAtEntry = trade.FairPriceAtEntry,
+                    EntryDelaySeconds = trade.EntryDelaySeconds,
+                    IntentExpiryReason = trade.IntentExpiryReason,
+                    ExitReason = trade.ExitReason
                 });
 
                 // -------------------------------
@@ -320,7 +349,9 @@ namespace KinetixFlowEngine.Core
                     EntryPrice = trade.EntryPrice,
                     ExitPrice = exitPrice,
                     ExitReason = trade.ExitReason,
-                    ExitTime = DateTime.UtcNow
+                    ExitTime = DateTime.UtcNow,
+                    CurrentPayloadId = trade.CurrentPayloadId,
+                    QuantIntentId = trade.QuantIntentId
                 });
 
                 //Apply PnL to Equity
@@ -892,6 +923,13 @@ namespace KinetixFlowEngine.Core
             var last = _tradeMemory.Get(signal.StrategyName);
             if (last == null)
                 return true;
+
+            if (signal.CurrentPayloadId.HasValue &&
+                last.CurrentPayloadId.HasValue &&
+                signal.CurrentPayloadId.Value == last.CurrentPayloadId.Value)
+            {
+                return false;
+            }
 
             if ((DateTime.UtcNow - last.ExitTime).TotalMinutes < 2)
                 return false;

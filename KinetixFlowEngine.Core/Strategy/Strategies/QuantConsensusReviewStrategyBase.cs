@@ -1,6 +1,7 @@
 using KinetixFlowEngine.Core.Engine;
 using KinetixFlowEngine.Core.Quant;
 using KinetixFlowEngine.Core.Trading;
+using KinetixFlowEngine.Core.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -11,6 +12,8 @@ internal abstract class QuantConsensusReviewStrategyBase : IKinetixStrategy
     private readonly IQuantModelConsensusProvider _consensusProvider;
     private readonly StrategyConfig _config;
     private readonly QuantModelConsensusStrategyOptions _options;
+    private readonly FairPriceEngine _fairPriceEngine;
+    private readonly QuantConsensusIntentTracker _intentTracker;
     private readonly ILogger _logger;
 
     protected QuantConsensusReviewStrategyBase(
@@ -18,12 +21,16 @@ internal abstract class QuantConsensusReviewStrategyBase : IKinetixStrategy
         IQuantModelConsensusProvider consensusProvider,
         StrategyConfigLoader configLoader,
         IOptions<QuantModelConsensusStrategyOptions> options,
+        FairPriceEngine fairPriceEngine,
+        QuantConsensusIntentTracker intentTracker,
         ILogger logger)
     {
         Name = name;
         _consensusProvider = consensusProvider;
         _config = configLoader.Get(name);
         _options = options.Value;
+        _fairPriceEngine = fairPriceEngine;
+        _intentTracker = intentTracker;
         _logger = logger;
     }
 
@@ -50,12 +57,29 @@ internal abstract class QuantConsensusReviewStrategyBase : IKinetixStrategy
             return NoSignal($"Quant consensus unavailable: {consensus.BlockReason}");
 
         if (IsStale(consensus))
+        {
+            _intentTracker.InvalidatePending(
+                Name,
+                consensus.CurrentPayloadId,
+                "CONSENSUS_STALE");
+
             return NoSignal("Quant consensus is stale.");
+        }
 
         var evaluation = EvaluateConsensus(consensus);
 
         if (!evaluation.Approved)
+        {
+            _intentTracker.InvalidatePending(
+                Name,
+                consensus.CurrentPayloadId,
+                $"CONSENSUS_BLOCKED:{evaluation.BlockReason}");
+
             return NoSignal(evaluation.BlockReason);
+        }
+
+        if (!evaluation.CurrentPayloadId.HasValue)
+            return NoSignal("Approved consensus is missing CurrentPayloadId.");
 
         var direction = ResolveSignalDirection(evaluation.Direction);
 
@@ -73,19 +97,57 @@ internal abstract class QuantConsensusReviewStrategyBase : IKinetixStrategy
                 $"Consensus score below strategy config. Score={confidence:F2}, Required={_config.MinConfidence:F2}");
         }
 
+        var marketPriceAtSignal = (decimal)result.Price;
+        var fairPriceAtSignal = direction == SignalDirection.Long
+            ? _fairPriceEngine.GetFairLongPrice(result.VWAP, result.ATR)
+            : _fairPriceEngine.GetFairShortPrice(result.VWAP, result.ATR);
+
+        var intent = _intentTracker.GetOrCreate(
+            Name,
+            direction,
+            evaluation.CurrentPayloadId.Value,
+            evaluation.PreviousPayloadId,
+            evaluation.ThirdPayloadId,
+            evaluation.ConsensusDecisionUtc,
+            evaluation.ReviewCount,
+            evaluation.CurrentBatchScore,
+            evaluation.Score,
+            evaluation.CurrentExecutableVoteCount,
+            evaluation.CurrentDirectionalAgreementRatio,
+            evaluation.CurrentExecutableAgreementRatio,
+            evaluation.ExecutableBatchCount,
+            evaluation.ReviewSpanMinutes,
+            marketPriceAtSignal,
+            fairPriceAtSignal);
+
+        if (intent.Status.Equals("EXECUTED", StringComparison.OrdinalIgnoreCase))
+        {
+            return NoSignal(
+                $"Payload already executed for paper strategy. Payload={intent.CurrentPayloadId}");
+        }
+
+        if (intent.Status.Equals("EXPIRED", StringComparison.OrdinalIgnoreCase))
+        {
+            return NoSignal(
+                $"Intent already expired. Payload={intent.CurrentPayloadId}, Reason={intent.IntentExpiryReason}");
+        }
+
         _logger.LogInformation(
-            "{Strategy} ENTRY signal | Reviews={Reviews} | Direction={Direction} | Score={Score} | CurrentAgreement={CurrentAgreement} | CurrentExecutableVotes={ExecutableVotes} | ExecutableBatches={ExecutableBatches} | SpanMinutes={SpanMinutes} | CurrentPayload={CurrentPayload} | PreviousPayload={PreviousPayload} | ThirdPayload={ThirdPayload}",
+            "{Strategy} ENTRY candidate | Reviews={Reviews} | Direction={Direction} | CurrentScore={CurrentScore} | TemporalScore={TemporalScore} | CurrentAgreement={CurrentAgreement} | CurrentExecutableVotes={ExecutableVotes} | ExecutableBatches={ExecutableBatches} | SpanMinutes={SpanMinutes} | Intent={IntentId} | CurrentPayload={CurrentPayload} | PreviousPayload={PreviousPayload} | ThirdPayload={ThirdPayload} | FairPriceAtSignal={FairPriceAtSignal}",
             Name,
             evaluation.ReviewCount,
             direction,
+            evaluation.CurrentBatchScore,
             evaluation.Score,
             evaluation.CurrentDirectionalAgreementRatio,
             evaluation.CurrentExecutableVoteCount,
             evaluation.ExecutableBatchCount,
             evaluation.ReviewSpanMinutes,
+            intent.IntentId,
             evaluation.CurrentPayloadId,
             evaluation.PreviousPayloadId,
-            evaluation.ThirdPayloadId);
+            evaluation.ThirdPayloadId,
+            intent.FairPriceAtSignal);
 
         return new StrategySignal
         {
@@ -95,16 +157,34 @@ internal abstract class QuantConsensusReviewStrategyBase : IKinetixStrategy
             EnterOnlyAtFairPrice = _config.EnterOnlyAtFairPrice,
             NotifyThroughTelegram = _config.NotifyThroughTelegram,
             IsVolumeBased = _config.VolumeBased,
-            TargetAccountIds = _config.AccountIds ?? new List<string>()
+            TargetAccountIds = _config.AccountIds ?? new List<string>(),
+
+            QuantIntentId = intent.IntentId,
+            CurrentPayloadId = intent.CurrentPayloadId,
+            PreviousPayloadId = intent.PreviousPayloadId,
+            ThirdPayloadId = intent.ThirdPayloadId,
+            ConsensusDecisionUtc = intent.ConsensusDecisionUtc,
+            SignalUtc = intent.SignalUtc,
+            PendingIntentCreatedUtc = intent.PendingIntentCreatedUtc,
+            ReviewCount = intent.ReviewCount,
+            CurrentBatchScore = intent.CurrentBatchScore,
+            TemporalScore = intent.TemporalScore,
+            ExecutableVotes = intent.ExecutableVotes,
+            DirectionalAgreement = intent.DirectionalAgreement,
+            ExecutableAgreement = intent.ExecutableAgreement,
+            ExecutableBatchCount = intent.ExecutableBatchCount,
+            ReviewSpanMinutes = intent.ReviewSpanMinutes,
+            MarketPriceAtSignal = intent.MarketPriceAtSignal,
+            FairPriceAtSignal = intent.FairPriceAtSignal,
+            SuggestedEntryPrice = intent.FairPriceAtSignal
         };
     }
 
-    public StrategySignal EvaluateExit(KinetixEngineResult result, ActiveTrade trade)
+    public StrategySignal EvaluateExit(
+    KinetixEngineResult result,
+    ActiveTrade trade)
     {
         if (!_options.Enabled || !IsProfileEnabled || !_config.Enabled)
-            return NoSignal();
-
-        if (!_options.EnableExitOnOppositeConsensus)
             return NoSignal();
 
         var consensus = _consensusProvider.GetLatest();
@@ -112,35 +192,7 @@ internal abstract class QuantConsensusReviewStrategyBase : IKinetixStrategy
         if (consensus is null || !consensus.IsAvailable || IsStale(consensus))
             return NoSignal();
 
-        // Exit remains intentionally based on the latest completed batch.
-        // Entry confirmation depth (1/2/3 reviews) does not delay protection.
-        if (_options.RequireShouldTradeForExit && !consensus.CurrentBatchShouldTrade)
-            return NoSignal();
-
-        if (Math.Abs(consensus.CurrentBatchWeightedDirectionalScore) <
-            _options.MinExitDirectionalScore)
-        {
-            return NoSignal();
-        }
-
-        if (consensus.CurrentBatchDirectionalAgreementRatio <
-            _options.MinExitAgreementRatio)
-        {
-            return NoSignal();
-        }
-
-        var isOpposite =
-            trade.Direction == SignalDirection.Long &&
-            consensus.CurrentBatchDirection.Equals(
-                "SHORT",
-                StringComparison.OrdinalIgnoreCase)
-            ||
-            trade.Direction == SignalDirection.Short &&
-            consensus.CurrentBatchDirection.Equals(
-                "LONG",
-                StringComparison.OrdinalIgnoreCase);
-
-        if (!isOpposite)
+        if (!ShouldExit(consensus, trade))
             return NoSignal();
 
         _logger.LogInformation(
@@ -157,6 +209,43 @@ internal abstract class QuantConsensusReviewStrategyBase : IKinetixStrategy
             StrategyName = Name,
             ExitSignal = true
         };
+    }
+
+    protected virtual bool ShouldExit(
+    QuantModelConsensusDecision consensus,
+    ActiveTrade trade)
+    {
+        if (!_options.EnableExitOnOppositeConsensus)
+            return false;
+
+        if (_options.RequireShouldTradeForExit &&
+            !consensus.CurrentBatchShouldTrade)
+        {
+            return false;
+        }
+
+        if (Math.Abs(consensus.CurrentBatchWeightedDirectionalScore) <
+            _options.MinExitDirectionalScore)
+        {
+            return false;
+        }
+
+        if (consensus.CurrentBatchDirectionalAgreementRatio <
+            _options.MinExitAgreementRatio)
+        {
+            return false;
+        }
+
+        return
+            trade.Direction == SignalDirection.Long &&
+            consensus.CurrentBatchDirection.Equals(
+                "SHORT",
+                StringComparison.OrdinalIgnoreCase)
+            ||
+            trade.Direction == SignalDirection.Short &&
+            consensus.CurrentBatchDirection.Equals(
+                "LONG",
+                StringComparison.OrdinalIgnoreCase);
     }
 
     protected static IReadOnlyList<QuantModelBatchConsensusDecision> GetLatestBatches(

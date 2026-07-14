@@ -1,4 +1,5 @@
 using KinetixFlowEngine.Core.Quant;
+using KinetixFlowEngine.Core.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -12,12 +13,16 @@ internal sealed class QuantConsensus3ReviewStrategy : QuantConsensusReviewStrate
         IQuantModelConsensusProvider consensusProvider,
         StrategyConfigLoader configLoader,
         IOptions<QuantModelConsensusStrategyOptions> options,
+        FairPriceEngine fairPriceEngine,
+        QuantConsensusIntentTracker intentTracker,
         ILogger<QuantConsensus3ReviewStrategy> logger)
         : base(
             StrategyName,
             consensusProvider,
             configLoader,
             options,
+            fairPriceEngine,
+            intentTracker,
             logger)
     {
     }
@@ -116,14 +121,17 @@ internal sealed class QuantConsensus3ReviewStrategy : QuantConsensusReviewStrate
             Approved = true,
             Direction = current.Direction,
             Score = Math.Round(weightedScore, 2),
+            CurrentBatchScore = current.WeightedDirectionalScore,
             ReviewCount = 3,
             ReviewSpanMinutes = Math.Round(spanMinutes, 2),
             ExecutableBatchCount = executableBatchCount,
             CurrentExecutableVoteCount = current.ExecutableVoteCount,
             CurrentDirectionalAgreementRatio = current.DirectionalAgreementRatio,
+            CurrentExecutableAgreementRatio = current.ExecutableAgreementRatio,
             CurrentPayloadId = current.PayloadId,
             PreviousPayloadId = previous.PayloadId,
-            ThirdPayloadId = third.PayloadId
+            ThirdPayloadId = third.PayloadId,
+            ConsensusDecisionUtc = current.DecisionTimeUtc
         };
     }
 }
