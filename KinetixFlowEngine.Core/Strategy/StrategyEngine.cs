@@ -50,8 +50,8 @@ namespace KinetixFlowEngine.Core.Strategy
                 var config = _strategyConfigLoader.Get(strategy.Name);
                 signal.TargetAccountIds = config.AccountIds ?? new List<string>();
 
-                if (!IsTrendAligned(result, signal.Direction))
-                    continue;
+                //if (!IsTrendAligned(result, signal.Direction))
+                //    continue;
 
                 signals.Add(signal);
             }
